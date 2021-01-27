@@ -85,7 +85,7 @@ set(USE_VULKAN OFF)
 set(USE_OPENGL OFF)
 
 # Whether enable MicroTVM runtime
-set(USE_MICRO OFF)
+set(USE_MICRO ON)
 
 # Whether enable RPC runtime
 set(USE_RPC ON)
@@ -106,7 +106,7 @@ set(USE_GRAPH_EXECUTOR_CUDA_GRAPH OFF)
 set(USE_PROFILER ON)
 
 # Whether enable uTVM standalone runtime
-set(USE_MICRO_STANDALONE_RUNTIME OFF)
+set(USE_MICRO_STANDALONE_RUNTIME ON)
 
 # Whether build with LLVM support
 # Requires LLVM version >= 4.0
