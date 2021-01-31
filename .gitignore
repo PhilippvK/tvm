@@ -173,6 +173,7 @@ cscope*
 perf
 .bash_history
 *.json
+!devcontainer.json
 *.params
 *.onnx
 *.h5
