@@ -2,46 +2,51 @@
 	"name": "Ubuntu",
 	"build": {
 		"dockerfile": "Dockerfile",
-    "context": "../docker/"
+		"context": "../docker/"
 		// Update 'VARIANT' to pick an Ubuntu version: focal, bionic
 		//"args": { "VARIANT": "focal" }
-	},
+  },
 
 	// Set *default* container specific settings.json values on container create.
 	"settings": { 
 		"terminal.integrated.shell.linux": "/bin/bash",
-    "python.pythonPath": "/usr/local/bin/python3",
-    "python.testing.nosetestArgs": [
-        "tests"
-    ],
-    "python.testing.pytestEnabled": false,
-    "python.testing.unittestEnabled": false,
-    "python.testing.nosetestsEnabled": false,
-    "python.testing.promptToConfigure": false,
-    "python.linting.pylintEnabled": true,
-    "python.linting.pylintCategorySeverity.convention": "Warning",
-    "python.linting.pylintCategorySeverity.refactor": "Warning",
-    "python.linting.pylintCategorySeverity.warning": "Warning",
-    "python.linting.pylintArgs": [
-        "--rcfile",
-        "${workspaceRoot}/tests/lint/pylintrc"
-    ],
-    "search.exclude": {
-        ".vscode/": true,
-    },
+		"python.pythonPath": "/usr/local/bin/python3",
+		"python.testing.nosetestArgs": [
+		    "tests"
+		],
+		"python.testing.pytestEnabled": false,
+		"python.testing.unittestEnabled": false,
+		"python.testing.nosetestsEnabled": false,
+		"python.testing.promptToConfigure": false,
+		"python.linting.pylintEnabled": true,
+		"python.linting.pylintCategorySeverity.convention": "Warning",
+		"python.linting.pylintCategorySeverity.refactor": "Warning",
+		"python.linting.pylintCategorySeverity.warning": "Warning",
+		"python.linting.pylintArgs": [
+		    "--rcfile",
+		    "${workspaceRoot}/tests/lint/pylintrc"
+		],
+		"search.exclude": {
+		    ".vscode/": true,
+		},
+		"browser-preview.chromeExecutable": "/usr/bin/google-chrome",
+		"browser-preview.startUrl": "http://localhost:8888",
+		"browser-preview.verbose": true
 	},
 
 	// Add the IDs of extensions you want installed when the container is created.
 	"extensions": [
-    "mutantdino.resourcemonitor"
-  ],
-
+	  "mutantdino.resourcemonitor",
+	  "ms-python.python",
+	  "auchenberg.vscode-browser-preview"
+	],
+	
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
-
+	
 	// Use 'postCreateCommand' to run commands after the container is created.
 	"postCreateCommand": "git submodule update --init --recursive",
-
+	
 	// Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode"
 }
