@@ -45,7 +45,7 @@ extern "C" {
 ssize_t UTvmWriteFunc(void* context, const uint8_t* data, size_t num_bytes) {
   ssize_t to_return = write(STDOUT_FILENO, data, num_bytes);
   fflush(stdout);
-  fsync(STDOUT_FILENO);
+  //fsync(STDOUT_FILENO);
   return to_return;
 }
 
@@ -102,7 +102,7 @@ tvm_crt_error_t TVMPlatformGenerateRandom(uint8_t* buffer, size_t num_bytes) {
     random_seed = (unsigned int)time(NULL);
   }
   for (size_t i = 0; i < num_bytes; ++i) {
-    int random = rand_r(&random_seed);
+    int random = rand();
     buffer[i] = (uint8_t)random;
   }
 
@@ -116,7 +116,7 @@ static char** g_argv = NULL;
 
 int testonly_reset_server(TVMValue* args, int* type_codes, int num_args, TVMValue* out_ret_value,
                           int* out_ret_tcode, void* resource_handle) {
-  execvp(g_argv[0], g_argv);
+  //execvp(g_argv[0], g_argv);
   perror("utvm runtime: error restarting");
   return -1;
 }
