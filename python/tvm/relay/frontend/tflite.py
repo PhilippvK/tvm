@@ -171,6 +171,7 @@ class OperatorConverter(object):
             "UNPACK": self.convert_unpack,
             "WHERE": self.convert_select,
             "ZEROS_LIKE": self.convert_zeros_like,
+            "CUSTOM": self.convert_custom
         }
 
     def check_unsupported_ops(self):
@@ -265,8 +266,13 @@ class OperatorConverter(object):
             custom_op_code_str = self.model.OperatorCodes(op_code_list_idx).CustomCode()
             if custom_op_code_str == b"TFLite_Detection_PostProcess":
                 return "DETECTION_POSTPROCESS"
+            #elif custom_op_code_str == b"Complex":
+            #    return "COMPLEX"
+            #elif custom_op_code_str == b"Real":
+            #    return "REAL"
 
-            raise NotImplementedError("Custom operators are currently not supported")
+            return "CUSTOM"
+            #raise NotImplementedError("Custom operators are currently not supported")
         return op_code_str
 
     def get_input_tensors(self, op):
@@ -1660,6 +1666,21 @@ class OperatorConverter(object):
 
     def convert_zeros_like(self, op):
         """Convert TFLite ZEROS LIKE"""
+        input_tensors = self.get_input_tensors(op)
+        assert len(input_tensors) == 1, "input tensors length should be 1"
+
+        input_tensor = input_tensors[0]
+        in_expr = self.get_expr(input_tensor.tensor_idx)
+        out = _op.zeros_like(in_expr)
+
+        return out
+
+    def convert_custom(self, op):
+        """Convert TFLite CUSTOM"""
+        custom_op_code_str = self.model.OperatorCodes(op.OpcodeIndex()).CustomCode()
+        print("CUSTOM:", custom_op_code_str)
+        print("op:", op)
+
         input_tensors = self.get_input_tensors(op)
         assert len(input_tensors) == 1, "input tensors length should be 1"
 
@@ -3648,6 +3669,8 @@ def from_tflite(model, shape_dict=None, dtype_dict=None):
     # model inputs / outputs
     model_inputs = subgraph.InputsAsNumpy()
     model_outputs = subgraph.OutputsAsNumpy()
+    print("model_inputs:", model_inputs)
+    print("model_outputs:", model_outputs)
 
     exp_tab = ExprTable()
     for model_input in model_inputs:
@@ -3663,6 +3686,7 @@ def from_tflite(model, shape_dict=None, dtype_dict=None):
 
     # params and outputs
     params = {k: _nd.array(np.array(v)) for k, v in exp_tab.params.items()}
+    print("params:", params)
     outputs = [exp_tab.get_expr(get_tensor_name(subgraph, i)) for i in model_outputs]
     outputs = outputs[0] if len(outputs) == 1 else _expr.Tuple(outputs)
     func = _function.Function(analysis.free_vars(outputs), outputs)
