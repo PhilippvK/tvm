@@ -470,6 +470,8 @@ int TVMFuncCall(TVMFunctionHandle func, TVMValue* args, int* arg_type_codes, int
                 TVMValue* ret_val, int* ret_type_code) {
   API_BEGIN();
 
+  LOG(WARNING) << "!!!!TVMFuncCall1!!!!";
+
   TVMRetValue rv;
   (*static_cast<const PackedFunc*>(func)).CallPacked(TVMArgs(args, arg_type_codes, num_args), &rv);
   // handle return string.

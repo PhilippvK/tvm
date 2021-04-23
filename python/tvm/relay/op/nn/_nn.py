@@ -83,6 +83,36 @@ def alter_op_layout_dense(attrs, inputs, tinfos, out_type):
     """Alternate the layout of dense"""
     return topi.nn.dense_alter_layout(attrs, inputs, tinfos, out_type)
 
+@reg.register_legalize("nn.tflite_custom")
+def legalize_tflite_custom(attrs, inputs, types):
+    """Legalize tflite_custom op.
+
+    Parameters
+    ----------
+    attrs : tvm.ir.Attrs
+        Attributes of current convolution
+    inputs : list of tvm.relay.Expr
+        The args of the Relay expr to be legalized
+    types : list of types
+        List of input and output types
+
+    Returns
+    -------
+    result : tvm.relay.Expr
+        The legalized expr
+    """
+    return topi.nn.tflite_custom_legalize(attrs, inputs, types)
+
+
+# dense
+reg.register_strategy("nn.tflite_custom", strategy.tflite_custom_strategy)
+reg.register_pattern("nn.tflite_custom", reg.OpPattern.OUT_ELEMWISE_FUSABLE)
+
+
+@reg.register_alter_op_layout("nn.tflite_custom")
+def alter_op_layout_tflite_custom(attrs, inputs, tinfos, out_type):
+    """Alternate the layout of tflite_custom"""
+    return topi.nn.tflite_custom_alter_layout(attrs, inputs, tinfos, out_type)
 
 # dense_pack
 reg.register_strategy("nn.contrib_dense_pack", strategy.dense_pack_strategy)

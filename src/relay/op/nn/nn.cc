@@ -191,6 +191,30 @@ RELAY_REGISTER_OP("nn.dense")
     .set_support_level(1)
     .add_type_rel("Dense", DenseRel<DenseAttrs>);
 
+// relay.nn.tflite_custom
+TVM_REGISTER_NODE_TYPE(TfLiteCustomAttrs);
+
+// Positional relay function to create dense operator used by frontend FFI.
+Expr MakeTfLiteCustom(Expr data, Expr weight, IndexExpr units, DataType out_dtype) {
+  auto attrs = make_object<TfLiteCustomAttrs>();
+  attrs->units = units;
+  attrs->out_dtype = out_dtype;
+  static const Op& op = Op::Get("nn.tflite_custom");
+  LOG(WARNING) << "MakeTfLiteCustom";
+  return Call(op, {data, weight}, Attrs(attrs), {});
+}
+
+TVM_REGISTER_GLOBAL("relay.op.nn._make.tflite_custom").set_body_typed(MakeTfLiteCustom);
+
+RELAY_REGISTER_OP("nn.tflite_custom")
+    .describe(R"code(TODO(Phi))code" TVM_ADD_FILELINE)
+    .set_attrs_type<TfLiteCustomAttrs>()
+    .set_num_inputs(2)
+    .add_argument("data", "nD Tensor", "Input data.")
+    .add_argument("weight", "2D Tensor", "Weight matrix.")
+    .set_support_level(1)
+    .add_type_rel("TfLiteCustom", TfLiteCustomRel<TfLiteCustomAttrs>);
+
 // relay.nn.contrib_dense_pack
 // Positional relay function to create dense_pack operator used by frontend FFI.
 Expr MakeDensePack(Expr data, Expr weight, IndexExpr units, DataType out_dtype) {

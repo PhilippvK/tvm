@@ -91,6 +91,60 @@ bool DenseRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
 }
 
 template <typename AttrType>
+bool TfLiteCustomRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
+              const TypeReporter& reporter) {
+  ICHECK_EQ(types.size(), 3);
+  const auto* data = types[0].as<TensorTypeNode>();
+  const auto* weight = types[1].as<TensorTypeNode>();
+  if (data == nullptr) return false;
+
+  const AttrType* param = attrs.as<AttrType>();
+  ICHECK(param != nullptr);
+
+  ICHECK(static_cast<int>(data->shape.size()) != 0);
+
+  Array<tvm::PrimExpr> oshape = data->shape;
+  if (param->units.defined()) {
+    Array<tvm::PrimExpr> dshape = data->shape;
+    // validate the weight shape is proper if defined
+    // Assign weight type
+    Array<IndexExpr> wshape({param->units, dshape[dshape.size() - 1]});
+    // It is possible for weight to be nullptr in which case we will use
+    // data dtype as the weight dtype. However if weight dtype is explicitly
+    // present we will use that.
+    auto weight_dtype = (weight == nullptr ? data->dtype : weight->dtype);
+    if (param->auto_scheduler_rewritten_layout.size() == 0) {
+      // Normal case: assign result to reporter
+      reporter->Assign(types[1], TensorType(wshape, weight_dtype));
+    } else {
+      // If the layout is rewritten by auto-scheduler,
+      // we just forcly apply the layout provided by auto-scheduler and
+      // skip the normal inference logic.
+      {}  // do nothing
+    }
+    oshape.Set((oshape.size() - 1), param->units);
+  } else {
+    if (weight == nullptr) return false;
+    Array<tvm::PrimExpr> wshape = weight->shape;
+    ICHECK(static_cast<int>(weight->shape.size()) == 2);
+    if (!data->shape.back().as<tir::AnyNode>()) {
+      ICHECK(reporter->AssertEQ(data->shape[data->shape.size() - 1], weight->shape[1]))
+          << "TfLiteCustomRel/DenseRel: input dimension doesn't match,"
+          << " data shape=" << data->shape << ", weight shape=" << weight->shape;
+    }
+    oshape.Set((oshape.size() - 1), wshape[0]);
+  }
+
+  DataType out_dtype = param->out_dtype;
+  if (out_dtype.bits() == 0) {
+    out_dtype = data->dtype;
+  }
+  // assign output type
+  reporter->Assign(types[2], TensorType(oshape, out_dtype));
+  return true;
+}
+
+template <typename AttrType>
 bool DensePackRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
                   const TypeReporter& reporter) {
   ICHECK_EQ(types.size(), 3);

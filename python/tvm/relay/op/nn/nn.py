@@ -1444,6 +1444,10 @@ def dense(data, weight, units=None, out_dtype=""):
     """
     return _make.dense(data, weight, units, out_dtype)
 
+def tflite_custom(data, weight, units=None, out_dtype=""):
+    print("DEF tflite_custom")
+    return _make.tflite_custom(data, weight, units, out_dtype)
+
 
 def contrib_dense_pack(data, weight, units=None, out_dtype=""):
     """Dense operator.

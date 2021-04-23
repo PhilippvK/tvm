@@ -29,6 +29,7 @@ from .elemwise import *
 from .dilate import *
 from .flatten import *
 from .dense import *
+from .tflite_custom import *
 from .mapping import *
 from .pooling import *
 from .softmax import *

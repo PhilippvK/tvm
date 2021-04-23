@@ -372,6 +372,7 @@ def dense_strategy_cpu(attrs, inputs, out_type, target):
         plevel=5,
     )
 
+    print("!!!", "dense_pack.x86")
     strategy.add_implementation(
         wrap_compute_dense(topi.x86.dense_pack),
         wrap_topi_schedule(topi.x86.schedule_dense_pack),

@@ -246,6 +246,12 @@ def __init_handle_by_constructor__(fconstructor, args):
     values, tcodes, num_args = _make_tvm_args(args, temp_args)
     ret_val = TVMValue()
     ret_tcode = ctypes.c_int()
+    print("__init_handle_by_constructor__!!!")
+    print("temp_args", temp_args)
+    print("values, tcodes, num_args", values, tcodes, num_args)
+    print("ret_val", ret_val)
+    print("ret_tcode", ret_tcode)
+    print("fconstructor, args", fconstructor, args)
     if (
         _LIB.TVMFuncCall(
             fconstructor.handle,

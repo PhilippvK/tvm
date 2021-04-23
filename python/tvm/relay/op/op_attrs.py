@@ -68,6 +68,9 @@ class BiasAddAttrs(Attrs):
 class DenseAttrs(Attrs):
     """Attributes for nn.dense"""
 
+@tvm._ffi.register_object("relay.attrs.TfLiteCustomAttrs")
+class TfLiteCustomAttrs(Attrs):
+    """Attributes for nn.tflite_custom"""
 
 @tvm._ffi.register_object("relay.attrs.SoftmaxAttrs")
 class SoftmaxAttrs(Attrs):

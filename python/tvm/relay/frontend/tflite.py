@@ -266,7 +266,9 @@ class OperatorConverter(object):
             if custom_op_code_str == b"TFLite_Detection_PostProcess":
                 return "DETECTION_POSTPROCESS"
 
-            raise NotImplementedError("Custom operators are currently not supported")
+            return "CUSTOM"
+            #raise NotImplementedError("Custom operators are currently not supported")
+        print(op_code_str)
         return op_code_str
 
     def get_input_tensors(self, op):
@@ -1815,6 +1817,7 @@ class OperatorConverter(object):
 
     def convert_fully_connected(self, op):
         """Convert TFLite fully connected"""
+        print("convert_fully_connected")
         try:
             from tflite.FullyConnectedOptions import FullyConnectedOptions
             from tflite.BuiltinOptions import BuiltinOptions
@@ -1881,7 +1884,8 @@ class OperatorConverter(object):
                 out_dtype="int32",
             )
         else:
-            out = _op.nn.dense(in_expr, weight_expr, units=weight_shape[0])
+            #out = _op.nn.dense(in_expr, weight_expr, units=weight_shape[0])
+            out = _op.nn.tflite_custom(in_expr, weight_expr, units=weight_shape[0])
 
         # if we have bias
         if len(input_tensors) == 3:
@@ -1933,6 +1937,7 @@ class OperatorConverter(object):
         else:
             out = self.convert_fused_activation_function(out, fused_activation_fn)
 
+        print(">", out)
         return out
 
     def convert_squeeze(self, op):

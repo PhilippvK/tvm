@@ -579,6 +579,21 @@ def schedule_dense(outs):
     """
     return _default_schedule(outs, False)
 
+def schedule_tflite_custom(outs):
+    """Schedule for tflite_custom(
+
+    Parameters
+    ----------
+    outs: Array of Tensor
+          The computation graph description of dense
+          in the format of an array of tensors.
+
+    Returns
+    -------
+    sch: Schedule
+        The computation schedule for the op.
+    """
+    return _default_schedule(outs, False)
 
 def schedule_pool(outs, layout):
     """Schedule for pool

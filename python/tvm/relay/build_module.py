@@ -76,6 +76,7 @@ class BuildModule(object):
     """
 
     def __init__(self):
+        print("PHI#", "PY", "BuildModule")
         self.mod = _build_module._BuildModule()
         self._get_graph_json = self.mod["get_graph_json"]
         self._get_module = self.mod["get_module"]
@@ -85,6 +86,7 @@ class BuildModule(object):
         self._get_params_func = self.mod["get_params"]
 
     def build(self, mod, target=None, target_host=None, params=None):
+        print("PHI#", "PY", "BuildModule", "BUILD")
         """
         Parameters
         ----------
@@ -141,6 +143,10 @@ class BuildModule(object):
         mod = self.get_module()
         params = self.get_params()
 
+        print("PHI#", "PY", "BuildModule", "BUILD", "RET")
+        #print("PHI#", "PY", "BuildModule", "BUILD", "graph_json", graph_json)
+        #print("PHI#", "PY", "BuildModule", "BUILD", "mod", mod)
+        #print("PHI#", "PY", "BuildModule", "BUILD", "params", params)
         return graph_json, mod, params
 
     def optimize(self, mod, target=None, params=None):

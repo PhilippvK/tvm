@@ -740,6 +740,19 @@ def dense_strategy(attrs, inputs, out_type, target):
     )
     return strategy
 
+@override_native_generic_func("tflite_custom_strategy")
+def tflite_custom_strategy(attrs, inputs, out_type, target):
+    """tflite_custom generic strategy"""
+    logger.warning("USING tflite_custom_strategy")
+    strategy = _op.OpStrategy()
+    strategy.add_implementation(
+        wrap_compute_dense(topi.nn.tflite_custom),
+        wrap_topi_schedule(topi.generic.schedule_tflite_custom),
+        name="tflite_custom.generic",
+    )
+    # TODO(Phi)
+    return strategy
+
 
 @override_native_generic_func("dense_pack_strategy")
 def dense_pack_strategy(attrs, inputs, out_type, target):
