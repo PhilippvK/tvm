@@ -91,8 +91,7 @@ def tflite_custom(data, weight, bias=None, out_dtype=None, auto_scheduler_rewrit
 #               lambda ins, outs: tvm.tir.call_packed(
 #                  "tvm.contrib.cblas.matmul",
 #                    ins[0], ins[1], outs[0], 0, 0), name="C")
-    return te.extern((batch, out_dim), [data, weight], lambda ins, outs: tvm.tir.call_extern(
-        out_dtype, "test_tflite_custom", ins[0], ins[1], outs[0], 0, 0), name="C")
+    return te.extern((batch, out_dim), [data, weight], lambda ins, outs: tvm.tir.call_extern(out_dtype, "test_tflite_custom"), name="C")
 
 
 @tvm.target.generic_func
