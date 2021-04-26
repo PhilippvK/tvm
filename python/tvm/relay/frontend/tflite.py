@@ -95,7 +95,8 @@ class OperatorConverter(object):
             "FLOOR_DIV": self.convert_floor_div,
             "FLOOR_MOD": self.convert_floor_mod,
             "FLOOR": self.convert_floor,
-            "FULLY_CONNECTED": self.convert_fully_connected,
+            #"FULLY_CONNECTED": self.convert_fully_connected,
+            "FULLY_CONNECTED": self.convert_tflite_custom,
             "GATHER": self.convert_gather,
             "GATHER_ND": self.convert_gather_nd,
             "GREATER_EQUAL": self.convert_greater_equal,
@@ -1884,8 +1885,7 @@ class OperatorConverter(object):
                 out_dtype="int32",
             )
         else:
-            #out = _op.nn.dense(in_expr, weight_expr, units=weight_shape[0])
-            out = _op.nn.tflite_custom(in_expr, weight_expr, units=weight_shape[0])
+            out = _op.nn.dense(in_expr, weight_expr, units=weight_shape[0])
 
         # if we have bias
         if len(input_tensors) == 3:
@@ -1936,6 +1936,129 @@ class OperatorConverter(object):
 
         else:
             out = self.convert_fused_activation_function(out, fused_activation_fn)
+
+        return out
+
+    def convert_tflite_custom(self, op):
+        """Convert TFLite custom op"""
+        print("convert_tflite_custom")
+        try:
+            from tflite.FullyConnectedOptions import FullyConnectedOptions
+            from tflite.BuiltinOptions import BuiltinOptions
+            #from tflite.CustomOptions import CustomOptions
+            from tflite.TensorType import TensorType
+        except ImportError:
+            raise ImportError("The tflite package must be installed")
+
+        input_tensors = self.get_input_tensors(op)
+        #assert len(input_tensors) in (2, 3), "input tensors length should be two or three"
+
+        input_tensor = input_tensors[0]
+        weight_tensor = input_tensors[1]
+
+        output_tensors = self.get_output_tensors(op)
+        #assert len(output_tensors) == 1, "output tensors length should be 1"
+        output_tensor = output_tensors[0]
+        output_tensor_type = output_tensor.tensor.Type()
+        output_tensor_type_str = self.get_tensor_type_str(output_tensor_type)
+
+        weight_tensor_shape = to_int_list(self.get_tensor_shape(weight_tensor))
+
+        # Weight should have only 2 dimensions(TFLite convention)
+        #assert len(weight_tensor_shape) == 2, "Weight should be only 2-dim"
+
+        # Input shape: [i_batch_size, ..., n_inputs]
+        # Filter shape: [n_inputs, n_units]
+        #
+        # As we will transform Fully_Connected Input to Dense Op inputs as below
+        # Dense expected Input shape: [batch_size, n_units]
+        # Dense expected Weight shape: [out_dim, n_units]
+        # Dense output shape: [batch_size, out_dim]
+        #target_shape = tuple((-1, weight_tensor_shape[1]))
+        in_expr = self.get_tensor_expr(input_tensor)
+        #in_expr = _op.reshape(in_expr, target_shape)
+
+        # TODO: Change the output shape calculation based on keep_dim option
+        assert op.BuiltinOptionsType() == BuiltinOptions.FullyConnectedOptions
+        op_options = op.BuiltinOptions()
+        fully_connected_options = FullyConnectedOptions()
+        fully_connected_options.Init(op_options.Bytes, op_options.Pos)
+        fused_activation_fn = fully_connected_options.FusedActivationFunction()
+
+        # weight tensor type should be INT8/UINT8 (quantization) or FLOAT32
+        weight_tensor_type = weight_tensor.tensor.Type()
+        assert weight_tensor_type in (TensorType.INT8, TensorType.UINT8, TensorType.FLOAT32)
+        weight_tensor_type_str = self.get_tensor_type_str(weight_tensor_type)
+
+        if self.has_expr(weight_tensor.tensor_idx):
+            weight_expr = self.get_expr(weight_tensor.tensor_idx)
+        else:
+            weight_value = self.get_tensor_value(weight_tensor)
+            weight_expr = self.exp_tab.new_const(weight_value, dtype=weight_tensor_type_str)
+        weight_shape = _infer_shape(weight_expr)
+
+        #if input_tensor.qnn_params:
+        #    out = _qnn.op.dense(
+        #        in_expr,
+        #        weight_expr,
+        #        input_zero_point=input_tensor.qnn_params["zero_point"],
+        #        kernel_zero_point=weight_tensor.qnn_params["zero_point"],
+        #        input_scale=input_tensor.qnn_params["scale"],
+        #        kernel_scale=weight_tensor.qnn_params["scale"],
+        #        units=weight_shape[0],
+        #        out_dtype="int32",
+        #    )
+        #else:
+        #    #out = _op.nn.dense(in_expr, weight_expr, units=weight_shape[0])
+        out = _op.nn.tflite_custom(in_expr, weight_expr, units=weight_shape[0])
+
+        # if we have bias
+        #if len(input_tensors) == 3:
+        #    bias_tensor = input_tensors[2]
+        #    if bias_tensor.tensor_idx != -1:
+        #        bias_tensor_type = bias_tensor.tensor.Type()
+        #        # bias tensor type should be INT32 (quantization) or FLOAT32
+        #        assert bias_tensor_type in (TensorType.INT32, TensorType.FLOAT32)
+        #        bias_tensor_type_str = self.get_tensor_type_str(bias_tensor_type)
+        #        if self.has_expr(bias_tensor.tensor_idx):
+        #            bias_expr = self.get_expr(bias_tensor.tensor_idx)
+        #        else:
+        #            bias_expr = self.exp_tab.new_const(
+        #                self.get_tensor_value(bias_tensor), dtype=bias_tensor_type_str
+        #            )
+        #        out = _op.nn.bias_add(out, bias_expr)
+        #
+        # Finally if the dense is quantized. Add a requantize at the end.
+        #if output_tensor.qnn_params:
+        #    data_scale = input_tensor.qnn_params["scale"]
+        #    weight_scale = weight_tensor.qnn_params["scale"]
+        #    data_scale_val = get_scalar_from_constant(data_scale)
+        #    weight_scale_val = get_scalar_from_constant(weight_scale)
+        #    new_input_scale_val = data_scale_val * weight_scale_val
+        #    new_input_scale = relay.const(new_input_scale_val, "float32")
+        #    new_input_zero_point = relay.const(0, "int32")
+        #    # Requantize
+        #    out = _qnn.op.requantize(
+        #        out,
+        #        input_scale=new_input_scale,
+        #        input_zero_point=new_input_zero_point,
+        #        output_scale=output_tensor.qnn_params["scale"],
+        #        output_zero_point=output_tensor.qnn_params["zero_point"],
+        #        out_dtype=output_tensor_type_str,
+        #    )
+        #    # Call activation function
+        #    output_scale_val = get_scalar_from_constant(output_tensor.qnn_params["scale"])
+        #    output_zero_point_val = get_scalar_from_constant(output_tensor.qnn_params["zero_point"])
+        #    out = self.convert_qnn_fused_activation_function(
+        #        expr=out,
+        #        fused_activation_fn=fused_activation_fn,
+        #        scale=output_scale_val,
+        #        zero_point=output_zero_point_val,
+        #        dtype=output_tensor_type_str,
+        #    )
+        #
+        #else:
+        out = self.convert_fused_activation_function(out, fused_activation_fn)
 
         print(">", out)
         return out
