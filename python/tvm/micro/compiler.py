@@ -42,9 +42,11 @@ def run_cmd(cmd):
     output : str
         resulting stdout capture from the subprocess
     """
+    print("RUN_CMD", " ".join(cmd))
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     (output, _) = proc.communicate()
     output = output.decode("utf-8")
+    print(">>>", output)
     if proc.returncode != 0:
         cmd_str = " ".join(cmd)
         msg = f'error while running command "{cmd_str}":\n{output}'

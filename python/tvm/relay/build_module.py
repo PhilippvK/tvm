@@ -87,6 +87,8 @@ class BuildModule(object):
 
     def build(self, mod, target=None, target_host=None, params=None):
         print("PHI#", "PY", "BuildModule", "BUILD")
+        print("MOD: ", mod)
+        input(">>>")
         """
         Parameters
         ----------
@@ -142,6 +144,10 @@ class BuildModule(object):
         graph_json = self.get_json()
         mod = self.get_module()
         params = self.get_params()
+        print("MOD: ", dir(mod))
+        print("MOD: ", mod.get_source())
+
+        input(">>>")
 
         print("PHI#", "PY", "BuildModule", "BUILD", "RET")
         #print("PHI#", "PY", "BuildModule", "BUILD", "graph_json", graph_json)

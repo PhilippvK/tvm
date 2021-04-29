@@ -73,10 +73,12 @@ void OpStrategy::AddImplementation(FTVMCompute fcompute, FTVMSchedule fschedule,
 
 TVM_REGISTER_GLOBAL("relay.op._OpImplementationCompute")
     .set_body([](TVMArgs args, TVMRetValue* rv) {
+      LOG(WARNING) << "_OpImplementationCompute" << "\n";
       OpImplementation imp = args[0];
       Attrs attrs = args[1];
       Array<te::Tensor> inputs = args[2];
       Type out_type = args[3];
+      LOG(WARNING) << "imp: " << imp << " attrs: " << attrs << " inputs: " << inputs << " out_type: " << out_type << "\n";
       *rv = imp.Compute(attrs, inputs, out_type);
     });
 

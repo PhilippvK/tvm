@@ -236,6 +236,7 @@ class RelayBuildModule : public runtime::ModuleNode {
    */
   void Build(IRModule mod, const TargetsMap& targets, const tvm::Target& target_host) {
     // Create protected variable targets_ from ground up
+    LOG(WARNING) << "### Build --- ";
     targets_ = targets;
     target_host_ = target_host;
     CheckAndUpdateHostConsistency(&targets_, &target_host_);
@@ -462,6 +463,8 @@ class RelayBuildModule : public runtime::ModuleNode {
    */
   void BuildRelay(IRModule relay_module,
                   const std::unordered_map<std::string, tvm::runtime::NDArray>& params) {
+    LOG(WARNING) << "### BuildRelay --- ";
+    LOG(WARNING) << "relay_module: " << relay_module;
     Target target_host = GetTargetHost();
     // If no target_host has been set, we choose a default one, which is
     // llvm if "codegen.LLVMModuleCreate" is accessible.
@@ -472,6 +475,9 @@ class RelayBuildModule : public runtime::ModuleNode {
     CheckAndUpdateHostConsistency(&targets_, &target_host);
 
     // Relay IRModule -> IRModule optimizations.
+    LOG(WARNING) << "### Now calling: relay_module = Optimize(relay_module, targets_, params); --- ";
+    LOG(WARNING) << "relay_module: " << relay_module;
+    LOG(WARNING) << "targets_: " << targets_;
     relay_module = Optimize(relay_module, targets_, params);
     // Get the updated function.
     auto func = Downcast<Function>(relay_module->Lookup("main"));

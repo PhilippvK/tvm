@@ -269,7 +269,6 @@ class OperatorConverter(object):
 
             return "CUSTOM"
             #raise NotImplementedError("Custom operators are currently not supported")
-        print(op_code_str)
         return op_code_str
 
     def get_input_tensors(self, op):

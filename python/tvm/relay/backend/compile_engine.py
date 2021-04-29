@@ -222,6 +222,10 @@ def select_implementation(op, attrs, inputs, out_type, target, use_autotvm=True)
     old_silent = autotvm.GLOBAL_SCOPE.silent
     autotvm.GLOBAL_SCOPE.silent = True
     for impl in all_impls:
+        print("impl: ", impl)
+        print("attrs: ", attrs)
+        print("inputs: ", inputs)
+        print("out_type: ", out_type)
         outs = impl.compute(attrs, inputs, out_type)
         outputs[impl] = outs
         workload = autotvm.task.get_workload(outs)
