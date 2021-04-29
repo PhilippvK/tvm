@@ -95,8 +95,8 @@ class OperatorConverter(object):
             "FLOOR_DIV": self.convert_floor_div,
             "FLOOR_MOD": self.convert_floor_mod,
             "FLOOR": self.convert_floor,
-            #"FULLY_CONNECTED": self.convert_fully_connected,
-            "FULLY_CONNECTED": self.convert_tflite_custom,
+            "FULLY_CONNECTED": self.convert_fully_connected,
+            #"FULLY_CONNECTED": self.convert_tflite_custom,
             "GATHER": self.convert_gather,
             "GATHER_ND": self.convert_gather_nd,
             "GREATER_EQUAL": self.convert_greater_equal,
@@ -172,6 +172,7 @@ class OperatorConverter(object):
             "UNPACK": self.convert_unpack,
             "WHERE": self.convert_select,
             "ZEROS_LIKE": self.convert_zeros_like,
+            "CUSTOM": self.convert_tflite_custom,
         }
 
     def check_unsupported_ops(self):
@@ -1289,7 +1290,10 @@ class OperatorConverter(object):
         # Check if the input tensor is quantized, call QNN op
         if self.is_quantized(op):
             return self._convert_elemwise(_qnn.op.add, op)
-        return self._convert_elemwise(_op.add, op)
+        out = self._convert_elemwise(_op.add, op)
+        print(">", out)
+        input()
+        return out
 
     def convert_add_n(self, op):
         """Convert TFLite ADD_N"""
@@ -1941,9 +1945,36 @@ class OperatorConverter(object):
     def convert_tflite_custom(self, op):
         """Convert TFLite custom op"""
         print("convert_tflite_custom")
+        flexbuffer = op.CustomOptionsAsNumpy().tobytes()
+        #print(type(flexbuffer))
+
+        #custom_options = FlexBufferDecoder(flexbuffer)
+        #print(custom_options.decode())
+        #.decode()
+        from _flatbuffers.python.flatbuffers import flexbuffers
+
+        #def parse_custom_options(data):
+        #    root = flexbuffers.GetRoot(data)
+        #    return root.Value
+
+        #options = parse_custom_options(flexbuffer)
+        #print(options)
+        #input()
+
+        op_code_list_idx = op.OpcodeIndex()
+        custom_op_code_str = self.model.OperatorCodes(op_code_list_idx).CustomCode().decode('utf-8')
+        print("CUSTOM:", custom_op_code_str)
+
+
+        input_tensors = self.get_input_tensors(op)
+        inputs = [ self.get_expr(input_tensor.tensor_idx) for input_tensor in input_tensors]
+        #print("input_tensors", input_tensors)
+        #print("inputs", inputs)
+        #input()
+
         try:
-            from tflite.FullyConnectedOptions import FullyConnectedOptions
-            from tflite.BuiltinOptions import BuiltinOptions
+            #from tflite.FullyConnectedOptions import FullyConnectedOptions
+            #from tflite.BuiltinOptions import BuiltinOptions
             #from tflite.CustomOptions import CustomOptions
             from tflite.TensorType import TensorType
         except ImportError:
@@ -1952,16 +1983,16 @@ class OperatorConverter(object):
         input_tensors = self.get_input_tensors(op)
         #assert len(input_tensors) in (2, 3), "input tensors length should be two or three"
 
-        input_tensor = input_tensors[0]
-        weight_tensor = input_tensors[1]
+        #input_tensor = input_tensors[0]
+        #weight_tensor = input_tensors[1]
 
         output_tensors = self.get_output_tensors(op)
         #assert len(output_tensors) == 1, "output tensors length should be 1"
-        output_tensor = output_tensors[0]
-        output_tensor_type = output_tensor.tensor.Type()
-        output_tensor_type_str = self.get_tensor_type_str(output_tensor_type)
+        #output_tensor = output_tensors[0]
+        #output_tensor_type = output_tensor.tensor.Type()
+        #output_tensor_type_str = self.get_tensor_type_str(output_tensor_type)
 
-        weight_tensor_shape = to_int_list(self.get_tensor_shape(weight_tensor))
+        #weight_tensor_shape = to_int_list(self.get_tensor_shape(weight_tensor))
 
         # Weight should have only 2 dimensions(TFLite convention)
         #assert len(weight_tensor_shape) == 2, "Weight should be only 2-dim"
@@ -1974,27 +2005,27 @@ class OperatorConverter(object):
         # Dense expected Weight shape: [out_dim, n_units]
         # Dense output shape: [batch_size, out_dim]
         #target_shape = tuple((-1, weight_tensor_shape[1]))
-        in_expr = self.get_tensor_expr(input_tensor)
+        #in_expr = self.get_tensor_expr(input_tensor)
         #in_expr = _op.reshape(in_expr, target_shape)
 
         # TODO: Change the output shape calculation based on keep_dim option
-        assert op.BuiltinOptionsType() == BuiltinOptions.FullyConnectedOptions
-        op_options = op.BuiltinOptions()
-        fully_connected_options = FullyConnectedOptions()
-        fully_connected_options.Init(op_options.Bytes, op_options.Pos)
-        fused_activation_fn = fully_connected_options.FusedActivationFunction()
+        #assert op.BuiltinOptionsType() == BuiltinOptions.FullyConnectedOptions
+        #op_options = op.BuiltinOptions()
+        #fully_connected_options = FullyConnectedOptions()
+        #fully_connected_options.Init(op_options.Bytes, op_options.Pos)
+        #fused_activation_fn = fully_connected_options.FusedActivationFunction()
 
         # weight tensor type should be INT8/UINT8 (quantization) or FLOAT32
-        weight_tensor_type = weight_tensor.tensor.Type()
-        assert weight_tensor_type in (TensorType.INT8, TensorType.UINT8, TensorType.FLOAT32)
-        weight_tensor_type_str = self.get_tensor_type_str(weight_tensor_type)
+        #weight_tensor_type = weight_tensor.tensor.Type()
+        #assert weight_tensor_type in (TensorType.INT8, TensorType.UINT8, TensorType.FLOAT32)
+        #weight_tensor_type_str = self.get_tensor_type_str(weight_tensor_type)
 
-        if self.has_expr(weight_tensor.tensor_idx):
-            weight_expr = self.get_expr(weight_tensor.tensor_idx)
-        else:
-            weight_value = self.get_tensor_value(weight_tensor)
-            weight_expr = self.exp_tab.new_const(weight_value, dtype=weight_tensor_type_str)
-        weight_shape = _infer_shape(weight_expr)
+        #if self.has_expr(weight_tensor.tensor_idx):
+        #    weight_expr = self.get_expr(weight_tensor.tensor_idx)
+        #else:
+        #    weight_value = self.get_tensor_value(weight_tensor)
+        #    weight_expr = self.exp_tab.new_const(weight_value, dtype=weight_tensor_type_str)
+        #weight_shape = _infer_shape(weight_expr)
 
         #if input_tensor.qnn_params:
         #    out = _qnn.op.dense(
@@ -2009,7 +2040,7 @@ class OperatorConverter(object):
         #    )
         #else:
         #    #out = _op.nn.dense(in_expr, weight_expr, units=weight_shape[0])
-        out = _op.nn.tflite_custom(in_expr, weight_expr, units=weight_shape[0])
+        #out = _op.nn.tflite_custom(in_expr, weight_expr, units=weight_shape[0])
 
         # if we have bias
         #if len(input_tensors) == 3:
@@ -2057,8 +2088,9 @@ class OperatorConverter(object):
         #    )
         #
         #else:
-        out = self.convert_fused_activation_function(out, fused_activation_fn)
-
+        #out = _op.nn.tflite_custom(inputs, custom_op_code_str, options=flexbuffer)
+        #out = _op.nn.tflite_custom(inputs[0], inputs[1], custom_op_code_str, options=list(flexbuffer))
+        out = _op.add2(inputs[0], inputs[1])
         print(">", out)
         return out
 
