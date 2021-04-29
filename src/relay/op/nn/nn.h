@@ -93,7 +93,10 @@ bool DenseRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
 template <typename AttrType>
 bool TfLiteCustomRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
               const TypeReporter& reporter) {
-  ICHECK_EQ(types.size(), 3);
+  LOG(WARNING) << "CUSTOM REL!" << "\n";
+  reporter->Assign(types[0], types[0]); // TODO(Phi): Use out_dtype
+  return true;
+  /*ICHECK_EQ(types.size(), 3);
   const auto* data = types[0].as<TensorTypeNode>();
   const auto* weight = types[1].as<TensorTypeNode>();
   if (data == nullptr) return false;
@@ -141,7 +144,7 @@ bool TfLiteCustomRel(const Array<Type>& types, int num_inputs, const Attrs& attr
   }
   // assign output type
   reporter->Assign(types[2], TensorType(oshape, out_dtype));
-  return true;
+  return true;*/
 }
 
 template <typename AttrType>

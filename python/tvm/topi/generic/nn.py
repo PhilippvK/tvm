@@ -580,7 +580,7 @@ def schedule_dense(outs):
     return _default_schedule(outs, False)
 
 def schedule_tflite_custom(outs):
-    """Schedule for tflite_custom(
+    """Schedule for tflite_custom
 
     Parameters
     ----------

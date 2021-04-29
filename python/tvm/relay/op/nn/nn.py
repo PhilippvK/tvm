@@ -1444,9 +1444,9 @@ def dense(data, weight, units=None, out_dtype=""):
     """
     return _make.dense(data, weight, units, out_dtype)
 
-def tflite_custom(data, weight, units=None, out_dtype=""):
+def tflite_custom(input1, input2, name, options=None, out_dtype=None): # TODO(Phi): Use out_dtype!
     print("DEF tflite_custom")
-    return _make.tflite_custom(data, weight, units, out_dtype)
+    return _make.tflite_custom(input1, input2, name, options, out_dtype)
 
 
 def contrib_dense_pack(data, weight, units=None, out_dtype=""):

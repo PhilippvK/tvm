@@ -941,17 +941,14 @@ struct DenseAttrs : public tvm::AttrsNode<DenseAttrs> {
 
 /*! \brief Attributes for dense operator */
 struct TfLiteCustomAttrs : public tvm::AttrsNode<TfLiteCustomAttrs> {
-  IndexExpr units;
-  tvm::String auto_scheduler_rewritten_layout;  // The layout after auto-scheduler's layout rewrite
+  tvm::String name;
   DataType out_dtype;
+  Array<Integer> options;
 
   TVM_DECLARE_ATTRS(TfLiteCustomAttrs, "relay.attrs.TfLiteCustomAttrs") {
-    TVM_ATTR_FIELD(units).describe("Number of hidden units of the dense transformation.");
-
-    // use 0 bits to indicate none.
-    TVM_ATTR_FIELD(out_dtype)
-        .set_default(NullValue<DataType>())
-        .describe("Output data type, set to explicit type under mixed precision setting");
+    TVM_ATTR_FIELD(name).describe("Custom name");
+    TVM_ATTR_FIELD(out_dtype).describe("Output Datatype");
+    TVM_ATTR_FIELD(options).describe("Custom options");
   }
 };
 

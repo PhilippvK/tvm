@@ -195,13 +195,15 @@ RELAY_REGISTER_OP("nn.dense")
 TVM_REGISTER_NODE_TYPE(TfLiteCustomAttrs);
 
 // Positional relay function to create dense operator used by frontend FFI.
-Expr MakeTfLiteCustom(Expr data, Expr weight, IndexExpr units, DataType out_dtype) {
+Expr MakeTfLiteCustom(Expr input1, Expr input2, String name, Array<Integer> options, DataType out_dtype) {
   auto attrs = make_object<TfLiteCustomAttrs>();
-  attrs->units = units;
+  attrs->name = std::move(name);
+  attrs->options = std::move(options); // TODO(Phi: String -> Dict/Map
   attrs->out_dtype = out_dtype;
   static const Op& op = Op::Get("nn.tflite_custom");
   LOG(WARNING) << "MakeTfLiteCustom";
-  return Call(op, {data, weight}, Attrs(attrs), {});
+  String test = "TESTABC";
+  return Call(op, {input1, input2}, Attrs(attrs), {});
 }
 
 TVM_REGISTER_GLOBAL("relay.op.nn._make.tflite_custom").set_body_typed(MakeTfLiteCustom);
@@ -210,10 +212,11 @@ RELAY_REGISTER_OP("nn.tflite_custom")
     .describe(R"code(TODO(Phi))code" TVM_ADD_FILELINE)
     .set_attrs_type<TfLiteCustomAttrs>()
     .set_num_inputs(2)
-    .add_argument("data", "nD Tensor", "Input data.")
-    .add_argument("weight", "2D Tensor", "Weight matrix.")
-    .set_support_level(1)
+    .add_argument("input1", "Tensor", "The first input tensor")
+    .add_argument("input2", "Tensor", "The second input tensor")
+    .set_support_level(10)
     .add_type_rel("TfLiteCustom", TfLiteCustomRel<TfLiteCustomAttrs>);
+
 
 // relay.nn.contrib_dense_pack
 // Positional relay function to create dense_pack operator used by frontend FFI.
