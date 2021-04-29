@@ -196,6 +196,12 @@ def schedule_lrn(attrs, outs, target):
     with target:
         return topi.generic.schedule_lrn(outs)
 
+# add2
+@generic_func
+def schedule_add2(attrs, outs, target):
+    """Schedule for add2"""
+    with target:
+        return topi.generic.default.default_schedule(outs, False)
 
 # bitpack
 @generic_func

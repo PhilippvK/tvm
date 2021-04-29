@@ -283,3 +283,16 @@ register_shape_func("log2", False, elemwise_shape_func)
 register_shape_func("sigmoid", False, elemwise_shape_func)
 register_shape_func("tanh", False, elemwise_shape_func)
 register_shape_func("logical_not", False, elemwise_shape_func)
+
+from . import op as reg
+from . import strategy
+@reg.register_compute("add2")
+def compute_add2(attrs, inputs, out_type):
+    out_dtype = out_type # TMP
+    #out_dtype = attrs.out_dtype
+    #out_dtype = inputs[0].dtype if out_dtype == "" else out_dtype
+    #args = [inputs[0], inputs[1], None, out_dtype]
+    args = [inputs[0], inputs[1]]
+    return [topi.add2_(*args)]
+
+reg.register_schedule("add2", strategy.schedule_add2)

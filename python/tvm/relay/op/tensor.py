@@ -529,6 +529,32 @@ def add(lhs, rhs):
     """
     return _make.add(lhs, rhs)
 
+def add2(lhs, rhs):
+    """Addition with numpy-style broadcasting.
+
+    Parameters
+    ----------
+    lhs : relay.Expr
+        The left hand side input data
+    rhs : relay.Expr
+        The right hand side input data
+
+    Returns
+    -------
+    result : relay.Expr
+        The computed result.
+
+    Examples
+    --------
+    .. code:: python
+
+      x = relay.Var("a") # shape is [2, 3]
+      y = relay.Var("b") # shape is [2, 1]
+      z = relay.add(x, y)  # result shape is [2, 3]
+    """
+    return _make.add2(lhs, rhs)
+
+
 
 def subtract(lhs, rhs):
     """Subtraction with numpy-style broadcasting.

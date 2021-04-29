@@ -58,6 +58,13 @@ def add(lhs, rhs):
     """
     return _cpp.add(lhs, rhs)
 
+from tvm import te, tir
+
+def add2_(lhs, rhs):
+
+    return te.extern((1, 2), [lhs, rhs], lambda ins, outs: tir.call_extern("float32", "test_tflite_custom"), name="C")
+    #return _cpp.add(lhs, rhs)
+
 
 def subtract(lhs, rhs):
     """Subtraction with auto-broadcasting
