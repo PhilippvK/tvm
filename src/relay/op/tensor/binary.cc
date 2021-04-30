@@ -47,11 +47,12 @@ RELAY_REGISTER_BINARY_OP("add")
 
 TVM_REGISTER_GLOBAL("relay.op._make.add2")
     .set_body_typed([](Expr lhs, Expr rhs) {
-        //static const Op& op = Op::Get("add2");
+
+
         static const Op& op = Op::Get("add2");
         return Call(op, {lhs, rhs}, Attrs(), {}); });
 
-RELAY_REGISTER_OP("add2")
+/*RELAY_REGISTER_OP("add2")
     .set_num_inputs(2)
     .add_argument("lhs", "Tensor", "The left hand side tensor.")
     .add_argument("rhs", "Tensor", "The right hand side tensor.")
@@ -59,6 +60,16 @@ RELAY_REGISTER_OP("add2")
     .set_attr<TOpPattern>("TOpPattern", kBroadcast)
     .set_attr<TOpIsStateful>("TOpIsStateful", false)
     .set_attr<FInferCorrectLayout>("FInferCorrectLayout", BinaryBroadcastLayout)
+    .describe("Elementwise add with broadcasting")
+    .set_support_level(1);*/
+
+
+RELAY_REGISTER_OP("add2")
+    .set_num_inputs(2)
+    .add_argument("lhs", "Tensor", "The left hand side tensor.")
+    .add_argument("rhs", "Tensor", "The right hand side tensor.")
+    .add_type_rel("Broadcast", BroadcastRel)
+    .set_attr<TOpPattern>("TOpPattern", kOpaque)
     .describe("Elementwise add with broadcasting")
     .set_support_level(1);
 

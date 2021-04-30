@@ -60,10 +60,39 @@ def add(lhs, rhs):
 
 from tvm import te, tir
 
-def add2_(lhs, rhs):
+def add2_(A, B):
+    print("(A,B)=",A,",", B)
+    dtype = A.dtype
+    shape = A.shape
+    C = te.placeholder(A.shape, name="c", dtype=dtype)
+    A_buf = tir.decl_buffer(shape, dtype)
+    B_buf = tir.decl_buffer(shape, dtype)
+    C_buf = tir.decl_buffer(shape, dtype    )
 
-    return te.extern((1, 2), [lhs, rhs], lambda ins, outs: tir.call_extern("float32", "test_tflite_custom"), name="C")
+    ret = te.extern(shape, [A, B], lambda ins, outs: tir.call_extern(dtype, "test_tflite_custom", ins[0].access_ptr("r"), ins[1].access_ptr("r"), outs[0].access_ptr("rw")), name="C")
+
+    #print("T: ", T)
+    #print("T2: ", T2)
+    print("ret: ", ret)
+    #input(">>>")
+
+    #return C
+                        #aa.access_ptr("r"),
+                    #bb.access_ptr("r"),
+                    #cc.access_ptr("w"),
+                    #aa.strides[0],
+                    #bb.strides[0],
+                    #cc.strides[0],
+    #A = te.placeholder((1, 2), name="A")
+    #B = te.placeholder((1, 2), name="B")
+    #C = te.extern((1, 2), [lhs, rhs],
+    #           lambda ins, outs: tir.call_packed(
+    #              "tvm.contrib.cblas.matmul2",
+    #                ins[0], ins[1], outs[0], 0, 0), name="C")
+
+    #C = te.extern((1, 2), [lhs, rhs], lambda ins, outs: tir.call_extern("float32", "test_tflite_custom", 1, 2), name="C")
     #return _cpp.add(lhs, rhs)
+    return ret
 
 
 def subtract(lhs, rhs):
