@@ -578,6 +578,8 @@ void CodeGenC::VisitExpr_(const NotNode* op, std::ostream& os) {  // NOLINT(*)
 
 void CodeGenC::PrintCallExtern(Type ret_type, String global_symbol, const Array<PrimExpr>& args,
                                bool skip_first_arg, std::ostream& os) {  // NOLINT(*)
+  LOG(WARNING) << "!!!" << "CodeGenC::PrintCallExtern" << "!!!" << "\n";
+  LOG(WARNING) << ret_type << "|" << global_symbol << "|" << args << "|" << skip_first_arg;
   os << global_symbol << "(";
   for (size_t i = static_cast<size_t>(skip_first_arg); i < args.size(); ++i) {
     this->PrintExpr(args[i], os);

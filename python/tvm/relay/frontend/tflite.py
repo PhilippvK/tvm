@@ -1968,9 +1968,9 @@ class OperatorConverter(object):
 
         input_tensors = self.get_input_tensors(op)
         inputs = [ self.get_expr(input_tensor.tensor_idx) for input_tensor in input_tensors]
-        #print("input_tensors", input_tensors)
-        #print("inputs", inputs)
-        #input()
+        print("input_tensors", input_tensors)
+        print("inputs", inputs)
+        input()
 
         try:
             #from tflite.FullyConnectedOptions import FullyConnectedOptions

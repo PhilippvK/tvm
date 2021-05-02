@@ -95,7 +95,7 @@ def get_shape(shape):
 
 
 def get_valid_implementations(op, attrs, inputs, out_type, target):
-    print("get_valid_implementations(op, attrs, inputs, out_type, target)", op, attrs, inputs, out_type, target)
+    #print("get_valid_implementations(op, attrs, inputs, out_type, target)", op, attrs, inputs, out_type, target)
     """Get all valid implementations from the op strategy.
 
     Note that this function doesn't support op with symbolic input shapes.
@@ -123,19 +123,19 @@ def get_valid_implementations(op, attrs, inputs, out_type, target):
         The list of all valid op implementations.
     """
     fstrategy = op.get_attr("FTVMStrategy")
-    print("fstrategy=", fstrategy)
+    #print("fstrategy=", fstrategy)
     assert fstrategy is not None, (
         "%s doesn't have an FTVMStrategy registered. You can register "
         "one in python with `tvm.relay.op.register_strategy`." % op.name
     )
     with target:
         strategy = fstrategy(attrs, inputs, out_type, target)
-    print("strategy=", strategy)
+    #print("strategy=", strategy)
     analyzer = tvm.arith.Analyzer()
     ret = []
     for spec in strategy.specializations:
-        print("SPEC", spec)
-        print("spec.implementations", spec.implementations)
+        #print("SPEC", spec)
+        #print("spec.implementations", spec.implementations)
         if spec.condition:
             # check if all the clauses in the specialized condition are true
             flag = True
@@ -193,8 +193,8 @@ def select_implementation(op, attrs, inputs, out_type, target, use_autotvm=True)
         The best op implementation and the corresponding output tensors.
     """
     all_impls = get_valid_implementations(op, attrs, inputs, out_type, target)
-    print("select_implementation(op, attrs, inputs, out_type, target, use_autotvm=True):", op, attrs, inputs, out_type, target)
-    print("ALL_IMPLS", all_impls)
+    #print("select_implementation(op, attrs, inputs, out_type, target, use_autotvm=True):", op, attrs, inputs, out_type, target)
+    #print("ALL_IMPLS", all_impls)
     best_plevel_impl = max(all_impls, key=lambda x: x.plevel)
 
     # Disable autotvm if auto_scheduler is enabled.
@@ -254,7 +254,7 @@ def select_implementation(op, attrs, inputs, out_type, target, use_autotvm=True)
         return best_autotvm_impl, outputs[best_autotvm_impl]
 
     # Use the implementation with highest plevel
-    print(workloads, best_plevel_impl)
+    #print(workloads, best_plevel_impl)
     if workloads[best_plevel_impl] is not None:
         msg = (
             "Cannot find config for target=%s, workload=%s. A fallback configuration "

@@ -491,12 +491,12 @@ class TypeInferencer : private ExprFunctor<Type(const Expr&)>,
 
     size_t type_arity = fn_ty->arg_types.size();
     size_t number_of_args = arg_types.size();
-    LOG(WARNING) << "type_args: " << type_args << "\n";
-    LOG(WARNING) << "fn_ty_node: " << fn_ty_node << "\n";
-    LOG(WARNING) << "fn_ty->arg_types: " << fn_ty->arg_types << "\n";
-    LOG(WARNING) << "arg_types: " << arg_types << "\n";
-    LOG(WARNING) << "type_arity: " << type_arity << "\n";
-    LOG(WARNING) << "number_of_args: " << number_of_args << "\n";
+    //LOG(WARNING) << "type_args: " << type_args << "\n";
+    //LOG(WARNING) << "fn_ty_node: " << fn_ty_node << "\n";
+    //LOG(WARNING) << "fn_ty->arg_types: " << fn_ty->arg_types << "\n";
+    //LOG(WARNING) << "arg_types: " << arg_types << "\n";
+    //LOG(WARNING) << "type_arity: " << type_arity << "\n";
+    //LOG(WARNING) << "number_of_args: " << number_of_args << "\n";
 
     if (type_arity != number_of_args) {
       if (type_arity < number_of_args) {
@@ -661,8 +661,8 @@ class TypeInferencer::Resolver : public MixedModeMutator, PatternMutator {
     auto it = tmap_.find(GetRef<Expr>(op));
     ICHECK(it != tmap_.end());
     Type checked_type = solver_->Resolve(it->second.checked_type);
-    LOG(WARNING) << "post: " << post << "\n";
-    LOG(WARNING) << "checked_type: " << checked_type << "\n";
+    //LOG(WARNING) << "post: " << post << "\n";
+    //LOG(WARNING) << "checked_type: " << checked_type << "\n";
 
     if (checked_type.as<IncompleteTypeNode>() != nullptr) {
       this->solver_->diag_ctx_.Emit(
@@ -749,7 +749,7 @@ class TypeInferencer::Resolver : public MixedModeMutator, PatternMutator {
 
 Expr TypeInferencer::Infer(GlobalVar var, Function function) {
   // Set the current function being type checked.
-  LOG(WARNING) << "TypeInferencer::Infer" << "\n";
+  //LOG(WARNING) << "TypeInferencer::Infer" << "\n";
   LOG(WARNING) << "Function: " << function << "\n";
   this->current_func_ = var;
 

@@ -763,6 +763,7 @@ Call::Call(DataType dtype, RelayExpr op, Array<PrimExpr> args, Span span) {
   node->args = std::move(args);
   node->span = std::move(span);
   data_ = std::move(node);
+  //LOG(WARNING) << "dtype:" << dtype << "\n";
 }
 
 TVM_REGISTER_GLOBAL("tir.Call")

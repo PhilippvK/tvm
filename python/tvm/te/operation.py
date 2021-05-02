@@ -295,7 +295,7 @@ def extern(
     input_placeholders = in_buffers or []
     output_placeholders = out_buffers or []
     types = set()
-    print("INPUTS", inputs)
+    #print("INPUTS", inputs)
     for t in inputs:
         if not isinstance(t, _tensor.Tensor):
             raise ValueError("expect inputs to be tensor")

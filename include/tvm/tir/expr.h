@@ -901,6 +901,7 @@ class CallNode : public PrimExprNode {
   /*! \brief The arguments. */
   Array<PrimExpr> args;
   void VisitAttrs(AttrVisitor* v) {
+    LOG(WARNING) << "VisitAttrs" << "\n";
     v->Visit("dtype", &dtype);
     v->Visit("op", &op);
     v->Visit("args", &args);
