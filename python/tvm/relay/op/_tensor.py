@@ -288,11 +288,12 @@ from . import op as reg
 from . import strategy
 @reg.register_compute("add2")
 def compute_add2(attrs, inputs, out_type):
-    out_dtype = out_type # TMP
+    #out_dtype = out_type # TMP
     #out_dtype = attrs.out_dtype
     #out_dtype = inputs[0].dtype if out_dtype == "" else out_dtype
-    #args = [inputs[0], inputs[1], None, out_dtype]
-    args = [inputs[0], inputs[1]]
+    args = [inputs, attrs, out_type ,"TEST"]
+    #args = [inputs[0], inputs[1]]
+    #print("2", "inputs=", inputs, " args=", args)
     return [topi.add2_(*args)]
 
 reg.register_schedule("add2", strategy.schedule_add2)

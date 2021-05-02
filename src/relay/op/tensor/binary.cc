@@ -44,13 +44,15 @@ RELAY_REGISTER_BINARY_OP("add")
     .set_support_level(1)
     .set_attr<FTVMCompute>("FTVMCompute", RELAY_BINARY_COMPUTE(topi::add));
 
-
 TVM_REGISTER_GLOBAL("relay.op._make.add2")
-    .set_body_typed([](Expr lhs, Expr rhs) {
-
+    .set_body_typed([](Array<Expr> inputs, String name, Array<Integer> options, DataType out_dtype){
+        auto attrs = make_object<TfLiteCustomAttrs>();
+        attrs->name = std::move(name);
+        attrs->options = std::move(options);
+        attrs->out_dtype = out_dtype;
 
         static const Op& op = Op::Get("add2");
-        return Call(op, {lhs, rhs}, Attrs(), {}); });
+        return Call(op, inputs, Attrs(attrs), {}); });
 
 /*RELAY_REGISTER_OP("add2")
     .set_num_inputs(2)
@@ -66,8 +68,7 @@ TVM_REGISTER_GLOBAL("relay.op._make.add2")
 
 RELAY_REGISTER_OP("add2")
     .set_num_inputs(2)
-    .add_argument("lhs", "Tensor", "The left hand side tensor.")
-    .add_argument("rhs", "Tensor", "The right hand side tensor.")
+    .add_argument("inputs", "Tuple", "The input tensors.")
     .add_type_rel("Broadcast", BroadcastRel)
     .set_attr<TOpPattern>("TOpPattern", kOpaque)
     .describe("Elementwise add with broadcasting")

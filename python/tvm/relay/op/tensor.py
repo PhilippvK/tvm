@@ -529,7 +529,7 @@ def add(lhs, rhs):
     """
     return _make.add(lhs, rhs)
 
-def add2(lhs, rhs):
+def add2(inputs, name="UNKNOWN", options=None, out_dtype=None):
     """Addition with numpy-style broadcasting.
 
     Parameters
@@ -552,7 +552,7 @@ def add2(lhs, rhs):
       y = relay.Var("b") # shape is [2, 1]
       z = relay.add(x, y)  # result shape is [2, 3]
     """
-    return _make.add2(lhs, rhs)
+    return _make.add2(inputs, name, options, out_dtype)
 
 
 

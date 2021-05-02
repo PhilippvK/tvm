@@ -58,18 +58,28 @@ def add(lhs, rhs):
     """
     return _cpp.add(lhs, rhs)
 
-from tvm import te, tir
+from tvm import te, tir, ir
 
-def add2_(A, B):
-    print("(A,B)=",A,",", B)
+def add2_(inputs, attrs, out_dtype, test):
+    A, B = inputs
+    print("(A,B) =",A,",", B)
+    print("inputs =",inputs)
+    attrs_dict = { i.name: attrs[i.name] for i in attrs.list_field_info()}
+    print("attrs =",attrs_dict)
+    print("out_dtype =",out_dtype)
+    print("test =",test)
+    input(">>>")
+   
     dtype = A.dtype
     shape = A.shape
     C = te.placeholder(A.shape, name="c", dtype=dtype)
-    A_buf = tir.decl_buffer(shape, dtype)
-    B_buf = tir.decl_buffer(shape, dtype)
-    C_buf = tir.decl_buffer(shape, dtype    )
+    #A_buf = tir.decl_buffer(shape, dtype)
+    #B_buf = tir.decl_buffer(shape, dtype)
+    #C_buf = tir.decl_buffer(shape, dtype)
 
-    ret = te.extern(shape, [A, B], lambda ins, outs: tir.call_extern(dtype, "test_tflite_custom", ins[0].access_ptr("r"), ins[1].access_ptr("r"), outs[0].access_ptr("rw")), name="C")
+
+    #ret = te.extern(shape, [A, B], lambda ins, outs: tir.call_extern(dtype, "test_tflite_custom", ins[0].access_ptr("r"), ins[1].access_ptr("r"), outs[0].access_ptr("rw")), name="C")
+    ret = te.extern(shape, [A, B], lambda ins, outs: tir.call_extern(dtype, f"tflite_custom_{attrs_dict['name']}", ins[0].access_ptr("r"), ins[1].access_ptr("r"), outs[0].access_ptr("rw"), outs[0].access_ptr("rw"), str(shape), [dtype]), name="C")
 
     #print("T: ", T)
     #print("T2: ", T2)

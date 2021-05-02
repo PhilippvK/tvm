@@ -2086,11 +2086,11 @@ class OperatorConverter(object):
         #        zero_point=output_zero_point_val,
         #        dtype=output_tensor_type_str,
         #    )
-        #
+        #name="UNKNOWN", options=None, out_dtype=None
         #else:
         #out = _op.nn.tflite_custom(inputs, custom_op_code_str, options=flexbuffer)
         #out = _op.nn.tflite_custom(inputs[0], inputs[1], custom_op_code_str, options=list(flexbuffer))
-        out = _op.add2(inputs[0], inputs[1])
+        out = _op.add2(inputs, name=custom_op_code_str, options=list(flexbuffer), out_dtype="float32")
         print(">", out)
         return out
 
