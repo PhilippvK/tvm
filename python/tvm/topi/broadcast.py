@@ -68,22 +68,32 @@ def add2_(inputs, attrs, out_dtype, test):
     print("attrs =",attrs_dict)
     print("out_dtype =",out_dtype)
     print("test =",test)
+    print(type(A.shape))
     input(">>>")
    
     dtype = A.dtype
     shape = A.shape
-    C = te.placeholder(A.shape, name="c", dtype=dtype)
+    C1 = te.placeholder(A.shape, name="c1", dtype=dtype)
+    C2 = te.placeholder(A.shape, name="c2", dtype=dtype)
+    outputs = [C1, C2]
+    
     #A_buf = tir.decl_buffer(shape, dtype)
     #B_buf = tir.decl_buffer(shape, dtype)
     #C_buf = tir.decl_buffer(shape, dtype)
 
 
     #ret = te.extern(shape, [A, B], lambda ins, outs: tir.call_extern(dtype, "test_tflite_custom", ins[0].access_ptr("r"), ins[1].access_ptr("r"), outs[0].access_ptr("rw")), name="C")
-    ret = te.extern(shape, [A, B], lambda ins, outs: tir.call_extern(dtype, f"tflite_custom_{attrs_dict['name']}", ins[0].access_ptr("r"), ins[1].access_ptr("r"), outs[0].access_ptr("rw"), outs[0].access_ptr("rw"), str(shape), [dtype]), name="C")
+    #ret = te.extern(shape, [A, B], lambda ins, outs: tir.call_extern(dtype, f"tflite_custom_{attrs_dict['name']}", ins[0].access_ptr("r"), ins[1].access_ptr("r"), outs[0].access_ptr("rw"), outs[0].access_ptr("rw"), str(shape), [dtype]), name="C")
+    #ret = te.extern(shape, [A, B], lambda ins, outs: tir.call_extern(dtype, f"tflite_custom_{attrs_dict['name']}", ins[0].access_ptr("r"), ins[1].access_ptr("r"), outs[0].access_ptr("rw"), outs[0].access_ptr("rw"), str(shape), dtype), name="C")
+    #rets = list(te.extern([shape, shape], [A, B], lambda ins, outs: tir.call_packed("tvm.runtime.tflite_custom_op", ins[0], ins[1], outs[0], dtype), name="C"))
+    rets = list(te.extern([o.shape for o in outputs], inputs, lambda ins, outs: tir.call_packed("tvm.runtime.tflite_custom_op", len(ins), len(outs), *ins, *outs, 3, "\x01\x02\x03"), name="C"))
+    #rets = list(te.extern([o.shape for o in outputs], inputs, lambda ins, outs: tir.call_extern("float32", "tvm.runtime.tflite_custom_op", len(ins), len(outs), *ins, *outs, 3, "\x01\x02\x03"), name="C"))
 
     #print("T: ", T)
     #print("T2: ", T2)
-    print("ret: ", ret)
+    print("rets: ", rets)
+    print("ret1: ", rets[0])
+    print("ret2: ", rets[1])
     #input(">>>")
 
     #return C
@@ -102,7 +112,7 @@ def add2_(inputs, attrs, out_dtype, test):
 
     #C = te.extern((1, 2), [lhs, rhs], lambda ins, outs: tir.call_extern("float32", "test_tflite_custom", 1, 2), name="C")
     #return _cpp.add(lhs, rhs)
-    return ret
+    return rets[0]
 
 
 def subtract(lhs, rhs):
