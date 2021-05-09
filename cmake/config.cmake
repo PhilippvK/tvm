@@ -160,14 +160,14 @@ set(USE_NNPACK OFF)
 # - ON: enable tflite with cmake's find search
 # - OFF: disable tflite
 # - /path/to/libtensorflow-lite.a: use specific path to tensorflow lite library
-set(USE_TFLITE OFF)
+set(USE_TFLITE ON)
 
 # /path/to/tensorflow: tensorflow root path when use tflite library
-set(USE_TENSORFLOW_PATH none)
+set(USE_TENSORFLOW_PATH /workspaces/ml_on_mcu/deps/src/tf/tensorflow)
 
 # Required for full builds with TFLite. Not needed for runtime with TFLite.
 # /path/to/flatbuffers: flatbuffers root path when using tflite library
-set(USE_FLATBUFFERS_PATH none)
+set(USE_FLATBUFFERS_PATH /workspaces/ml_on_mcu/deps/src/tf/tensorflow/tensorflow/lite/tools/make/downloads/flatbuffers)
 
 # Possible values:
 # - OFF: disable tflite support for edgetpu
