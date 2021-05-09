@@ -255,7 +255,7 @@ def extern(
     Returns
     -------
     tensor: Tensor or list of Tensors
-        The created tensor or tuple of tensors it it contains multiple outputs.
+        The created tensor or tuple of tensors if it contains multiple outputs.
 
     Example
     -------
