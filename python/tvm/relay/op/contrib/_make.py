@@ -14,14 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-# pylint: disable=wildcard-import
-"""Contrib modules."""
-from .register import get_pattern_table, register_pattern_table
+"""Constructor APIs"""
+import tvm._ffi
 
-from .arm_compute_lib import *
-from .dnnl import *
-from .bnns import *
-from .coreml import *
-from .ethosn import *
-from .tensorrt import *
-from .tflite import *
+tvm._ffi._init_api("relay.op.contrib._make", __name__)

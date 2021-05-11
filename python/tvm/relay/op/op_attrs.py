@@ -562,3 +562,9 @@ class BatchToSpaceNDAttrs(Attrs):
 @tvm._ffi.register_object("relay.attrs.ThreefryGenerateAttrs")
 class ThreefryGenerateAttrs(Attrs):
     """Attributes used in ThreefryGenerateAttrs operators"""
+
+
+@tvm._ffi.register_object("relay.attrs.TfLiteExternAttrs")
+class TfLiteExternAttrs(Attrs):
+    """Attributes used in TfLiteExtern operator"""
+
