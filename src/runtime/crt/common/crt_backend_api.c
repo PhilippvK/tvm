@@ -32,6 +32,12 @@
 
 #include "crt_config.h"
 
+int TVMBackendGetFuncFromEnv(void* mod_node, const char* func_name, TVMFunctionHandle* func) {
+  //TVMModGetFunction((TVMModuleHandle*)mod_node, func_name, 0, func);
+  TVMFuncGetGlobal(func_name, func);
+  return 0;
+}
+
 void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t nbytes, int dtype_code_hint,
                                int dtype_bits_hint) {
   tvm_crt_error_t err = kTvmErrorNoError;
