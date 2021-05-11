@@ -74,10 +74,17 @@ from tvm import te, tir, ir, topi
 def tflite_extern_topi(data, attrs, out_dtype):
     inputs = data[:-1]
     options = data[-1]
+    print(options)
+    print("inputs =",inputs)
     attrs_dict = { i.name: attrs[i.name] for i in attrs.list_field_info()}
+    print("attrs =",attrs_dict)
+    print("out_dtype =",out_dtype, "T:", out_dtype.dtype, "of", type(out_dtype.dtype), "S:", out_dtype.shape, "of", type(out_dtype.shape))
+    input(">>>")
 
-    output_dtype = out_dtype.dtype
-    output_shape = out_dtype.shape
+    output_dtype = out_dtype.dtype # TODO: get!
+    output_shape = out_dtype.shape # TODO: get!
+    #output_dtype = out_dtype # TODO: get!
+    #output_shape = out_shape # TODO: get!
 
     num_outputs = 1 # TODO!
 
@@ -92,6 +99,7 @@ def tflite_extern_topi(data, attrs, out_dtype):
     op_name = attrs_dict['name']
     is_builtin = False
     rets = list(te.extern(output_shapes, data, lambda ins, outs: tir.call_packed("tvm.runtime.tflite_extern_wrapper", op_name, int(is_builtin), len(inputs), len(outputs), *ins[:-1], *outs, ins[-1]), name="C", dtype=output_dtypes))
+    print("rets: ", rets)
     return rets[0]
 
 @reg.register_compute("tflite_extern")
