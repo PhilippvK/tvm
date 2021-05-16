@@ -662,6 +662,10 @@ void CodeGenC::VisitExpr_(const CallNode* op, std::ostream& os) {  // NOLINT(*)
       os << " != ";
       this->PrintExpr(op->args[0], os);
       os << ")";
+    } else if (ptr_op->name == "tir.round") {
+      os << "(";
+      this->PrintExpr(op->args[0], os);
+      os << " + 0.5f)";
     } else {
       LOG(FATAL) << "Unresolved call " << op->op;
     }

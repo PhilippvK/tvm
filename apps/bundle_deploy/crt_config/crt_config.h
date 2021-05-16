@@ -28,7 +28,7 @@
 #define TVM_CRT_LOG_LEVEL TVM_CRT_LOG_LEVEL_DEBUG
 
 /*! Support low-level debugging in MISRA-C runtime */
-#define TVM_CRT_DEBUG 0
+#define TVM_CRT_DEBUG 1
 
 /*! Maximum supported dimension in NDArray */
 #define TVM_CRT_MAX_NDIM 6
