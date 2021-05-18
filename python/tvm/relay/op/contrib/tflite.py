@@ -23,6 +23,7 @@ from .. import strategy
 from tvm.target import generic_func
 from . import _make
 
+from tvm import relay
 
 
 def _register_tflite_op(op_name):
@@ -52,8 +53,7 @@ def _register_tflite_op(op_name):
 # for op in _convert_map:
 #     _register_tflite_op(op)
 
-
-def tflite_extern(inputs, name="UNKNOWN", options=None, out_dtype=None, out_shape=None):
+def tflite_extern(inputs, name="UNKNOWN", builtin=False, options=None, out_dtype=None, out_shape=None):
     """Addition with numpy-style broadcasting.
     Parameters
     ----------
@@ -67,7 +67,7 @@ def tflite_extern(inputs, name="UNKNOWN", options=None, out_dtype=None, out_shap
     """ # TODO: update docstring
     import numpy as np
     inputs.append(tvm.relay.Constant(tvm.nd.array(np.array(options, dtype="uint8"))))
-    return _make.tflite_extern(tvm.relay.Tuple(inputs), name, options, out_dtype, out_shape)
+    return _make.tflite_extern(tvm.relay.Tuple(inputs), name, builtin, options, out_dtype, out_shape)
 
 from tvm import te, tir, ir, topi
 
@@ -97,7 +97,7 @@ def tflite_extern_topi(data, attrs, out_dtype):
         output_shapes.append(output_shape)
 
     op_name = attrs_dict['name']
-    is_builtin = False
+    is_builtin = attrs_dict['is_builtin']
     rets = list(te.extern(output_shapes, data, lambda ins, outs: tir.call_packed("tvm.runtime.tflite_extern_wrapper", op_name, int(is_builtin), len(inputs), len(outputs), *ins[:-1], *outs, ins[-1]), name="C", dtype=output_dtypes))
     print("rets: ", rets)
     return rets[0]

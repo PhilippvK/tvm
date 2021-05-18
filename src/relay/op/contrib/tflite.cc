@@ -15,9 +15,11 @@ namespace relay {
 
 
 TVM_REGISTER_GLOBAL("relay.op.contrib._make.tflite_extern")
-    .set_body_typed([](Expr inputs, String name, Array<Integer> options, DataType out_dtype, Array<Integer> out_shape){
+    .set_body_typed([](Expr inputs, String name, bool is_builtin, Array<Integer> options, DataType out_dtype, Array<Integer> out_shape){
+        LOG(WARNING) << "TESTWARNING" << std::endl;
         auto attrs = make_object<TfLiteExternAttrs>();
         attrs->name = std::move(name);
+        attrs->is_builtin = std::move(is_builtin);
         attrs->options = std::move(options);
         attrs->out_dtype = out_dtype;
         attrs->out_shape = out_shape;

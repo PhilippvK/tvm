@@ -38,12 +38,14 @@ namespace relay {
 /*! \brief Attributes for tflite_extern operator */
 struct TfLiteExternAttrs : public tvm::AttrsNode<TfLiteExternAttrs> {
   tvm::String name;
+  bool is_builtin;
   DataType out_dtype;
   Array<Integer> options;
   Array<Integer> out_shape;
 
   TVM_DECLARE_ATTRS(TfLiteExternAttrs, "relay.attrs.TfLiteExternAttrs") {
     TVM_ATTR_FIELD(name).describe("Custom name");
+    TVM_ATTR_FIELD(is_builtin).describe("Builtin Op Flag");
     TVM_ATTR_FIELD(out_dtype).describe("Output Datatype");
     TVM_ATTR_FIELD(options).describe("Custom options");
     TVM_ATTR_FIELD(out_shape).describe("OutputShape");
