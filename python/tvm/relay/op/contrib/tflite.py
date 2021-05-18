@@ -67,6 +67,7 @@ def tflite_extern(inputs, name="UNKNOWN", builtin=False, options=None, out_dtype
     """ # TODO: update docstring
     import numpy as np
     inputs.append(tvm.relay.Constant(tvm.nd.array(np.array(options, dtype="uint8"))))
+    inputs = [ relay.annotation.compiler_begin(input_expr, "ccompiler") for input_expr in inputs]
     return _make.tflite_extern(tvm.relay.Tuple(inputs), name, builtin, options, out_dtype, out_shape)
 
 from tvm import te, tir, ir, topi
