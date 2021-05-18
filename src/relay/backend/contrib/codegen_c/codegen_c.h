@@ -301,7 +301,7 @@ class CodegenCBase {
         continue;
       }
       this->PrintIndents();
-      code_stream_ << "memcpy(out" << i << ", " << outs[i].name << ", 4 * " << outs[i].size
+      code_stream_ << "memcpy(out" << i << ", " << outs[i].name << ", " << outs[i].size
                    << ");\n";
     }
 
@@ -341,14 +341,77 @@ class CodegenCBase {
    */
   std::string GetDtypeString(const TensorTypeNode* ttype) {
     std::string dtype;
-    if (runtime::TypeMatch(ttype->dtype, kDLFloat, 32)) {
+    if (runtime::TypeMatch(ttype->dtype, kDLFloat, 64)) {
+      dtype = "double";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLFloat, 32)) {
       dtype = "float";
     } else if (runtime::TypeMatch(ttype->dtype, kDLFloat, 16)) {
       dtype = "half";
-    } else if (runtime::TypeMatch(ttype->dtype, kDLInt, 32)) {
-      dtype = "int";
     } else if (runtime::TypeMatch(ttype->dtype, kDLInt, 64)) {
       dtype = "int64_t";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLInt, 32)) {
+      dtype = "int32_t";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLInt, 16)) {
+      dtype = "int16_t";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLInt, 8)) {
+      dtype = "int8_t";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLUInt, 64)) {
+      dtype = "uint64_t";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLUInt, 32)) {
+      dtype = "uint32_t";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLUInt, 16)) {
+      dtype = "uint16_t";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLUInt, 8)) {
+      dtype = "uint8_t";
+    } else {
+      LOG(FATAL) << "Unsupported dtype " << ttype->dtype;
+    }
+    return dtype;
+  }
+
+    /*!
+   * \brief Returns dtype size in bytes
+   *
+   * \param ttype TensorTypeNode* to get the dtype of
+   *
+   * \return The number of required bytes.
+   */
+  size_t GetDtypeSize(const TensorTypeNode* ttype) {
+    ICHECK_EQ(ttype->dtype.lanes(), 1U) << "Tensors with multiple lanes are not supported.";
+    return ttype->dtype.bits() / 8U;
+  }
+
+  /*!
+   * \brief Returns TfLite dtype string
+   *
+   * \param ttype TensorTypeNode* to get the dtype of
+   *
+   * \return The dtype string.
+   */
+  std::string GetTfLiteTypeString(const TensorTypeNode* ttype) {
+    std::string dtype;
+    if (runtime::TypeMatch(ttype->dtype, kDLFloat, 64)) {
+      dtype = "kTfLiteFloat64";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLFloat, 32)) {
+      dtype = "kTfLiteFloat32";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLFloat, 16)) {
+      dtype = "kTfLiteFloat16";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLInt, 64)) {
+      dtype = "kTfLiteInt64";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLInt, 32)) {
+      dtype = "kTfLiteInt32";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLInt, 16)) {
+      dtype = "kTfLiteInt16";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLInt, 8)) {
+      dtype = "kTfLiteInt8";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLUInt, 64)) {
+      dtype = "kTfLiteUInt64";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLUInt, 32)) {
+      dtype = "kTfLiteUInt32";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLUInt, 16)) {
+      dtype = "kTfLiteUInt16";
+    } else if (runtime::TypeMatch(ttype->dtype, kDLUInt, 8)) {
+      dtype = "kTfLiteUInt8";
     } else {
       LOG(FATAL) << "Unsupported dtype " << ttype->dtype;
     }
