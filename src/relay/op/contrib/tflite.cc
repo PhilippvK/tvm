@@ -21,8 +21,8 @@ TVM_REGISTER_GLOBAL("relay.op.contrib._make.tflite_extern")
         attrs->name = std::move(name);
         attrs->is_builtin = std::move(is_builtin);
         attrs->options = std::move(options);
-        attrs->out_dtype = out_dtype;
-        attrs->out_shape = out_shape;
+        attrs->out_dtype = std::move(out_dtype);
+        attrs->out_shape = std::move(out_shape);
 
         static const Op& op = Op::Get("tflite_extern");
         return Call(op, {inputs}, Attrs(attrs), {}); });
