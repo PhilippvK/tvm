@@ -1,7 +1,6 @@
 mxnet
 decorator
 scipy
-attr
 cloudpickle
 numpy
 psutil
@@ -10,3 +9,4 @@ tornado
 tensorflow
 tensorflow-estimator
 tflite
+attrs
