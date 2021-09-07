@@ -1,0 +1,22 @@
+diff --git a/cmake/config.cmake b/cmake/config.cmake
+index 8d8186c1b..cbed89ac2 100644
+--- a/cmake/config.cmake
++++ b/cmake/config.cmake
+@@ -85,7 +85,7 @@ set(USE_VULKAN OFF)
+ set(USE_OPENGL OFF)
+ 
+ # Whether enable MicroTVM runtime
+-set(USE_MICRO OFF)
++set(USE_MICRO ON)
+ 
+ # Whether enable RPC runtime
+ set(USE_RPC ON)
+@@ -109,7 +109,7 @@ set(USE_GRAPH_EXECUTOR_CUDA_GRAPH OFF)
+ set(USE_PROFILER ON)
+ 
+ # Whether enable microTVM standalone runtime
+-set(USE_MICRO_STANDALONE_RUNTIME OFF)
++set(USE_MICRO_STANDALONE_RUNTIME ON)
+ 
+ # Whether build with LLVM support
+ # Requires LLVM version >= 4.0
