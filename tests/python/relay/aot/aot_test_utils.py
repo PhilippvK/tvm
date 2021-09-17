@@ -436,7 +436,7 @@ def create_main(
         emit_main_epilogue(main_file)
 
 
-def create_header_file(tensor_name, npy_data, output_path):
+def create_header_file(tensor_name, npy_data, output_path, const=False):
     """
     This method generates a header file containing the data contained in the numpy array provided.
     It is used to capture the tensor data (for both inputs and expected outputs) to be bundled into the standalone application.
@@ -449,6 +449,8 @@ def create_header_file(tensor_name, npy_data, output_path):
         header_file.write("#include <stdint.h>\n")
         header_file.write("#include <dlpack/dlpack.h>\n")
         header_file.write(f"const size_t {tensor_name}_len = {npy_data.size};\n")
+        if const:
+            header_file.write(f"const \n")
 
         if npy_data.dtype == "int8":
             header_file.write(f"int8_t {tensor_name}[] =")
@@ -538,6 +540,7 @@ def compile_and_run(
                 f'{mangle_name(model.name, "input_data")}_{sanitized_tensor_name}',
                 model.inputs[key],
                 include_path,
+                const=True
             )
 
         for i in range(len(model.outputs)):
