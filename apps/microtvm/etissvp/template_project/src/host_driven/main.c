@@ -55,7 +55,7 @@ static size_t g_num_bytes_in_rx_buffer = 0;
 
 
 // Circular buffers for transmit and receive
-#define BUFLEN 128
+#define BUFLEN (TVM_CRT_MAX_PACKET_SIZE_BYTES + 100)
 
 //static uint8_t _tx_buffer[sizeof(RingBuffer) + BUFLEN] __attribute__ ((aligned(4)));
 static uint8_t _rx_buffer[sizeof(RingBuffer) + BUFLEN] __attribute__ ((aligned(4)));
