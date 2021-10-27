@@ -45,12 +45,37 @@
 //#include <zephyr.h>
 
 #include "crt_config.h"
+#include "ringbuffer.h"
 
 static const struct device* tvm_uart;
 
 static size_t g_num_bytes_requested = 0;
 static size_t g_num_bytes_written = 0;
 static size_t g_num_bytes_in_rx_buffer = 0;
+
+
+// Circular buffers for transmit and receive
+#define BUFLEN 128
+
+//static uint8_t _tx_buffer[sizeof(RingBuffer) + BUFLEN] __attribute__ ((aligned(4)));
+static uint8_t _rx_buffer[sizeof(RingBuffer) + BUFLEN] __attribute__ ((aligned(4)));
+
+//static RingBuffer *const tx_buffer = (RingBuffer *) &_tx_buffer;
+static RingBuffer *const rx_buffer = (RingBuffer *) &_rx_buffer;
+
+void UART0_IRQHandler() {
+    // ...
+    
+    // If there is received data, read it into the receive buffer.  If the
+    // buffer is full, disable the receive interrupt.
+    if (!buf_isfull(rx_buffer)) {
+        buf_put_byte(rx_buffer, UART0_D);
+        //if(buf_isfull(rx_buffer))
+        //    UART0_C2 &= ~UART_C2_RIE_MASK;
+    }
+
+    // ...
+}
 
 unsigned long micros() {
   return 0;
