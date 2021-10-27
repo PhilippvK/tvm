@@ -83,10 +83,8 @@ params = {"weight": weight_sample}
 #  When running on physical hardware, choose a TARGET and a BOARD that describe the hardware. The
 #  STM32L4R5ZI Nucleo target and board is chosen in the example below.
 #
-##TARGET = tvm.target.target.micro("stm32l4r5zi")
-TARGET = tvm.target.target.micro("host")
-##BOARD = "nucleo_l4r5zi"
-BOARD = "qemu_riscv32"
+TARGET = tvm.target.target.riscv_cpu("bare_etiss_processor")
+BOARD = "bare_etiss_processor"
 
 #########################
 # Extracting tuning tasks

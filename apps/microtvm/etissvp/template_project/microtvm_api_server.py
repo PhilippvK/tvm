@@ -141,12 +141,17 @@ PROJECT_OPTIONS = [
         help="Path to script which sets up the environment and starts running the provided target software binary on the vp.",
     ),
     server.ProjectOption(
+        "etissvp_script_args",
+        help="Additional arguments to etissvp_script.",
+    ),
+    server.ProjectOption(
         "project_type",
         help="Type of project to generate.",
         choices=tuple(PROJECT_TYPES),
     ),
     server.ProjectOption("verbose", help="Run build with verbose output.", choices=(True, False)),
     server.ProjectOption("debug", help="Run build in DEBUG mode.", choices=(True, False)),
+    server.ProjectOption("transport", help="Run build in DEBUG mode.", choices=(True, False)),
 ]
 
 
@@ -241,15 +246,15 @@ class Handler(server.ProjectAPIHandler):
 
         cmake_args = ["cmake", ".."]
 
-        if options.get("etiss_dir"):
-            cmake_args.append("-DETISS_DIR=" + options["etiss_dir"])
+        if options.get("etiss_path"):
+            cmake_args.append("-DETISS_DIR=" + options["etiss_path"])
         else:
-            raise RuntimeError("Project Config 'etiss_dir' undefined!")
+            raise RuntimeError("Project Config 'etiss_path' undefined!")
 
-        if options.get("riscv_dir"):
-            cmake_args.append("-DRISCV_ELF_GCC_PREFIX=" + options["riscv_dir"])
+        if options.get("riscv_path"):
+            cmake_args.append("-DRISCV_ELF_GCC_PREFIX=" + options["riscv_path"])
         else:
-            raise RuntimeError("Project Config 'riscv_dir' undefined!")
+            raise RuntimeError("Project Config 'riscv_path' undefined!")
 
         if options.get("debug"):
             cmake_args.append("-DCMAKE_BUILD_TYPE=DEBUG")
@@ -267,7 +272,16 @@ class Handler(server.ProjectAPIHandler):
         check_call(args, cwd=BUILD_DIR)
 
     def flash(self, options):
-        return  # NOTE: etissvp requires no flash step--it is launched from open_transport.
+        if options.get("transport"):
+            return  # NOTE: etissvp requires no flash step--it is launched from open_transport.
+        else:
+            transport = ETISSVPTransport(options)
+            to_return = transport.open()
+            self._transport = transport
+            transport._wait_for_etissvp()
+            transport._wait_for_etissvp()
+            self.close_transport()
+            return
 
     def open_transport(self, options):
         transport = ETISSVPTransport(options)
@@ -304,6 +318,7 @@ def _set_nonblock(fd):
 
 class ETISSVPMakeResult(enum.Enum):
     ETISSVP_STARTED = "etissvp_started"
+    ETISSVP_ENDED = "etissvp_ended"
     MAKE_FAILED = "make_failed"
     EOF = "eof"
 
@@ -321,21 +336,25 @@ class ETISSVPTransport:
 
     def open(self):
         #self.pipe_dir = pathlib.Path(tempfile.mkdtemp())
-        self.pipe_dir = os.path.join(BUILD_DIR, ".tmp")
+        self.pipe_dir = pathlib.Path(os.path.join(BUILD_DIR, ".tmp"))
+        os.mkdir(self.pipe_dir)
         self.write_pipe = self.pipe_dir / "uartdevicefifoin"
         self.read_pipe = self.pipe_dir / "uartdevicefifoout"
-        #os.mkfifo(self.write_pipe)
-        #os.mkfifo(self.read_pipe)
+        os.mkfifo(self.write_pipe)
+        os.mkfifo(self.read_pipe)
 
         print("RUN", BUILD_DIR)
         input()
-        if not options.get("etissvp_script"):
+        if not self.options.get("etissvp_script"):
             raise RuntimeError("Project Config 'etissvp_script' undefined!")
+        etissvp_env = os.environ.copy()
+        etissvp_env["ETISS_DIR"] = self.options["etiss_path"]
         self.proc = subprocess.Popen(
-            [options["etissvp_script"], "app"],
+            [self.options["etissvp_script"], "app"],
             #["make", "run", f"UART_PIPE={self.pipe}"],
             cwd=BUILD_DIR,
             stdout=subprocess.PIPE,
+            env=etissvp_env
         )
         self._wait_for_etissvp()
 
@@ -347,11 +366,19 @@ class ETISSVPTransport:
         _set_nonblock(self.read_fd)
         _set_nonblock(self.write_fd)
 
+        #self._wait_for_etissvp()
+
         return server.TransportTimeouts(
             session_start_retry_timeout_sec=2.0,
             session_start_timeout_sec=10.0,
             session_established_timeout_sec=10.0,
         )
+        return server.TransportTimeouts(
+            session_start_retry_timeout_sec=0,
+            session_start_timeout_sec=0,
+            session_established_timeout_sec=0,
+        )
+
 
     def close(self):
         did_write = False
@@ -400,10 +427,12 @@ class ETISSVPTransport:
 
     def _etissvp_check_stdout(self):
         for line in self.proc.stdout:
-            line = str(line)
-            _LOG.info("%s", line)
-            if "[QEMU] CPU" in line:  # TODO
+            line = str(line.decode())
+            _LOG.info("%s", line.replace("\n", ""))
+            if "=== Simulation start ===" in line:  # TODO
                 self._queue.put(ETISSVPMakeResult.ETISSVP_STARTED)
+            elif "=== Simulation end ===" in line:  # TODO
+                self._queue.put(ETISSVPMakeResult.ETISSVP_ENDED)
             else:
                 line = re.sub("[^a-zA-Z0-9 \n]", "", line)
                 pattern = r"recipe for target (\w*) failed"
@@ -422,10 +451,13 @@ class ETISSVPTransport:
             if item == ETISSVPMakeResult.ETISSVP_STARTED:
                 break
 
-            if item in [ETISSVPMakeResult.MAKE_FAILED, ETISSVPMakeResult.EOF]:
-                raise RuntimeError("ETISSVP setup failed.")
+            if item == ETISSVPMakeResult.ETISSVP_ENDED:
+                break
 
-            raise ValueError(f"{item} not expected.")
+            #if item in [ETISSVPMakeResult.MAKE_FAILED, ETISSVPMakeResult.EOF]:
+            #    raise RuntimeError("ETISSVP setup failed.")
+
+            #raise ValueError(f"{item} not expected.")
 
 
 if __name__ == "__main__":
