@@ -62,6 +62,6 @@
 /*! \brief Number of pages on device. */
 #define TVM_CRT_MAX_PAGES 300
 
-// #define TVM_CRT_FRAMER_ENABLE_LOGS
+#define TVM_CRT_FRAMER_ENABLE_LOGS
 
 #endif  // TVM_RUNTIME_CRT_CONFIG_H_
