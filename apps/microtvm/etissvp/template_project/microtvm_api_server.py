@@ -377,10 +377,19 @@ class ETISSVPTransport:
 
         #self._wait_for_etissvp()
 
+        #return server.TransportTimeouts(
+        #    session_start_retry_timeout_sec=1.0,
+        #    #session_start_timeout_sec=200.0, #20.0,
+        #    session_start_timeout_sec=400.0, #20.0,
+        #    #session_established_timeout_sec=10.0,
+        #    session_established_timeout_sec=200.0, #20.0,
+        #)
         return server.TransportTimeouts(
-            session_start_retry_timeout_sec=2.0,
-            session_start_timeout_sec=10.0,
-            session_established_timeout_sec=10.0,
+            session_start_retry_timeout_sec=0,
+            #session_start_timeout_sec=200.0, #20.0,
+            session_start_timeout_sec=0, #20.0,
+            #session_established_timeout_sec=10.0,
+            session_established_timeout_sec=0, #20.0,
         )
         return server.TransportTimeouts(
             session_start_retry_timeout_sec=0,
