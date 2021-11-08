@@ -457,7 +457,7 @@ class ETISSVPTransport:
 
     def _etissvp_check_stdout(self):
         for line in self.proc.stdout:
-            line = str(line.decode())
+            line = str(line.decode(errors="ignore"))
             _LOG.info("%s", line.replace("\n", ""))
             if "=== Simulation start ===" in line:  # TODO
                 self._queue.put(ETISSVPMakeResult.ETISSVP_STARTED)
