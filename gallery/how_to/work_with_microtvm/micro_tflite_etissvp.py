@@ -187,8 +187,8 @@ mod, params = relay.frontend.from_tflite(
 # the example below the x86 arch is selected and a x86 VM is picked up accordingly:
 #
 #TARGET = tvm.target.target.riscv_cpu("bare_etiss_processor")
-#TARGET = tvm.target.target.micro("host")
-TARGET = tvm.target.target.micro("host", options=["--unpacked-api=1", "--interface-api=c", "-executor=aot", "--link-params=1"])
+TARGET = tvm.target.target.micro("host")
+#TARGET = tvm.target.target.micro("host", options=["--unpacked-api=1", "--interface-api=c", "-executor=aot", "--link-params=1"])
 BOARD = "bare_etiss_processor"
 #
 # Compiling for physical hardware
@@ -318,20 +318,20 @@ generated_project.flash()
 # microcontroller, but in this tutorial, it simply launches a subprocess
 # to stand in for an attached microcontroller.
 
-#with tvm.micro.Session(transport_context_manager=generated_project.transport()) as session:
-    #pass
-    #graph_mod = tvm.micro.create_local_graph_executor(
-    #    module.get_graph_json(), session.get_system_lib(), session.device
-    #)
+with tvm.micro.Session(transport_context_manager=generated_project.transport()) as session:
+    pass
+    graph_mod = tvm.micro.create_local_graph_executor(
+        module.get_graph_json(), session.get_system_lib(), session.device
+    )
 
-    ## Set the model parameters using the lowered parameters produced by `relay.build`.
-    #graph_mod.set_input(**module.get_params())
+    # Set the model parameters using the lowered parameters produced by `relay.build`.
+    graph_mod.set_input(**module.get_params())
 
-    ## The model consumes a single float32 value and returns a predicted sine value.  To pass the
-    ## input value we construct a tvm.nd.array object with a single contrived number as input. For
-    ## this model values of 0 to 2Pi are acceptable.
-    #graph_mod.set_input(input_tensor, tvm.nd.array(np.array([0.5], dtype="float32")))
-    #graph_mod.run()
+    # The model consumes a single float32 value and returns a predicted sine value.  To pass the
+    # input value we construct a tvm.nd.array object with a single contrived number as input. For
+    # this model values of 0 to 2Pi are acceptable.
+    graph_mod.set_input(input_tensor, tvm.nd.array(np.array([0.5], dtype="float32")))
+    graph_mod.run()
 
-    #tvm_output = graph_mod.get_output(0).numpy()
-    #print("result is: " + str(tvm_output))
+    tvm_output = graph_mod.get_output(0).numpy()
+    print("result is: " + str(tvm_output))
