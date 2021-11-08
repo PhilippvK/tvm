@@ -351,18 +351,23 @@ class ETISSVPTransport:
             raise RuntimeError("Project Config 'etissvp_script' undefined!")
         etissvp_env = os.environ.copy()
         etissvp_env["ETISS_DIR"] = self.options["etiss_path"]
-        self.proc = subprocess.Popen(
-            [self.options["etissvp_script"], "app"],
-            #["make", "run", f"UART_PIPE={self.pipe}"],
-            cwd=BUILD_DIR,
-            stdout=subprocess.PIPE,
-            env=etissvp_env
-        )
-        self._wait_for_etissvp()
+        #self.proc = subprocess.Popen(
+        #    [self.options["etissvp_script"], "app"],
+        #    #["make", "run", f"UART_PIPE={self.pipe}"],
+        #    cwd=BUILD_DIR,
+        #    stdout=subprocess.PIPE,
+        #    env=etissvp_env
+        #)
+        #input()
+        #self._wait_for_etissvp()
 
         # NOTE: although each pipe is unidirectional, open both as RDWR to work around a select
         # limitation on linux. Without this, non-blocking I/O can't use timeouts because named
         # FIFO are always considered ready to read when no one has opened them for writing.
+        #while not (os.path.exists(self.read_pipe) and os.path.exists(self.write_pipe) and os.path.exists(self.write_pipe2)):
+        while not (os.path.exists(self.read_pipe) and os.path.exists(self.write_pipe)):
+            time.sleep(1)
+
         self.read_fd = os.open(self.read_pipe, os.O_RDWR | os.O_NONBLOCK)
         self.write_fd = os.open(self.write_pipe, os.O_RDWR | os.O_NONBLOCK)
         self.write_fd2 = os.open(self.write_pipe2, os.O_RDWR | os.O_NONBLOCK)
