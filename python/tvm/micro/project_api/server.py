@@ -706,7 +706,7 @@ def read_with_timeout(fd, n, timeout_sec):  # pylint: disable=invalid-name
     return to_return
 
 
-def write_with_timeout(fd, data, timeout_sec):  # pylint: disable=invalid-name
+def write_with_timeout(fd, data, timeout_sec, dbg_fd=None):  # pylint: disable=invalid-name
     """Write data to a file descriptor, with timeout.
 
     This function is intended as a helper function for implementations of ProjectAPIHandler
@@ -748,9 +748,14 @@ def write_with_timeout(fd, data, timeout_sec):  # pylint: disable=invalid-name
             raise exc
 
         num_written_this_cycle = os.write(fd, data)
+        if dbg_fd:
+            os.write(dbg_fd, data)
+        print("WRITE OS")
 
         if not num_written_this_cycle:
             os.close(fd)
+            if dbg_fd:
+                os.close(dbg_fd)
             raise base.TransportClosedError()
 
         data = data[num_written_this_cycle:]

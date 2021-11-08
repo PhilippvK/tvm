@@ -339,12 +339,14 @@ class ETISSVPTransport:
         self.pipe_dir = pathlib.Path(os.path.join(BUILD_DIR, ".tmp"))
         os.mkdir(self.pipe_dir)
         self.write_pipe = self.pipe_dir / "uartdevicefifoin"
+        self.write_pipe2 = self.pipe_dir / "uartdevicefifoin2"
         self.read_pipe = self.pipe_dir / "uartdevicefifoout"
-        os.mkfifo(self.write_pipe)
-        os.mkfifo(self.read_pipe)
+        
+        #os.mkfifo(self.read_pipe)
 
         print("RUN", BUILD_DIR)
         input()
+        os.mkfifo(self.write_pipe2)
         if not self.options.get("etissvp_script"):
             raise RuntimeError("Project Config 'etissvp_script' undefined!")
         etissvp_env = os.environ.copy()
@@ -363,8 +365,10 @@ class ETISSVPTransport:
         # FIFO are always considered ready to read when no one has opened them for writing.
         self.read_fd = os.open(self.read_pipe, os.O_RDWR | os.O_NONBLOCK)
         self.write_fd = os.open(self.write_pipe, os.O_RDWR | os.O_NONBLOCK)
+        self.write_fd2 = os.open(self.write_pipe2, os.O_RDWR | os.O_NONBLOCK)
         _set_nonblock(self.read_fd)
         _set_nonblock(self.write_fd)
+        _set_nonblock(self.write_fd2)
 
         #self._wait_for_etissvp()
 
@@ -392,6 +396,16 @@ class ETISSVPTransport:
                 pass
             os.close(self.write_fd)
             self.write_fd = None
+        if self.write_fd2 is not None:
+            try:
+                server.write_with_timeout(
+                    self.write_fd2, b"\x01x", 1.0
+                )  # Use a short timeout since we will kill the process
+                did_write = True
+            except server.IoTimeoutError:
+                pass
+            os.close(self.write_fd2)
+            self.write_fd2 = None
 
         if self.proc:
             if not did_write:
@@ -422,7 +436,7 @@ class ETISSVPTransport:
             to_write.append(b)
 
         while to_write:
-            num_written = server.write_with_timeout(self.write_fd, to_write, timeout_sec)
+            num_written = server.write_with_timeout(self.write_fd, to_write, timeout_sec, dbg_fd=self.write_fd2)
             to_write = to_write[num_written:]
 
     def _etissvp_check_stdout(self):
