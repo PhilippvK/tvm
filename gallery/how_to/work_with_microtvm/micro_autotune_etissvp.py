@@ -140,8 +140,15 @@ repo_root = pathlib.Path(
 module_loader = tvm.micro.AutoTvmModuleLoader(
     template_project_dir=repo_root / "apps" / "microtvm" / "etissvp" / "template_project",
     project_options={
-        "verbose": False,
         "project_type": "host_driven",
+        "verbose": True,
+        "debug": True,
+        "transport": True,
+        "etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
+        "riscv_path": "/usr/local/research/projects/SystemDesign/tools/riscv/current/",
+        "etissvp_script": "/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/run.sh",
+        "etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini"
+        #"etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini v"
     },
 )
 builder = tvm.autotvm.LocalBuilder(
@@ -198,8 +205,15 @@ project = tvm.micro.generate_project(
     lowered,
     temp_dir / "project",
     {
-        "verbose": False,
         "project_type": "host_driven",
+        "verbose": True,
+        "debug": True,
+        "transport": True,
+        "etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
+        "riscv_path": "/usr/local/research/projects/SystemDesign/tools/riscv/current/",
+        "etissvp_script": "/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/run.sh",
+        "etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini"
+        #"etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini v"
     },
 )
 
@@ -239,8 +253,15 @@ project = tvm.micro.generate_project(
     lowered_tuned,
     temp_dir / "project",
     {
-        "verbose": False,
         "project_type": "host_driven",
+        "verbose": True,
+        "debug": True,
+        "transport": True,
+        "etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
+        "riscv_path": "/usr/local/research/projects/SystemDesign/tools/riscv/current/",
+        "etissvp_script": "/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/run.sh",
+        "etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini"
+        #"etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini v"
     },
 )
 
