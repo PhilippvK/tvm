@@ -438,9 +438,11 @@ class ETISSVPTransport:
             self.pipe_dir = None
 
     def read(self, n, timeout_sec):
+        #print("PY read", n, timeout_sec)
         return server.read_with_timeout(self.read_fd, n, timeout_sec)
 
     def write(self, data, timeout_sec):
+        #print("PY write", data, timeout_sec)
         to_write = bytearray()
         escape_pos = []
         for i, b in enumerate(data):

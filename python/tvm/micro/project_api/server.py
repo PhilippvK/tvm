@@ -652,9 +652,16 @@ def _await_nonblocking_ready(rlist, wlist, timeout_sec=None, end_time=None):
 
     if timeout_sec is None:
         timeout_sec = max(0, end_time - time.monotonic())
+    #print("timeout_sec =", timeout_sec)
+    t0 = time.time()
     rlist, wlist, xlist = select.select(rlist, wlist, rlist + wlist, timeout_sec)
     if not rlist and not wlist and not xlist:
+        t1 = time.time()
+        print("IoTimeoutError", "DELTA_=", t1-t0)
         raise IoTimeoutError()
+    else:
+        t2 = time.time()
+        print("DELTA=", t2-t0)
 
     return True
 
