@@ -140,7 +140,7 @@ class Transport(metaclass=abc.ABCMeta):
 class TransportLogger(Transport):
     """Wraps a Transport implementation and logs traffic to the Python logging infrastructure."""
 
-    def __init__(self, name, child, logger=None, level=logging.INFO):
+    def __init__(self, name, child, logger=None, level=logging.DEBUG):
         self.name = name
         self.child = child
         self.logger = logger or _LOG

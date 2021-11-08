@@ -31,6 +31,7 @@ import typing
 from . import server
 
 _LOG = logging.getLogger(__name__)
+_LOG.setLevel(logging.DEBUG)
 
 
 class ProjectAPIErrorBase(Exception):

@@ -33,6 +33,10 @@ import pathlib
 
 import tvm
 
+import logging
+import sys
+logging.basicConfig(level="DEBUG", stream=sys.stdout)
+
 ####################
 # Defining the model
 ####################
