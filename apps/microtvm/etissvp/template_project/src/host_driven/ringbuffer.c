@@ -33,7 +33,7 @@ inline int buf_isempty(const RingBuffer *buf)
     return buf->head == buf->tail;
 }
 
-inline int advance(uint16_t i, uint16_t size)
+int advance(uint16_t i, uint16_t size)
 {
     if (++i >= size)             // Avoid modulo or divide
         i = 0;

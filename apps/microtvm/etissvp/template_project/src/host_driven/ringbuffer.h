@@ -1,6 +1,8 @@
 #ifndef RINGBUFFER_H
 #define RINGBUFFER_H
 
+ #include <stdint.h>
+
 typedef struct {
     volatile uint16_t head;
     volatile uint16_t tail;
