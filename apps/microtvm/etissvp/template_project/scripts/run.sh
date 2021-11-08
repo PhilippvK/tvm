@@ -9,7 +9,16 @@ ETISS=${ETISS_DIR:-/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/e
 #    rm dBusAccess.csv
 #fi
 
-$ETISS/examples/bare_etiss_processor/run_helper.sh "$@"
+
+( until [ -p `pwd`/.tmp/uartdevicefifoin2 ] ; do sleep 1 && echo sleep ; done ; gnome-terminal -- cat `pwd`/.tmp/uartdevicefifoin2 ) &
+echo B
+( until [ -p `pwd`/.tmp/uartdevicefifoout2 ] ; do test -d `pwd` && sleep 1 && echo sleep || exit ; done ; gnome-terminal -- cat `pwd`/.tmp/uartdevicefifoout2 ) &
+echo "TEST" > `pwd`/log.log
+(gnome-terminal -- tail -f `pwd`/log.log) &
+$ETISS/examples/bare_etiss_processor/run_helper.sh "$@" 2>&1 | tee -a log.log
+
+
+
 
 #if [ -f metrics.csv ]
 #then
