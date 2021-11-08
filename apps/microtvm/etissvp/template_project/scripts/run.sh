@@ -1,6 +1,6 @@
 #!/bin/sh
 
-ETISS=${ETISS_DIR:-$(pwd)/../../deps/install/etiss/etiss_default}
+ETISS=${ETISS_DIR:-/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/}
 
 #. ../../venv/bin/activate
 
