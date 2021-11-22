@@ -263,13 +263,15 @@ class Handler(server.ProjectAPIHandler):
             cmake_args.append("-DCMAKE_VERBOSE_MAKEFILE:BOOL=TRUE")
 
         print(BUILD_DIR)
-        input()
-        check_call(cmake_args, cwd=BUILD_DIR)
+        #input()
+        #check_call(cmake_args, cwd=BUILD_DIR)
+        check_call(cmake_args, cwd=BUILD_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
         args = ["make", "-j2"]
         if options.get("verbose"):
             args.append("VERBOSE=1")
-        check_call(args, cwd=BUILD_DIR)
+        #check_call(args, cwd=BUILD_DIR)
+        check_call(args, cwd=BUILD_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
     def flash(self, options):
         if options.get("transport"):
@@ -345,19 +347,19 @@ class ETISSVPTransport:
         #os.mkfifo(self.read_pipe)
 
         print("RUN", BUILD_DIR)
-        input()
+        #input()
         os.mkfifo(self.write_pipe2)
         if not self.options.get("etissvp_script"):
             raise RuntimeError("Project Config 'etissvp_script' undefined!")
         etissvp_env = os.environ.copy()
         etissvp_env["ETISS_DIR"] = self.options["etiss_path"]
-        #self.proc = subprocess.Popen(
-        #    [self.options["etissvp_script"], "app"],
-        #    #["make", "run", f"UART_PIPE={self.pipe}"],
-        #    cwd=BUILD_DIR,
-        #    stdout=subprocess.PIPE,
-        #    env=etissvp_env
-        #)
+        self.proc = subprocess.Popen(
+            [self.options["etissvp_script"], "app"],
+            #["make", "run", f"UART_PIPE={self.pipe}"],
+            cwd=BUILD_DIR,
+            stdout=subprocess.PIPE,
+            env=etissvp_env
+        )
         #input()
         #self._wait_for_etissvp()
 
@@ -367,6 +369,7 @@ class ETISSVPTransport:
         #while not (os.path.exists(self.read_pipe) and os.path.exists(self.write_pipe) and os.path.exists(self.write_pipe2)):
         while not (os.path.exists(self.read_pipe) and os.path.exists(self.write_pipe)):
             time.sleep(1)
+        time.sleep(2)
 
         self.read_fd = os.open(self.read_pipe, os.O_RDWR | os.O_NONBLOCK)
         self.write_fd = os.open(self.write_pipe, os.O_RDWR | os.O_NONBLOCK)
@@ -385,11 +388,11 @@ class ETISSVPTransport:
         #    session_established_timeout_sec=200.0, #20.0,
         #)
         return server.TransportTimeouts(
-            session_start_retry_timeout_sec=0,
+            session_start_retry_timeout_sec=1,
             #session_start_timeout_sec=200.0, #20.0,
-            session_start_timeout_sec=0, #20.0,
+            session_start_timeout_sec=10, #20.0,
             #session_established_timeout_sec=10.0,
-            session_established_timeout_sec=0, #20.0,
+            session_established_timeout_sec=10, #20.0,
         )
         return server.TransportTimeouts(
             session_start_retry_timeout_sec=0,
@@ -399,6 +402,7 @@ class ETISSVPTransport:
 
 
     def close(self):
+        self.proc.kill() # Does this work?
         did_write = False
         if self.write_fd is not None:
             try:
@@ -434,7 +438,8 @@ class ETISSVPTransport:
             self.read_fd = None
 
         if self.pipe_dir is not None:
-            shutil.rmtree(self.pipe_dir)
+            if os.path.exists(self.pipe_dir):
+                shutil.rmtree(self.pipe_dir)
             self.pipe_dir = None
 
     def read(self, n, timeout_sec):
