@@ -283,12 +283,15 @@ void sleep_busy(volatile int);
 #define CLINT_MTIMECMPHI_OFFSET    (0x4000 + 4)
 #define CLINT_MTIMELO_OFFSET       0xBFF8
 #define CLINT_MTIMEHI_OFFSET       (0xBFF8 + 4)
+#define CLINT_TICKS_OFFSET         (0x4000 + 8)
 
 #define CLINT_MTIMECMPLO        (CLINT_BASE_ADDR + CLINT_MTIMECMPLO_OFFSET)
 #define CLINT_MTIMECMPHI        (CLINT_BASE_ADDR + CLINT_MTIMECMPHI_OFFSET)
 
 #define CLINT_MTIMELO           (CLINT_BASE_ADDR + CLINT_MTIMELO_OFFSET)
 #define CLINT_MTIMEHI           (CLINT_BASE_ADDR + CLINT_MTIMEHI_OFFSET)
+
+#define CLINT_TICKS           (CLINT_BASE_ADDR + CLINT_TICKS_OFFSET)
 
 #define CLINT_TIMER_PERIOD_NS 30518
 
@@ -310,16 +313,16 @@ static RingBuffer *const rx_buffer = (RingBuffer *) &_rx_buffer;
 
 volatile uint32_t ticks = 0;
 
-#define TICKS_FREQ 1000  // 1 Tick: 1ms
+#define TICKS_FREQ 10000  // 1 Tick: 0.01ms
 
 void ISR_CLINT(void) {
 //void ISR_TA_OVF (void){
-    //printf("CLINT\n");
-    uint32_t * mtimelo = (uint32_t*)(CLINT_MTIMELO);
-    uint32_t * mtimehi = (uint32_t*)(CLINT_MTIMEHI);
+    printf("CLINT\n");
+    //uint32_t * mtimelo = (uint32_t*)(CLINT_MTIMELO);
+    //uint32_t * mtimehi = (uint32_t*)(CLINT_MTIMEHI);
 
-    *mtimelo = 0;
-    *mtimehi = 0;
+    //*mtimelo = 0;
+    //*mtimehi = 0;
     ticks++;
 }
 
@@ -341,7 +344,7 @@ void ISR_UART() {
         //printf("PUT\n");
         buf_put_byte(rx_buffer, c);
         size_t l = buf_len(rx_buffer);
-        printf("buf_len=%ld\n", l);
+        //printf("buf_len=%ld\n", l);
         //if(buf_isfull(rx_buffer))
         //    UART0_C2 &= ~UART_C2_RIE_MASK;
     } else {
@@ -354,7 +357,12 @@ void ISR_UART() {
 }
 
 unsigned long micros() {
-  return ticks * 1000000/TICKS_FREQ;
+  //static long fake_ticks = 0;
+  //fake_ticks += 100;
+  //return fake_ticks * 1000000/TICKS_FREQ;
+  //return ticks * 1000000/TICKS_FREQ;
+  uint32_t my_ticks = ((uint64_t)*((volatile int*)CLINT_TICKS)) * 1000000/TICKS_FREQ;
+  return my_ticks;
 }
 
 // Called by TVM to write serial data to the UART.
@@ -529,8 +537,8 @@ void main(void) {
   //tvm_uart = device_get_binding(DT_LABEL(DT_CHOSEN(zephyr_console)));
   //uart_rx_init(&uart_rx_rbuf, tvm_uart);
   buf_reset(rx_buffer, BUFLEN);
-  uint32_t systemtimer_us = 1000000;
-  //clint_cfg_timecompare_us(systemtimer_us);
+  uint32_t systemtimer_us = 100;
+  clint_cfg_timecompare_us(systemtimer_us);
   // Initialize microTVM RPC server, which will receive commands from the UART and execute them.
   microtvm_rpc_server_t server = MicroTVMRpcServerInit(write_serial, NULL);
   TVMLogf("microTVM ETISSVP runtime - running");
@@ -541,7 +549,8 @@ void main(void) {
     
     //printf("LOOP\n");
     int x = 0, y = 1;
-    while (x < 100000) {
+    //while (x < 100000) {
+    while (x < 1000) {
       y++;
       x++;
     }
@@ -552,15 +561,16 @@ void main(void) {
     static uint8_t data[BUFLEN];
     //while (lock) {}
     lock = 1;
-    int_disable();
+    //int_disable(); // TODO: reenable this?
     size_t bytes_remaining = buf_len(rx_buffer);
     if (bytes_remaining > 0) {
-      printf("Micros: %lu\n", micros());
-      printf("bytes_remaining=%ld\n", bytes_remaining);
+      
+      //printf("bytes_remaining=%ld\n", bytes_remaining);
       for (size_t i = 0; i < bytes_remaining; i++) {
         data[i] = buf_get_byte(rx_buffer);
       }
       int_enable();
+      printf("Micros: %lu\n", micros());
       // TODO: disable interrupts
       uint8_t* arr_ptr = data;
       while (bytes_remaining > 0) {
@@ -613,6 +623,6 @@ void main(void) {
     //break;
   }
   TVMLogf("microTVM ETISSVP runtime - done");
-  for (;;) {}
+  //for (;;) {}
 
 }
