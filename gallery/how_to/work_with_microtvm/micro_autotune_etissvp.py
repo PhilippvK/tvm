@@ -166,10 +166,12 @@ measure_option = tvm.autotvm.measure_option(builder=builder, runner=runner)
 ################
 # Run Autotuning
 ################
-# Now we can run autotuning separately on each extracted task.
 
-num_trials = 10
-for task in tasks:
+# Now we can run autotuning separately on each extracted task.
+#num_trials = 1
+num_trials = 1
+for i, task in enumerate(tasks):
+    prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
     tuner = tvm.autotvm.tuner.GATuner(task)
     tuner.tune(
         n_trial=num_trials,
