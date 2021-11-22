@@ -40,10 +40,6 @@ logging.basicConfig(level="DEBUG", stream=sys.stdout)
 ####################
 # Defining the model
 ####################
-#
-# To begin with, define a model in Relay to be executed on-device. Then create an IRModule from relay model and
-# fill parameters with random numbers.
-#
 
 data_shape = (1, 3, 10, 10)
 weight_shape = (6, 3, 5, 5)
@@ -72,21 +68,9 @@ params = {"weight": weight_sample}
 #######################
 # Defining the target #
 #######################
-# Now we define the TVM target that describes the execution environment. This looks very similar
-# to target definitions from other microTVM tutorials.
-#
-# When running on physical hardware, choose a target and a board that
-# describe the hardware. There are multiple hardware targets that could be selected from
-# PLATFORM list in this tutorial. You can chose the platform by passing --platform argument when running
-# this tutorial.
-#
-##TARGET = tvm.target.target.micro("host")
 
-# Compiling for physical hardware
+# Compiling for virtual hardware
 # --------------------------------------------------------------------------
-#  When running on physical hardware, choose a TARGET and a BOARD that describe the hardware. The
-#  STM32L4R5ZI Nucleo target and board is chosen in the example below.
-#
 TARGET = tvm.target.target.micro("host")
 #TARGET = tvm.target.target.riscv_cpu("bare_etiss_processor")
 BOARD = "bare_etiss_processor"
@@ -94,12 +78,6 @@ BOARD = "bare_etiss_processor"
 #########################
 # Extracting tuning tasks
 #########################
-# Not all operators in the Relay program printed above can be tuned. Some are so trivial that only
-# a single implementation is defined; others don't make sense as tuning tasks. Using
-# `extract_from_program`, you can produce a list of tunable tasks.
-#
-# Because task extraction involves running the compiler, we first configure the compiler's
-# transformation passes; we'll apply the same configuration later on during autotuning.
 
 pass_context = tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True})
 with pass_context:
@@ -109,34 +87,8 @@ assert len(tasks) > 0
 ######################
 # Configuring microTVM
 ######################
-# Before autotuning, we need to define a module loader and then pass that to
-# a `tvm.autotvm.LocalBuilder`. Then we create a `tvm.autotvm.LocalRunner` and use
-# both builder and runner to generates multiple measurements for auto tunner.
-#
-# In this tutorial, we have the option to use x86 host as an example or use different targets
-# from Zephyr RTOS. If you choose pass `--platform=host` to this tutorial it will uses x86. You can
-# choose other options by choosing from `PLATFORM` list.
-#
 
-repo_root = pathlib.Path(
-    subprocess.check_output(["git", "rev-parse", "--show-toplevel"], encoding="utf-8").strip()
-)
-
-##module_loader = tvm.micro.AutoTvmModuleLoader(
-##    template_project_dir=repo_root / "src" / "runtime" / "crt" / "host",
-##    project_options={"verbose": False},
-##)
-##builder = tvm.autotvm.LocalBuilder(
-##    n_parallel=1,
-##    build_kwargs={"build_option": {"tir.disable_vectorize": True}},
-##    do_fork=True,
-##    build_func=tvm.micro.autotvm_build_func,
-##)
-##runner = tvm.autotvm.LocalRunner(number=1, repeat=1, timeout=100, module_loader=module_loader)
-##
-##measure_option = tvm.autotvm.measure_option(builder=builder, runner=runner)
-
-# Compiling for physical hardware
+# Compiling for virtual hardware
 # --------------------------------------------------------------------------
 module_loader = tvm.micro.AutoTvmModuleLoader(
     template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("etissvp")),
@@ -167,8 +119,6 @@ measure_option = tvm.autotvm.measure_option(builder=builder, runner=runner)
 # Run Autotuning
 ################
 
-# Now we can run autotuning separately on each extracted task.
-#num_trials = 1
 num_trials = 1
 for i, task in enumerate(tasks):
     prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
@@ -186,23 +136,12 @@ for i, task in enumerate(tasks):
 ############################
 # Timing the untuned program
 ############################
-# For comparison, let's compile and run the graph without imposing any autotuning schedules. TVM
-# will select a randomly-tuned implementation for each operator, which should not perform as well as
-# the tuned operator.
-
 with pass_context:
     lowered = tvm.relay.build(relay_mod, target=TARGET, params=params)
 
 temp_dir = tvm.contrib.utils.tempdir()
 
-##project = tvm.micro.generate_project(
-##    str(repo_root / "src" / "runtime" / "crt" / "host"),
-##    lowered,
-##    temp_dir / "project",
-##    {"verbose": False},
-##)
-
-# Compiling for physical hardware
+# Compiling for virtual hardware
 # --------------------------------------------------------------------------
 project = tvm.micro.generate_project(
     tvm.micro.get_microtvm_template_projects("etissvp"),
@@ -210,7 +149,6 @@ project = tvm.micro.generate_project(
     temp_dir / "project",
     {
         "project_type": "host_driven",
-        #"verbose": True,
         "verbose": False,
         "debug": True,
         "transport": True,
@@ -238,7 +176,6 @@ with tvm.micro.Session(project.transport()) as session:
 ##########################
 # Timing the tuned program
 ##########################
-# Once autotuning completes, you can time execution of the entire program using the Debug Runtime:
 
 with tvm.autotvm.apply_history_best("microtvm_autotune.log.txt"):
     with pass_context:
@@ -246,14 +183,7 @@ with tvm.autotvm.apply_history_best("microtvm_autotune.log.txt"):
 
 temp_dir = tvm.contrib.utils.tempdir()
 
-##project = tvm.micro.generate_project(
-##    str(repo_root / "src" / "runtime" / "crt" / "host"),
-##    lowered_tuned,
-##    temp_dir / "project",
-##    {"verbose": False},
-##)
-
-# Compiling for physical hardware
+# Compiling for virtual hardware
 # --------------------------------------------------------------------------
 project = tvm.micro.generate_project(
     tvm.micro.get_microtvm_template_projects("etissvp"),
@@ -261,7 +191,6 @@ project = tvm.micro.generate_project(
     temp_dir / "project",
     {
         "project_type": "host_driven",
-        #"verbose": True,
         "verbose": False,
         "debug": True,
         "transport": True,
