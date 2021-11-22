@@ -139,7 +139,7 @@ repo_root = pathlib.Path(
 # Compiling for physical hardware
 # --------------------------------------------------------------------------
 module_loader = tvm.micro.AutoTvmModuleLoader(
-    template_project_dir=repo_root / "apps" / "microtvm" / "etissvp" / "template_project",
+    template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("etissvp")),
     project_options={
         "project_type": "host_driven",
         #"verbose": True,
@@ -148,8 +148,8 @@ module_loader = tvm.micro.AutoTvmModuleLoader(
         "transport": True,
         "etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
         "riscv_path": "/usr/local/research/projects/SystemDesign/tools/riscv/current/",
-        "etissvp_script": str(repo_root / "apps" / "microtvm" / "etissvp" / "template_project") + "/scripts/run.sh",
-        "etissvp_script_args": "-i" + str(repo_root / "apps" / "microtvm" / "etissvp" / "template_project") + "/scripts/memsegs.ini v"
+        "etissvp_script": tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/run.sh",
+        "etissvp_script_args": "-i" + tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/memsegs.ini v"
         #"etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini v"
     },
 )
@@ -205,7 +205,7 @@ temp_dir = tvm.contrib.utils.tempdir()
 # Compiling for physical hardware
 # --------------------------------------------------------------------------
 project = tvm.micro.generate_project(
-    str(repo_root / "apps" / "microtvm" / "etissvp" / "template_project"),
+    tvm.micro.get_microtvm_template_projects("etissvp"),
     lowered,
     temp_dir / "project",
     {
@@ -216,9 +216,8 @@ project = tvm.micro.generate_project(
         "transport": True,
         "etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
         "riscv_path": "/usr/local/research/projects/SystemDesign/tools/riscv/current/",
-        "etissvp_script": "/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/run.sh",
-        "etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini v"
-        #"etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini v"
+        "etissvp_script": tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/run.sh",
+        "etissvp_script_args": "-i" + tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/memsegs.ini"
     },
 )
 
@@ -257,7 +256,7 @@ temp_dir = tvm.contrib.utils.tempdir()
 # Compiling for physical hardware
 # --------------------------------------------------------------------------
 project = tvm.micro.generate_project(
-    str(repo_root / "apps" / "microtvm" / "etissvp" / "template_project"),
+    tvm.micro.get_microtvm_template_projects("etissvp"),
     lowered_tuned,
     temp_dir / "project",
     {
@@ -268,9 +267,8 @@ project = tvm.micro.generate_project(
         "transport": True,
         "etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
         "riscv_path": "/usr/local/research/projects/SystemDesign/tools/riscv/current/",
-        "etissvp_script": "/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/run.sh",
-        "etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini"
-        #"etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini v"
+        "etissvp_script": tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/run.sh",
+        "etissvp_script_args": "-i" + tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/memsegs.ini"
     },
 )
 
