@@ -142,7 +142,8 @@ module_loader = tvm.micro.AutoTvmModuleLoader(
     template_project_dir=repo_root / "apps" / "microtvm" / "etissvp" / "template_project",
     project_options={
         "project_type": "host_driven",
-        "verbose": True,
+        #"verbose": True,
+        "verbose": False,
         "debug": True,
         "transport": True,
         "etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
@@ -255,7 +256,8 @@ project = tvm.micro.generate_project(
     temp_dir / "project",
     {
         "project_type": "host_driven",
-        "verbose": True,
+        #"verbose": True,
+        "verbose": False,
         "debug": True,
         "transport": True,
         "etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
