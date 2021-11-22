@@ -38,7 +38,7 @@ import sys
 logging.basicConfig(level="DEBUG", stream=sys.stdout)
 
 
-options = {
+project_options = {
     "project_type": "host_driven",
     "verbose": False,
     "debug": True,
@@ -145,7 +145,7 @@ repo_root = pathlib.Path(
 # --------------------------------------------------------------------------
 module_loader = tvm.micro.AutoTvmModuleLoader(
     template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("etissvp")),
-    project_options=options,
+    project_options=project_options,
 )
 builder = tvm.autotvm.LocalBuilder(
     n_parallel=1,
@@ -190,7 +190,7 @@ project = tvm.micro.generate_project(
     str(repo_root / "apps" / "microtvm" / "etissvp" / "template_project"),
     lowered,
     temp_dir / "project",
-    options,
+    project_options,
 )
 
 project.build()
@@ -223,7 +223,7 @@ project = tvm.micro.generate_project(
     str(repo_root / "apps" / "microtvm" / "etissvp" / "template_project"),
     lowered_tuned,
     temp_dir / "project",
-    options,
+    project_options,
 )
 
 project.build()
