@@ -224,7 +224,10 @@ project = tvm.micro.generate_project(
 project.build()
 project.flash()
 with tvm.micro.Session(project.transport()) as session:
-    debug_module = tvm.micro.create_local_debug_executor(
+    #debug_module = tvm.micro.create_local_debug_executor(
+    #    lowered.get_graph_json(), session.get_system_lib(), session.device
+    #)
+    debug_module = tvm.micro.create_local_graph_executor(
         lowered.get_graph_json(), session.get_system_lib(), session.device
     )
     debug_module.set_input(**lowered.get_params())
