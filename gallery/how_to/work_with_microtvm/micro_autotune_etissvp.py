@@ -148,8 +148,8 @@ module_loader = tvm.micro.AutoTvmModuleLoader(
         "transport": True,
         "etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
         "riscv_path": "/usr/local/research/projects/SystemDesign/tools/riscv/current/",
-        "etissvp_script": "/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/run.sh",
-        "etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini"
+        "etissvp_script": str(repo_root / "apps" / "microtvm" / "etissvp" / "template_project") + "/scripts/run.sh",
+        "etissvp_script_args": "-i" + str(repo_root / "apps" / "microtvm" / "etissvp" / "template_project") + "/scripts/memsegs.ini v"
         #"etissvp_script_args": "-i/work/git/prj/tvm_etiss_autotune/tvm_private/apps/microtvm/etissvp/template_project/scripts/memsegs.ini v"
     },
 )
