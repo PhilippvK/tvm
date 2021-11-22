@@ -661,7 +661,7 @@ def _await_nonblocking_ready(rlist, wlist, timeout_sec=None, end_time=None):
         raise IoTimeoutError()
     else:
         t2 = time.time()
-        print("DELTA=", t2-t0)
+        #print("DELTA=", t2-t0)
 
     return True
 
@@ -757,7 +757,7 @@ def write_with_timeout(fd, data, timeout_sec, dbg_fd=None):  # pylint: disable=i
         num_written_this_cycle = os.write(fd, data)
         if dbg_fd:
             os.write(dbg_fd, data)
-        print("WRITE OS")
+        #print("WRITE OS")
 
         if not num_written_this_cycle:
             os.close(fd)

@@ -205,7 +205,7 @@ class TransportLogger(Transport):
             raise err
 
         hex_lines = self._to_hex(data)
-        print("READ DATA", list(bytes(data)))
+        #print("READ DATA", list(bytes(data)))
         if len(hex_lines) > 1:
             self.logger.log(
                 self.level,
@@ -256,7 +256,7 @@ class TransportLogger(Transport):
             raise err
 
         hex_lines = self._to_hex(data)
-        print("WRITE DATA", list(bytes(data)))
+        #print("WRITE DATA", list(bytes(data)))
         if len(hex_lines) > 1:
             self.logger.log(
                 self.level,
