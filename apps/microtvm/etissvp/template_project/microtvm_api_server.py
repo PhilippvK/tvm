@@ -36,6 +36,7 @@ import tempfile
 import threading
 import time
 import json
+import signal
 
 import serial
 import serial.tools.list_ports
@@ -358,7 +359,8 @@ class ETISSVPTransport:
             #["make", "run", f"UART_PIPE={self.pipe}"],
             cwd=BUILD_DIR,
             stdout=subprocess.PIPE,
-            env=etissvp_env
+            env=etissvp_env,
+            preexec_fn=os.setsid,
         )
         #input()
         #self._wait_for_etissvp()
@@ -400,38 +402,23 @@ class ETISSVPTransport:
             session_established_timeout_sec=0,
         )
 
-
     def close(self):
-        self.proc.kill() # Does this work?
         did_write = False
         if self.write_fd is not None:
-            try:
-                server.write_with_timeout(
-                    self.write_fd, b"\x01x", 1.0
-                )  # Use a short timeout since we will kill the process
-                did_write = True
-            except server.IoTimeoutError:
-                pass
             os.close(self.write_fd)
             self.write_fd = None
+
         if self.write_fd2 is not None:
-            try:
-                server.write_with_timeout(
-                    self.write_fd2, b"\x01x", 1.0
-                )  # Use a short timeout since we will kill the process
-                did_write = True
-            except server.IoTimeoutError:
-                pass
             os.close(self.write_fd2)
             self.write_fd2 = None
 
         if self.proc:
-            if not did_write:
-                self.proc.terminate()
-            try:
-                self.proc.wait(5.0)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
+            # Killing the ETISS subprocess seems to need this workaround...
+            self.proc.send_signal(signal.SIGINT)
+            time.sleep(1)
+            self.proc.kill()
+            pgrp = os.getpgid(self.proc.pid)
+            os.killpg(pgrp, signal.SIGKILL)
 
         if self.read_fd:
             os.close(self.read_fd)
