@@ -143,11 +143,6 @@ os.unlink(model_library_format_tar_path)
 import subprocess
 import pathlib
 
-repo_root = pathlib.Path(
-    subprocess.check_output(["git", "rev-parse", "--show-toplevel"], encoding="utf-8").strip()
-)
-template_project_path = repo_root / "apps" / "microtvm" / "etissvp" / "template_project"
-
 # Compiling for virtual hardware
 # ------------------------------
 
@@ -157,7 +152,7 @@ import tvm.contrib.utils
 temp_dir = tvm.contrib.utils.tempdir()
 generated_project_dir = temp_dir / "generated-project"
 generated_project = tvm.micro.generate_project(
-    template_project_path, module, generated_project_dir, project_options
+    tvm.micro.get_microtvm_template_projects("etissvp"), module, generated_project_dir, project_options
 )
 
 # Build and flash the project

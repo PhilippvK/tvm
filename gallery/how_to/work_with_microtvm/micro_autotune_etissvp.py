@@ -120,7 +120,7 @@ measure_option = tvm.autotvm.measure_option(builder=builder, runner=runner)
 # Run Autotuning
 ################
 
-num_trials = 1
+num_trials = 10
 for i, task in enumerate(tasks):
     prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
     tuner = tvm.autotvm.tuner.GATuner(task)
@@ -192,5 +192,5 @@ with tvm.micro.Session(project.transport()) as session:
     )
     debug_module.set_input(**lowered_tuned.get_params())
     print("########## Build with Autotuning ##########")
-    debug_module.run()
+    #debug_module.run()
     del debug_module

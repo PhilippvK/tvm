@@ -139,10 +139,6 @@ assert len(tasks) > 0
 # Configuring microTVM
 ######################
 
-repo_root = pathlib.Path(
-    subprocess.check_output(["git", "rev-parse", "--show-toplevel"], encoding="utf-8").strip()
-)
-
 # Compiling for virtual hardware
 # --------------------------------------------------------------------------
 module_loader = tvm.micro.AutoTvmModuleLoader(
@@ -163,7 +159,8 @@ measure_option = tvm.autotvm.measure_option(builder=builder, runner=runner)
 # Run Autotuning
 ################
 
-num_trials = 100
+#num_trials = 100
+num_trials = 10
 for i, task in enumerate(tasks):
     prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
     tuner = tvm.autotvm.tuner.GATuner(task)
