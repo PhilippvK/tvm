@@ -315,54 +315,54 @@ volatile uint32_t ticks = 0;
 
 #define TICKS_FREQ 10000  // 1 Tick: 0.01ms
 
-void ISR_CLINT(void) {
-//void ISR_TA_OVF (void){
-    printf("CLINT\n");
-    //uint32_t * mtimelo = (uint32_t*)(CLINT_MTIMELO);
-    //uint32_t * mtimehi = (uint32_t*)(CLINT_MTIMEHI);
+void ISR_MTIP (void) {
+    //printf("CLINT\n");
+    const uint64_t cmp_increment = 40;  // TODO
+    uint32_t * mtimelo = (uint32_t*)(CLINT_MTIMELO);
+    uint32_t * mtimehi = (uint32_t*)(CLINT_MTIMEHI);
+    uint32_t * mtimecmplo = (uint32_t*)(CLINT_MTIMECMPLO);
+    uint32_t * mtimecmphi = (uint32_t*)(CLINT_MTIMECMPHI);
 
-    //*mtimelo = 0;
-    //*mtimehi = 0;
+    uint64_t cmp_new = ((uint64_t)*mtimehi << 32 | *mtimelo) + cmp_increment;
+
+    *mtimecmplo = cmp_new & 0xffffffff;
+    *mtimecmphi = cmp_new >> 32;
+
     ticks++;
 }
 
 volatile char lock = 0;
 
-void ISR_UART() {
-    /*if (lock) {
-      printf("LOCKED\n");
-      return; // TODO
-    }*/
+void ISR_MEIP() {
+    /*if(lock) {
+        printf("LOCKED\n");
+    } else {
     //lock = 1;
-    // ...
     //printf("UART\n");
     char c = *(volatile int*)UART_REG_RBR;
-    //printf("> %d (%c)\n", c, c);
-    // If there is received data, read it into the receive buffer.  If the
-    // buffer is full, disable the receive interrupt.
     if (!buf_isfull(rx_buffer)) {
-        //printf("PUT\n");
         buf_put_byte(rx_buffer, c);
         size_t l = buf_len(rx_buffer);
-        //printf("buf_len=%ld\n", l);
-        //if(buf_isfull(rx_buffer))
-        //    UART0_C2 &= ~UART_C2_RIE_MASK;
     } else {
       printf("ERR: buf full!\n");
       TVMPlatformAbort((tvm_crt_error_t)0xbeef7);
     }
     //lock = 0;
+    }*/
 
-    // ...
 }
 
 unsigned long micros() {
+  uint32_t * mtimelo = (uint32_t*)(CLINT_MTIMELO);
+  uint32_t * mtimehi = (uint32_t*)(CLINT_MTIMEHI);
   //static long fake_ticks = 0;
   //fake_ticks += 100;
   //return fake_ticks * 1000000/TICKS_FREQ;
   //return ticks * 1000000/TICKS_FREQ;
-  uint32_t my_ticks = ((uint64_t)*((volatile int*)CLINT_TICKS)) * 1000000/TICKS_FREQ;
-  return my_ticks;
+  //uint32_t my_ticks = ((uint64_t)*((volatile int*)CLINT_TICKS)) * 1000000/TICKS_FREQ;
+  // TODO: Does this need to be atomic?
+  uint64_t micros = ((uint64_t)*mtimehi << 32 | *mtimelo) * CLINT_TIMER_PERIOD_NS / 1000;
+  return micros;
 }
 
 // Called by TVM to write serial data to the UART.
@@ -371,7 +371,7 @@ ssize_t write_serial(void* unused_context, const uint8_t* data, size_t size) {
 
   for (size_t i = 0; i < size; i++) {
     //uart_poll_out(tvm_uart, data[i]);
-    printf("uart_sendchar: %d (%c)\n", data[i], data[i]);
+    //printf("uart_sendchar: %d (%c)\n", data[i], data[i]);
     uart_sendchar(data[i]);
     g_num_bytes_written++;
   }
@@ -389,7 +389,7 @@ size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes, const 
 void TVMPlatformAbort(tvm_crt_error_t error) {
   //TVMLogf("TVMError: 0x%x", error);
   printf("TVMError: 0x%x", error);
-  exit(1);
+  //exit(1);
   //sys_reboot(SYS_REBOOT_COLD);
   // TODO
   for (;;)
@@ -541,36 +541,58 @@ void main(void) {
   clint_cfg_timecompare_us(systemtimer_us);
   // Initialize microTVM RPC server, which will receive commands from the UART and execute them.
   microtvm_rpc_server_t server = MicroTVMRpcServerInit(write_serial, NULL);
-  TVMLogf("microTVM ETISSVP runtime - running");
+  //TVMLogf("microTVM ETISSVP runtime - running");
 
   // The main application loop. We continuously read commands from the UART
   // and dispatch them to MicroTVMRpcServerLoop().
   while (true) {
     
-    //printf("LOOP\n");
+    /*//printf("LOOP\n");
     int x = 0, y = 1;
     //while (x < 100000) {
-    while (x < 1000) {
+    while (x < 10000) {
       y++;
       x++;
     }
     if (x == y){
       x = 1;
       y = 0;
-    }
+    }*/
     static uint8_t data[BUFLEN];
-    //while (lock) {}
-    lock = 1;
+    //while(lock) {printf("LOCKED\n");}
+    //lock = 1;
     //int_disable(); // TODO: reenable this?
-    size_t bytes_remaining = buf_len(rx_buffer);
+    //size_t bytes_remaining = buf_len(rx_buffer);
+    size_t bytes_remaining = 0;
+    //while((*((volatile int*)UART_REG_LSR) & 0x1) != 0x1) {
+    //  //printf(";\n");
+    //}
+    while((*((volatile int*)UART_REG_LSR) & 0x1) == 0x1) {
+      char c = *(volatile int*)UART_REG_RBR;
+      //printf("UART - %u [%02x]\n", c, c);
+      data[bytes_remaining] = c;
+      bytes_remaining++;
+      //printf("LOOP\n");
+      /*int x = 0, y = 1;
+      while (x < 10) {
+        y++;
+        x++;
+      }
+      if (x == y){
+        x = 1;
+        y = 0;
+      }*/
+    }
+
     if (bytes_remaining > 0) {
       
       //printf("bytes_remaining=%ld\n", bytes_remaining);
-      for (size_t i = 0; i < bytes_remaining; i++) {
-        data[i] = buf_get_byte(rx_buffer);
-      }
-      int_enable();
-      printf("Micros: %lu\n", micros());
+      //for (size_t i = 0; i < bytes_remaining; i++) {
+      //  data[i] = buf_get_byte(rx_buffer);
+      //}
+      //int_enable();
+      //lock = 0;
+      //printf("Micros: %lu\n", micros());
       // TODO: disable interrupts
       uint8_t* arr_ptr = data;
       while (bytes_remaining > 0) {
@@ -590,9 +612,9 @@ void main(void) {
       }
       printf("done\n");
     } else {
-      int_enable();
+      //int_enable();
     }
-    lock = 0;
+    //lock = 0;
     
     
     //unsigned int key = irq_lock();
@@ -622,7 +644,7 @@ void main(void) {
     //irq_unlock(key);
     //break;
   }
-  TVMLogf("microTVM ETISSVP runtime - done");
+  //TVMLogf("microTVM ETISSVP runtime - done");
   //for (;;) {}
 
 }
