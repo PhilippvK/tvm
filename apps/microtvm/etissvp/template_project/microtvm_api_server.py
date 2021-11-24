@@ -434,14 +434,7 @@ class ETISSVPTransport:
         return server.read_with_timeout(self.read_fd, n, timeout_sec)
 
     def write(self, data, timeout_sec):
-        #print("PY write", data, timeout_sec)
-        to_write = bytearray()
-        escape_pos = []
-        for i, b in enumerate(data):
-            if b == 0x01:
-                to_write.append(b)
-                escape_pos.append(i)
-            to_write.append(b)
+        to_write = bytearray(data)
 
         while to_write:
             num_written = server.write_with_timeout(self.write_fd, to_write, timeout_sec, dbg_fd=self.write_fd2)
