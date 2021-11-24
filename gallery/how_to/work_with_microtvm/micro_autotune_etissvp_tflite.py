@@ -41,12 +41,14 @@ logging.basicConfig(level="DEBUG", stream=sys.stdout)
 project_options = {
     "project_type": "host_driven",
     "verbose": False,
-    "debug": True,
+    "debug": False,
     "transport": True,
-    "etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
+    #"etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
+    "etiss_path": "/work/git/prj/etiss_freertos/etiss-public-fork/build/installed",
     "riscv_path": "/usr/local/research/projects/SystemDesign/tools/riscv/current/",
     "etissvp_script": tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/run.sh",
-    "etissvp_script_args": "-i" + tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/memsegs.ini v"
+    #"etissvp_script_args": "-i" + tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/memsegs.ini v",
+    "etissvp_script_args": "v"
 }
 
 ####################
