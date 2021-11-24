@@ -371,7 +371,7 @@ class ETISSVPTransport:
         #while not (os.path.exists(self.read_pipe) and os.path.exists(self.write_pipe) and os.path.exists(self.write_pipe2)):
         while not (os.path.exists(self.read_pipe) and os.path.exists(self.write_pipe)):
             time.sleep(1)
-        time.sleep(2)
+        time.sleep(1)
 
         self.read_fd = os.open(self.read_pipe, os.O_RDWR | os.O_NONBLOCK)
         self.write_fd = os.open(self.write_pipe, os.O_RDWR | os.O_NONBLOCK)
