@@ -647,6 +647,7 @@ class ProjectAPIServer:
 
 
 def _await_nonblocking_ready(rlist, wlist, timeout_sec=None, end_time=None):
+    end_time=None
     if end_time is None:
         return True
 
