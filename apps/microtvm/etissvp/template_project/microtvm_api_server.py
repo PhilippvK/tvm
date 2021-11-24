@@ -355,7 +355,7 @@ class ETISSVPTransport:
         etissvp_env = os.environ.copy()
         etissvp_env["ETISS_DIR"] = self.options["etiss_path"]
         self.proc = subprocess.Popen(
-            [self.options["etissvp_script"], "app"],
+            [self.options["etissvp_script"], "app", *self.options["etissvp_script_args"].split()],
             #["make", "run", f"UART_PIPE={self.pipe}"],
             cwd=BUILD_DIR,
             stdout=subprocess.PIPE,
