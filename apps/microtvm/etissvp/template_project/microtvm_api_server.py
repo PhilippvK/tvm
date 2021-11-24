@@ -61,7 +61,7 @@ IS_TEMPLATE = not (API_SERVER_DIR / MODEL_LIBRARY_FORMAT_RELPATH).exists()
 
 def check_call(cmd_args, *args, **kwargs):
     cwd_str = "" if "cwd" not in kwargs else f" (in cwd: {kwargs['cwd']})"
-    _LOG.info("run%s: %s", cwd_str, " ".join(shlex.quote(a) for a in cmd_args))
+    _LOG.debug("run%s: %s", cwd_str, " ".join(shlex.quote(a) for a in cmd_args))
     return subprocess.check_call(cmd_args, *args, **kwargs)
 
 
@@ -263,16 +263,19 @@ class Handler(server.ProjectAPIHandler):
         if options.get("verbose"):
             cmake_args.append("-DCMAKE_VERBOSE_MAKEFILE:BOOL=TRUE")
 
-        print(BUILD_DIR)
+        #print("BUILD", BUILD_DIR)
         #input()
-        #check_call(cmake_args, cwd=BUILD_DIR)
-        check_call(cmake_args, cwd=BUILD_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        if options.get("verbose"):
+            check_call(cmake_args, cwd=BUILD_DIR)
+        else:
+            check_call(cmake_args, cwd=BUILD_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
         args = ["make", "-j2"]
         if options.get("verbose"):
             args.append("VERBOSE=1")
-        #check_call(args, cwd=BUILD_DIR)
-        check_call(args, cwd=BUILD_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            check_call(args, cwd=BUILD_DIR)
+        else:
+            check_call(args, cwd=BUILD_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
     def flash(self, options):
         if options.get("transport"):
@@ -347,7 +350,7 @@ class ETISSVPTransport:
         
         #os.mkfifo(self.read_pipe)
 
-        print("RUN", BUILD_DIR)
+        #print("RUN", BUILD_DIR)
         #input()
         os.mkfifo(self.write_pipe2)
         if not self.options.get("etissvp_script"):
@@ -430,7 +433,6 @@ class ETISSVPTransport:
             self.pipe_dir = None
 
     def read(self, n, timeout_sec):
-        #print("PY read", n, timeout_sec)
         return server.read_with_timeout(self.read_fd, n, timeout_sec)
 
     def write(self, data, timeout_sec):

@@ -35,7 +35,8 @@ import tvm
 
 import logging
 import sys
-logging.basicConfig(level="DEBUG", stream=sys.stdout)
+logging.basicConfig(level="WARNING", stream=sys.stdout)
+
 
 project_options = {
     "project_type": "host_driven",

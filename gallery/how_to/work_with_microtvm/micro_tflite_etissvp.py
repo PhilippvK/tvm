@@ -33,8 +33,7 @@ import numpy as np
 import logging
 import sys
 
-#logging.basicConfig(level="DEBUG", stream=sys.stderr)
-logging.basicConfig(level="DEBUG", stream=sys.stdout)
+#logging.basicConfig(level="DEBUG", stream=sys.stdout)
 
 import tvm
 import tvm.micro as micro

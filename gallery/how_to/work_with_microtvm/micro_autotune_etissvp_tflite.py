@@ -35,7 +35,7 @@ import tvm
 
 import logging
 import sys
-logging.basicConfig(level="DEBUG", stream=sys.stdout)
+#logging.basicConfig(level="DEBUG", stream=sys.stdout)
 
 
 project_options = {
