@@ -38,8 +38,6 @@ import time
 import json
 import signal
 
-import serial
-import serial.tools.list_ports
 import yaml
 
 from tvm.micro.project_api import server
