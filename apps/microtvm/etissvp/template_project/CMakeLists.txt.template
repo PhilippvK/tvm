@@ -38,6 +38,25 @@ SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
 
 INCLUDE(PulpinoTarget)
 
+SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} \
+    -Os \
+    -ffunction-sections \
+    -fdata-sections \
+    -fno-rtti \
+    -fno-exceptions \
+    -fno-threadsafe-statics \
+")
+SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} \
+    -Os \
+    -ffunction-sections \
+    -fdata-sections \
+")
+SET(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS} \
+    -Xlinker --gc-sections \
+    -Xlinker -Map=linker.map \
+    -Xlinker --cref \
+")
+
 ADD_EXECUTABLE_PULPINO(app src/main.c)
 
 set(CRT_LIBS <API_SERVER_CRT_LIBS>)
