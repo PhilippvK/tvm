@@ -453,6 +453,7 @@ class LocalRunner(RPCRunner):
         cooldown_interval=0.1,
         enable_cpu_cache_flush=False,
         module_loader=None,
+        silent=True
     ):
         super(LocalRunner, self).__init__(
             "",
@@ -468,6 +469,7 @@ class LocalRunner(RPCRunner):
             enable_cpu_cache_flush=enable_cpu_cache_flush,
             module_loader=module_loader,
         )
+        self.silent = silent
         self.tracker = None
         self.server = None
 
@@ -479,7 +481,7 @@ class LocalRunner(RPCRunner):
         #pdb.set_trace()
 
         self.task = task
-        tracker = Tracker(port=9000, port_end=10000, silent=False)
+        tracker = Tracker(port=9000, port_end=10000, silent=self.silent)
         device_key = "$local$device$%d" % tracker.port
         servers = []
         # TODO: check if None!
@@ -488,7 +490,7 @@ class LocalRunner(RPCRunner):
                 port=9000,
                 port_end=10000,
                 key=device_key,
-                silent=False,
+                silent=self.silent,
                 tracker_addr=("127.0.0.1", tracker.port),
             )
             servers.append(server)
