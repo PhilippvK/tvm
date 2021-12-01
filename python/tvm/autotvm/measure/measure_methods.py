@@ -446,6 +446,7 @@ class LocalRunner(RPCRunner):
     def __init__(
         self,
         timeout=10,
+        n_parallel=1,
         number=4,
         repeat=3,
         min_repeat_ms=0,
@@ -459,7 +460,7 @@ class LocalRunner(RPCRunner):
             None,
             0,
             timeout=timeout,
-            n_parallel=1,
+            n_parallel=n_parallel,
             number=number,
             repeat=repeat,
             min_repeat_ms=min_repeat_ms,
@@ -474,23 +475,29 @@ class LocalRunner(RPCRunner):
         # pylint: disable=import-outside-toplevel
         from ...rpc.server import Server
         from ...rpc.tracker import Tracker
+        import pdb
+        #pdb.set_trace()
 
         self.task = task
-        tracker = Tracker(port=9000, port_end=10000, silent=True)
+        tracker = Tracker(port=9000, port_end=10000, silent=False)
         device_key = "$local$device$%d" % tracker.port
-        server = Server(
-            port=9000,
-            port_end=10000,
-            key=device_key,
-            silent=True,
-            tracker_addr=("127.0.0.1", tracker.port),
-        )
+        servers = []
+        # TODO: check if None!
+        for i in range(self.n_parallel):
+            server = Server(
+                port=9000,
+                port_end=10000,
+                key=device_key,
+                silent=False,
+                tracker_addr=("127.0.0.1", tracker.port),
+            )
+            servers.append(server)
         self.key = device_key
         self.host = "127.0.0.1"
         self.port = tracker.port
 
         super(LocalRunner, self).set_task(task)
-        return server, tracker
+        return servers, tracker
 
 
 def _build_func_common(measure_input, runtime=None, check_gpu=None, build_option=None):
