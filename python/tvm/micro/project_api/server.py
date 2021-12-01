@@ -705,6 +705,7 @@ def read_with_timeout(fd, n, timeout_sec):  # pylint: disable=invalid-name
             break
         except BlockingIOError:
             pass
+        time.sleep(0.01)
 
     # When EOF is reached, close the file.
     if not to_return:
@@ -754,6 +755,7 @@ def write_with_timeout(fd, data, timeout_sec, dbg_fd=None):  # pylint: disable=i
                 return num_written
 
             raise exc
+        time.sleep(0.01)
 
         num_written_this_cycle = os.write(fd, data)
         if dbg_fd:
