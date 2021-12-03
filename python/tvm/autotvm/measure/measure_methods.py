@@ -437,6 +437,7 @@ class LocalRunner(RPCRunner):
         its actual latency during end-to-end inference.
         To make this option effective, the argument `number` should also be set to 1.
         This is only has effect on CPU task.
+        TODO
     Note
     ----
     This is a "fake" local mode. We start a silent rpc tracker and rpc server
