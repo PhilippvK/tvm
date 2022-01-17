@@ -65,6 +65,7 @@ TVM_REGISTER_PASS_CONFIG_OPTION("tir.ptx_ldg32", Bool);
 // can be tricky e.g. it is yet to be proven out in the Hexagon runtime. Hence the warning above and
 // the "experimental" notation for this feature.
 TVM_REGISTER_PASS_CONFIG_OPTION("tir.experimental_dma_bypass_cache", Bool);
+TVM_REGISTER_PASS_CONFIG_OPTION("tir.max_stack_alloca", Integer);
 
 using tvm::Array;
 using tvm::transform::Pass;

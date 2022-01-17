@@ -68,9 +68,6 @@ constexpr int kAllocAlignment = 64;
 constexpr int kTempAllocaAlignment = 64;
 #endif  // TVM_KALLOC_ALIGNMENT
 
-/*! \brief Maximum size that can be allocated on stack */
-constexpr int kMaxStackAlloca = 1024;
-
 /*! \brief Number of bytes each allocation must align to by default in the workspace buffer to
  * service intermediate tensors */
 constexpr int kDefaultWorkspaceAlignment = 1;
