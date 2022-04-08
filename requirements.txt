@@ -1,0 +1,5 @@
+numpy
+scipy
+decorator
+attrs
+tflite
