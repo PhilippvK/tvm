@@ -32,6 +32,7 @@ from . import _backend
 
 logger = logging.getLogger("te_compiler")
 autotvm_logger = logging.getLogger("autotvm")
+autotvm_logger.setLevel(logging.DEBUG)
 
 _first_warning = True
 
