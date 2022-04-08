@@ -85,8 +85,16 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
         raise ValueError("dilation should be positive value")
 
     isa = arm_isa.IsaAnalyzer(target)
+    print("<<<")
+    print("dilation_h, dilation_w", dilation_h, dilation_w)
+    print("stride_h, stride_w", stride_h, stride_w)
+    print("padding", padding)
+    print("groups", groups)
+    print("layout", layout)
+    print("kernel_layout", kernel_layout)
+    print(">>>")
 
-    if groups == 1:
+    if groups == 1: # true
         if layout == "NCHW":
             if kernel_layout == "OIHW":
                 if (
@@ -159,16 +167,19 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
                 wrap_topi_schedule(topi.generic.schedule_conv2d_hwcn),
                 name="conv2d_hwcn.generic",
             )
-        elif layout == "NHWC":
-            if isa.has_dsp_support and kernel_layout == "HWOI":
+        elif layout == "NHWC":  # true
+            if isa.has_dsp_support and kernel_layout == "HWOI":  # false
                 strategy.add_implementation(
                     wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_dsp),
                     wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_dsp),
                     name="conv2d_nhwc_dsp.micro_dev",
                 )
-            elif kernel_layout == "HWIO":
+            elif kernel_layout == "HWIO":  # true
                 is_aarch64 = topi.arm_cpu.arm_utils.is_aarch64_arm()
+                print("is_aarch64", is_aarch64)
                 has_dot_prod = topi.arm_cpu.arm_utils.is_dotprod_available()
+                print("has_dot_prod", has_dot_prod)
+                print("data.dtype", data.dtype)
                 if has_dot_prod and data.dtype in ["int8", "uint8"]:
                     strategy.add_implementation(
                         wrap_compute_conv2d(topi.arm_cpu.compute_conv2d_NHWC_quantized_native),
