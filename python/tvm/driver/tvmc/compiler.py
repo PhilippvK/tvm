@@ -288,6 +288,19 @@ def compile_model(
             config[codegen["config_key"]] = codegen_from_cli["opts"]
         with tvm.transform.PassContext(config=config):
             mod = partition_function(mod, params, mod_name=mod_name, **codegen_from_cli["opts"])
+    # if True:
+    #     desired_layouts = {
+    #         # 'nn.dense': ['NHWC', 'OHWI'],
+    #         # 'nn.conv2d': ['NCHW', 'OHWI'],
+    #         # 'qnn.conv2d': ['NHWC', 'HWOI'],  # dsp
+    #         # 'qnn.conv2d': ['NHWC', 'HWIO'],  # default
+    #         # 'qnn.conv2d': ['HWCN', 'HWIO'],  # alt1
+    #         'qnn.conv2d': ['NCHW', 'OIHW'],  # alt2
+    #     }
+    #     seq = tvm.transform.Sequential([relay.transform.ConvertLayout(desired_layouts),
+    #                             relay.transform.FoldConstant()])
+    #     with tvm.transform.PassContext(opt_level=3):
+    #         mod = seq(mod)
 
     if tuning_records and os.path.exists(tuning_records):
         logger.debug("tuning records file provided: %s", tuning_records)
