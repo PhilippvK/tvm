@@ -73,6 +73,7 @@ def schedule_pool_arm_cpu(attrs, outs, target):
 @conv2d_strategy.register("arm_cpu")
 def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
     """conv2d arm cpu strategy"""
+    print("!conv2d_strategy_arm_cpu!")
     strategy = _op.OpStrategy()
     data, kernel = inputs
     dilation_h, dilation_w = attrs.get_int_tuple("dilation")
@@ -268,6 +269,7 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
 
 @conv2d_NCHWc_strategy.register("arm_cpu")
 def conv2d_NCHWc_strategy_arm_cpu(attrs, inputs, out_type, target):
+    print("!conv2d_NCHWc_strategy_arm_cpu!")
     """conv2d_NCHWc adopted from x86"""
     strategy = _op.OpStrategy()
     data, kernel = inputs
@@ -288,6 +290,7 @@ def conv2d_NCHWc_strategy_arm_cpu(attrs, inputs, out_type, target):
 
 @depthwise_conv2d_NCHWc_strategy.register("arm_cpu")
 def depthwise_conv2d_NCHWc_strategy_arm_cpu(attrs, inputs, out_type, target):
+    print("!depthwise_conv2d_NCHWc_strategy_arm_cpu!")
     """depthwise_conv2d_NCHWc adopted from x86"""
     strategy = _op.OpStrategy()
     strategy.add_implementation(
@@ -314,6 +317,7 @@ def wrap_compute_conv2d_winograd_nnpack(topi_compute):
 
 @conv2d_winograd_without_weight_transfrom_strategy.register("arm_cpu")
 def conv2d_winograd_without_weight_transfrom_strategy_arm_cpu(attrs, inputs, out_type, target):
+    print("!conv2d_winograd_without_weight_transfrom_strategy_arm_cpu!")
     """conv2d_winograd_without_weight_transfrom arm cpu strategy"""
     dilation = attrs.get_int_tuple("dilation")
     groups = attrs.get_int("groups")
@@ -380,6 +384,7 @@ def wrap_compute_conv2d_gemm(topi_compute):
 
 @conv2d_gemm_without_weight_transform_strategy.register("arm_cpu")
 def conv2d_gemm_without_weight_transform_strategy_arm_cpu(attrs, inputs, out_type, target):
+    print("!conv2d_gemm_without_weight_transform_strategy_arm_cpu!")
     """conv2d_winograd_without_weight_transfrom arm cpu strategy"""
     layout = attrs.data_layout
     data = inputs[0]
@@ -412,6 +417,7 @@ def conv2d_gemm_without_weight_transform_strategy_arm_cpu(attrs, inputs, out_typ
 
 @conv2d_transpose_strategy.register("arm_cpu")
 def conv2d_transpose_strategy_arm_cpu(attrs, inputs, out_type, target):
+    print("!conv2d_transpose_strategy_arm_cpu!")
     """conv2d_transpose arm cpu strategy"""
     layout = attrs.data_layout
     dilation = get_const_tuple(attrs.dilation)
