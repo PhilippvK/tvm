@@ -33,6 +33,7 @@ from .micro_kernel.gemm import (
 
 def conv2d_nhwc_dsp(*args, **kwargs):
     """Defines the v7e-m DSP instructions of conv2d."""
+    print("!conv2d_nhwc_dsp!")
     assert not kwargs, "Do not support kwargs in template function call"
     args = deserialize_args(args)
     data, kernel = args[:2]
@@ -52,6 +53,7 @@ conv2d_nhwc_dsp.default_kernel_layout = "HWOI"
 
 def conv2d_nhwc_dsp_compute(cfg, data, kernel, strides, padding, dilation, out_dtype):
     """Compute function for v7e-m DSP instructions of conv2d."""
+    print("!conv2d_nhwc_dsp_compute!")
     assert isinstance(strides, int) or len(strides) == 2
     assert isinstance(dilation, int) or len(dilation) == 2
 
@@ -149,6 +151,7 @@ def conv2d_nhwc_dsp_compute(cfg, data, kernel, strides, padding, dilation, out_d
 
 def conv2d_nhwc_dsp_schedule(cfg, outs):
     """Schedule function for v7e-m DSP instructions of conv2d."""
+    print("!conv2d_nhwc_dsp_schedule!")
     sched = te.create_schedule([x.op for x in outs])
 
     def _callback(op):
