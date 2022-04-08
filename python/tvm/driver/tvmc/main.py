@@ -21,6 +21,7 @@ TVMC - TVM driver command-line interface
 """
 import argparse
 import logging
+logging.getLogger('autotvm').setLevel(logging.DEBUG)
 import sys
 
 import tvm
