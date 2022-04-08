@@ -19,6 +19,8 @@
 TVMC - TVM driver command-line interface
 """
 
+import logging
+logging.getLogger('autotvm').setLevel(logging.DEBUG)
 
 class TVMCException(Exception):
     """TVMC Exception"""
