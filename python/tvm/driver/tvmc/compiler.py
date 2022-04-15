@@ -373,6 +373,10 @@ def compile_model(
         source = str(mod) if source_type == "relay" else lib.get_source(source_type)
         dumps[source_type] = source
 
+    print("graph_module", graph_module, dir(graph_module), graph_module.get_lib().get_source("asm"))
+    print("graph_module", graph_module, dir(graph_module), graph_module.get_lib().get_source("ll"))
+    print("graph_module", graph_module, dir(graph_module), str(mod))
+
     # Create a new tvmc model package object from the graph definition.
     package_path = tvmc_model.export_package(
         graph_module, package_path, cross, cross_options, output_format

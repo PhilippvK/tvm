@@ -106,6 +106,7 @@ def get_valid_implementations(op, attrs, inputs, out_type, target):
     ret : List[relay.op.OpImplementation]
         The list of all valid op implementations.
     """
+    print("get_valid_implementations", op, attrs, inputs, out_type, target)
     fstrategy = op.get_attr("FTVMStrategy")
     assert fstrategy is not None, (
         "%s doesn't have an FTVMStrategy registered. You can register "
@@ -172,6 +173,8 @@ def select_implementation(op, attrs, inputs, out_type, target, use_autotvm=True)
         The best op implementation and the corresponding output tensors.
     """
     all_impls = get_valid_implementations(op, attrs, inputs, out_type, target)
+    print("all_impls", all_impls)
+
     if len(all_impls) == 0:
         raise RuntimeError(f"No valid {op} implementations for {target}")
     best_plevel_impl = max(all_impls, key=lambda x: x.plevel)
@@ -321,6 +324,7 @@ def lower_call(call, inputs, target):
     # re-enable AutoTVM tracing
     if reenable_tracing:
         env.tracing = True
+    print("best_impl", best_impl)
     return LoweredOutput(outputs, best_impl)
 
 
