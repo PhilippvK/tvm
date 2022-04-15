@@ -64,6 +64,14 @@
         "vid_hex": "",
         "pid_hex": ""
     },
+    "esp32c3_devkitm": {
+        "board": "esp32c3_devkitm",
+        "model": "host",
+        "is_qemu": false,
+        "fpu": false,
+        "vid_hex": "",
+        "pid_hex": ""
+    },
     "qemu_riscv32": {
         "board": "qemu_riscv32",
         "model": "host",

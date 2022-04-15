@@ -33,7 +33,7 @@
 #include <drivers/uart.h>
 #include <fatal.h>
 #include <kernel.h>
-#include <power/reboot.h>
+// #include <power/reboot.h>
 #include <random/rand32.h>
 #include <stdio.h>
 #include <sys/printk.h>
@@ -101,7 +101,7 @@ size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes, const 
 // Called by TVM when an internal invariant is violated, and execution cannot continue.
 void TVMPlatformAbort(tvm_crt_error_t error) {
   TVMLogf("TVMError: 0x%x", error);
-  sys_reboot(SYS_REBOOT_COLD);
+  // sys_reboot(SYS_REBOOT_COLD);
 #ifdef CONFIG_LED
   gpio_pin_set(led0_pin, LED0_PIN, 1);
 #endif
@@ -192,24 +192,25 @@ tvm_crt_error_t TVMPlatformTimerStop(double* elapsed_time_seconds) {
 
   // need to grab time remaining *before* stopping. when stopped, this function
   // always returns 0.
-  int32_t time_remaining_ms = k_timer_remaining_get(&g_microtvm_timer);
-  k_timer_stop(&g_microtvm_timer);
-  // check *after* stopping to prevent extra expiries on the happy path
-  if (time_remaining_ms < 0) {
-    TVMLogf("negative time remaining");
-    return kTvmErrorSystemErrorMask | 3;
-  }
-  uint32_t num_expiries = k_timer_status_get(&g_microtvm_timer);
-  uint32_t timer_res_ms = ((num_expiries * MILLIS_TIL_EXPIRY) + time_remaining_ms);
-  double approx_num_cycles =
-      (double)k_ticks_to_cyc_floor32(1) * (double)k_ms_to_ticks_ceil32(timer_res_ms);
+  // int32_t time_remaining_ms = k_timer_remaining_get(&g_microtvm_timer);
+  // k_timer_stop(&g_microtvm_timer);
+  // // check *after* stopping to prevent extra expiries on the happy path
+  // if (time_remaining_ms < 0) {
+  //   TVMLogf("negative time remaining");
+  //   return kTvmErrorSystemErrorMask | 3;
+  // }
+  // uint32_t num_expiries = k_timer_status_get(&g_microtvm_timer);
+  // uint32_t timer_res_ms = ((num_expiries * MILLIS_TIL_EXPIRY) + time_remaining_ms);
+  // double approx_num_cycles =
+  //     (double)k_ticks_to_cyc_floor32(1) * (double)k_ms_to_ticks_ceil32(timer_res_ms);
   // if we approach the limits of the HW clock datatype (uint32_t), use the
   // coarse-grained timer result instead
-  if (approx_num_cycles > (0.5 * (~((uint32_t)0)))) {
-    *elapsed_time_seconds = timer_res_ms / 1000.0;
-  } else {
+  // if (approx_num_cycles > (0.5 * (~((uint32_t)0)))) {
+  //   // *elapsed_time_seconds = timer_res_ms / 1000.0;
+  //   *elapsed_time_seconds = hw_clock_res_us / 1e6;
+  // } else {
     *elapsed_time_seconds = hw_clock_res_us / 1e6;
-  }
+  // }
 
   g_microtvm_timer_running = 0;
   return kTvmErrorNoError;
