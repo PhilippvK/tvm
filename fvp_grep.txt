@@ -1,0 +1,53 @@
+- apps/microtvm/ethosu/README.md:  - [Fixed Virtual Platform (FVP) based on Arm(R) Corstone(TM)-300 software](https://developer.arm.com/tools-and-software/open-source-software/arm-platforms-software/arm-ecosystem-fvps)
+- apps/microtvm/ethosu/README.md:You will need to update your PATH environment variable to include the path to cmake 3.19.5 and the FVP.
+- apps/microtvm/ethosu/README.md:export PATH=/opt/arm/FVP_Corstone_SSE-300/models/Linux64_GCC-6.4:/opt/arm/cmake/bin:$PATH
+- apps/microtvm/ethosu/README.md:- Run the demo application on a Fixed Virtual Platform (FVP) based on Arm(R) Corstone(TM)-300 software
+- apps/microtvm/ethosu/run_demo.sh:--fvp_path FVP_PATH
+- apps/microtvm/ethosu/run_demo.sh:   Set path to FVP.
+- apps/microtvm/ethosu/run_demo.sh:        --fvp_path)
+- apps/microtvm/ethosu/run_demo.sh:                echo 'ERROR: --fvp_path requires a non-empty argument' >&2
+- apps/microtvm/ethosu/run_demo.sh:# Run demo executable on the FVP
+- apps/microtvm/ethosu/run_demo.sh:FVP_Corstone_SSE-300_Ethos-U55 -C cpu0.CFGDTCMSZ=15 \
+- apps/microtvm/ethosu/src/demo_bare_metal.c:  // The FVP will shut down when it receives "EXITTHESIM" on the UART
+- apps/microtvm/ethosu/src/demo_freertos.c:  // The FVP will shut down when it receives "EXITTHESIM" on the UART
+~ muriscvnn, microtvm problematic without uart -> path spike?
+~ apps/microtvm/zephyr_cmsisnn/CMakeLists.txt:set(EMU_PLATFORM armfvp)
+~ apps/microtvm/zephyr_cmsisnn/README.md:The application starts from [the Zephyr base project](https://docs.zephyrproject.org/latest/application/index.html#application) and makes minimal changes to integrate TVM. To try it out, first refer to the [Zephyr Getting Started](https://docs.zephyrproject.org/latest/getting_started/index.html) page to setup your tooling such as `west` (you can also use the `tlcpack/ci_qemu` image). Then download the [Fixed Virtual Platform (FVP) based on Arm(R) Corstone(TM)-300 software](https://developer.arm.com/tools-and-software/open-source-software/arm-platforms-software/arm-ecosystem-fvps) and set the path for Zephyr to find it:
+~ apps/microtvm/zephyr_cmsisnn/README.md:export ARMFVP_BIN_PATH=/opt/arm/FVP_Corstone_SSE-300/models/Linux64_GCC-6.4/
+~ apps/microtvm/zephyr_cmsisnn/run_demo.sh:  pkill FVP
+~ apps/microtvm/zephyr_cmsisnn/run_demo.sh:export ARMFVP_BIN_PATH=/opt/arm/FVP_Corstone_SSE-300/models/Linux64_GCC-6.4/
+! docker/Dockerfile.ci_cpu:ENV PATH /opt/arm/gcc-arm-none-eabi/bin:/opt/arm/FVP_Corstone_SSE-300/models/Linux64_GCC-6.4:$PATH
+! docker/Dockerfile.ci_qemu:ENV PATH /opt/arm/gcc-arm-none-eabi/bin:/opt/arm/FVP_Corstone_SSE-300/models/Linux64_GCC-6.4:$PATH
+docker/install/ubuntu_install_ethosu_driver_stack.sh:fvp_dir="/opt/arm/FVP_Corstone_SSE-300"
+docker/install/ubuntu_install_ethosu_driver_stack.sh:# Download the FVP
+docker/install/ubuntu_install_ethosu_driver_stack.sh:mkdir -p "$fvp_dir"
+docker/install/ubuntu_install_ethosu_driver_stack.sh:curl -sL https://developer.arm.com/-/media/Arm%20Developer%20Community/Downloads/OSS/FVP/Corstone-300/FVP_Corstone_SSE-300_11.15_24.tgz | tar -xz
+docker/install/ubuntu_install_ethosu_driver_stack.sh:./FVP_Corstone_SSE-300.sh --i-agree-to-the-contained-eula --no-interactive -d "$fvp_dir"
+docker/install/ubuntu_install_ethosu_driver_stack.sh:rm -rf FVP_Corstone_SSE-300.sh license_terms
+- gallery/how_to/work_with_microtvm/micro_ethosu.py:on a Fixed Virtual Platform (FVP). The FVP based on Arm(R) Corstone(TM)-300
+- gallery/how_to/work_with_microtvm/micro_ethosu.py:#       // The FVP will shut down when it receives "EXITTHESIM" on the UART
+- gallery/how_to/work_with_microtvm/micro_ethosu.py:# An example linker script for the FVP can be found here
+- gallery/how_to/work_with_microtvm/micro_ethosu.py:#   PATH environment variable to include the path to cmake 3.19.5 and the FVP.
+- gallery/how_to/work_with_microtvm/micro_ethosu.py:#   ``export PATH=/opt/arm/FVP_Corstone_SSE-300_Ethos-U55/models/Linux64_GCC-6.4:/opt/arm/cmake/bin:$PATH``
+- gallery/how_to/work_with_microtvm/micro_ethosu.py:# Finally, we can run our demo appliction on the Fixed Virtual Platform (FVP),
+- gallery/how_to/work_with_microtvm/micro_ethosu.py:#     FVP_Corstone_SSE-300_Ethos-U55 -C cpu0.CFGDTCMSZ=15 \
+x python/tvm/testing/plugin.py:    "corstone300": "mark a test as requiring Corstone300 FVP",
+x python/tvm/testing/utils.py:    """Mark a test as requiring the corstone300 FVP
+x tests/python/conftest.py:        help="Run Corstone-300 FVP tests",
+- tests/python/contrib/test_ethosu/infra.py:    This method verifies the generated source from an NPU module by building it and running on an FVP.
+! tests/python/relay/aot/aot_test_utils.py:        fvp_dir = "/opt/arm/FVP_Corstone_SSE-300/models/Linux64_GCC-6.4/"
+! tests/python/relay/aot/aot_test_utils.py:        # TODO(@grant-arm): Remove once ci_cpu docker image has been updated to FVP_Corstone_SSE
+! tests/python/relay/aot/aot_test_utils.py:        if not os.path.isdir(fvp_dir):
+! tests/python/relay/aot/aot_test_utils.py:            fvp_dir = "/opt/arm/FVP_Corstone_SSE-300_Ethos-U55/models/Linux64_GCC-6.4/"
+! tests/python/relay/aot/aot_test_utils.py:            + f" FVP_DIR={fvp_dir}"
+- tests/python/relay/aot/corstone300.mk:FVP_DIR ?= /opt/arm/FVP_Corstone_SSE-300_Ethos-U55/models/Linux64_GCC-6.4/
+- tests/python/relay/aot/corstone300.mk:MODEL = FVP_Corstone_SSE-300_Ethos-$(NPU_VARIANT)
+- tests/python/relay/aot/corstone300.mk:	$(FVP_DIR)/$(MODEL) -C cpu0.CFGDTCMSZ=15 \
+! tests/python/relay/aot/spike.mk:# FVP_DIR ?= /opt/arm/FVP_Corstone_SSE-300_Ethos-U55/models/Linux64_GCC-6.4/
+! tests/python/relay/aot/spike.mk:SPIKE_DIR ?= /opt/arm/FVP_Corstone_SSE-300_Ethos-U55/models/Linux64_GCC-6.4/  # TODO
+! tests/python/relay/aot/spike.mk:# MODEL = FVP_Corstone_SSE-300_Ethos-$(NPU_VARIANT)
+! tests/python/relay/aot/spike.mk:	$(FVP_DIR)/$(MODEL) -C cpu0.CFGDTCMSZ=15 \
+! only if spike+microtvm will work
+! tests/scripts/task_demo_microtvm.sh:FVP_PATH="/opt/arm/FVP_Corstone_SSE-300_Ethos-U55"
+! tests/scripts/task_demo_microtvm.sh: timeout 5m ./run_demo.sh --fvp_path $FVP_PATH --cmake_path $CMAKE_PATH
+! tests/scripts/task_demo_microtvm.sh: timeout 5m ./run_demo.sh --fvp_path $FVP_PATH --cmake_path $CMAKE_PATH --freertos_path $FREERTOS_PATH

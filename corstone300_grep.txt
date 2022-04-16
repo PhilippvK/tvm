@@ -1,0 +1,67 @@
+- apps/microtvm/ethosu/Makefile:PKG_LDFLAGS = -lm -specs=nosys.specs -static -T corstone300.ld
+- gallery/how_to/work_with_microtvm/micro_ethosu.py:# should be placed in memory. The corstone300.ld linker script below should be
+- gallery/how_to/work_with_microtvm/micro_ethosu.py:# `corstone300.ld <https://github.com/apache/tvm/blob/main/apps/microtvm/ethosu/corstone300.ld>`_
+x python/tvm/testing/plugin.py:    "corstone300": "mark a test as requiring Corstone300 FVP",
+x python/tvm/testing/utils.py:def requires_corstone300(*args):
+x python/tvm/testing/utils.py:    """Mark a test as requiring the corstone300 FVP
+x python/tvm/testing/utils.py:    _requires_corstone300 = [
+x python/tvm/testing/utils.py:        pytest.mark.corstone300,
+x python/tvm/testing/utils.py:    return _compose(args, _requires_corstone300)
+- Binary file python/tvm/testing/__pycache__/utils.cpython-38.pyc matches
+- Binary file python/tvm/testing/__pycache__/plugin.cpython-38-pytest-6.2.5.pyc matches
+x tests/python/conftest.py:        "--enable-corstone300-tests",
+x tests/python/conftest.py:    if not config.getoption("--enable-corstone300-tests"):
+x tests/python/conftest.py:            if "corstone300" in item.keywords:
+x tests/python/conftest.py:                        reason="Need --enable-corstone300-tests option to run this test"
+~ -> test muriscvnn?
+~ tests/python/contrib/test_cmsisnn/test_binary_ops.py:    AOT_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_binary_ops.py:    AOT_USMP_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_binary_ops.py:    test_runner = AOT_USMP_CORSTONE300_RUNNER
+~ tests/python/contrib/test_cmsisnn/test_binary_ops.py:    test_runner = AOT_USMP_CORSTONE300_RUNNER
+~ tests/python/contrib/test_cmsisnn/test_conv2d.py:    AOT_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_conv2d.py:    AOT_USMP_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_conv2d.py:    test_runner = AOT_USMP_CORSTONE300_RUNNER
+~ tests/python/contrib/test_cmsisnn/test_conv2d.py:    test_runner = AOT_USMP_CORSTONE300_RUNNER
+~ tests/python/contrib/test_cmsisnn/test_conv2d.py:    test_runner = AOT_USMP_CORSTONE300_RUNNER
+~ tests/python/contrib/test_cmsisnn/test_conv2d.py:    test_runner = AOT_USMP_CORSTONE300_RUNNER
+~ tests/python/contrib/test_cmsisnn/test_fully_connected.py:    AOT_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_fully_connected.py:    AOT_USMP_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_fully_connected.py:    test_runner = AOT_USMP_CORSTONE300_RUNNER
+~ tests/python/contrib/test_cmsisnn/test_invalid_graphs.py:    AOT_USMP_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_invalid_graphs.py:    test_runner = AOT_USMP_CORSTONE300_RUNNER
+~ tests/python/contrib/test_cmsisnn/test_networks.py:    AOT_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_networks.py:    AOT_USMP_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_networks.py:@pytest.mark.parametrize("test_runner", [AOT_CORSTONE300_RUNNER, AOT_USMP_CORSTONE300_RUNNER])
+~ tests/python/contrib/test_cmsisnn/test_pooling.py:    AOT_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_pooling.py:    AOT_USMP_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_pooling.py:    test_runner = AOT_USMP_CORSTONE300_RUNNER
+~ tests/python/contrib/test_cmsisnn/test_softmax.py:    AOT_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_softmax.py:    AOT_USMP_CORSTONE300_RUNNER,
+~ tests/python/contrib/test_cmsisnn/test_softmax.py:    test_runner = AOT_USMP_CORSTONE300_RUNNER
+- tests/python/contrib/test_ethosu/infra.py:        makefile="corstone300",
+! -> !!!
+! tests/python/integration/test_arm_mprofile_dsp.py:    AOT_CORSTONE300_RUNNER,
+! tests/python/integration/test_arm_mprofile_dsp.py:@tvm.testing.requires_corstone300
+! tests/python/integration/test_arm_mprofile_dsp.py:        runner=AOT_CORSTONE300_RUNNER,
+! tests/python/integration/test_arm_mprofile_dsp.py:@tvm.testing.requires_corstone300
+! tests/python/integration/test_arm_mprofile_dsp.py:        runner=AOT_CORSTONE300_RUNNER,
+! tests/python/integration/test_arm_mprofile_dsp.py:@tvm.testing.requires_corstone300
+! tests/python/integration/test_arm_mprofile_dsp.py:        runner=AOT_CORSTONE300_RUNNER,
+! tests/python/integration/test_arm_mprofile_dsp.py:@tvm.testing.requires_corstone300
+! tests/python/integration/test_arm_mprofile_dsp.py:        runner=AOT_CORSTONE300_RUNNER,
+! tests/python/integration/test_arm_mprofile_dsp.py:@tvm.testing.requires_corstone300
+! tests/python/integration/test_arm_mprofile_dsp.py:        runner=AOT_CORSTONE300_RUNNER,
+! tests/python/integration/test_arm_mprofile_dsp.py:@tvm.testing.requires_corstone300
+! tests/python/integration/test_arm_mprofile_dsp.py:        runner=AOT_CORSTONE300_RUNNER,
+! tests/python/integration/test_arm_mprofile_dsp.py:@tvm.testing.requires_corstone300
+! tests/python/integration/test_arm_mprofile_dsp.py:        runner=AOT_CORSTONE300_RUNNER,
+x spike test runner for aot
+x tests/python/relay/aot/aot_test_utils.py:AOT_CORSTONE300_RUNNER = AOTTestRunner(
+x tests/python/relay/aot/aot_test_utils.py:    makefile="corstone300",
+x tests/python/relay/aot/aot_test_utils.py:AOT_USMP_CORSTONE300_RUNNER = AOTTestRunner(
+x tests/python/relay/aot/aot_test_utils.py:    makefile="corstone300",
+x tests/python/relay/aot/aot_test_utils.py:    test_runner = [AOT_DEFAULT_RUNNER, AOT_CORSTONE300_RUNNER]
+x tests/python/relay/aot/aot_test_utils.py:            parameters[2] == AOT_CORSTONE300_RUNNER
+x tests/python/relay/aot/aot_test_utils.py:        if parameters[2] == AOT_CORSTONE300_RUNNER
+! tests/python/relay/aot/corstone300.mk:PKG_LDFLAGS = -lm -specs=nosys.specs -static -T ${AOT_TEST_ROOT}/corstone300.ld
+x tests/scripts/task_python_integration.sh:    run_pytest ctypes ${TVM_INTEGRATION_TESTSUITE_NAME}-m7-simd tests/python/integration/test_arm_mprofile_dsp.py --enable-corstone300-tests
