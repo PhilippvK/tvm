@@ -40,6 +40,7 @@ from tests.python.relay.aot.aot_test_utils import (
     AOTTestModel,
     AOT_CORSTONE300_RUNNER,
     AOT_USMP_CORSTONE300_RUNNER,
+    AOT_SPIKE_RUNNER,
     generate_ref_data,
     compile_and_run,
 )

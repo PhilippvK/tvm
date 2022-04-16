@@ -45,7 +45,7 @@ if [ "$1" == "--target-list" ]; then
     shift
     target_list=$1
 else
-    # Build these by defualt for microtvm reference virtual machine and ci_qemu.
+    # Build these by default for microtvm reference virtual machine and ci_qemu.
     target_list="aarch64-softmmu,arm-softmmu,i386-softmmu,riscv32-softmmu,riscv64-softmmu,x86_64-softmmu"
 fi
 

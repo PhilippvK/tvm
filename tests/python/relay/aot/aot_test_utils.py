@@ -169,6 +169,13 @@ AOT_USMP_CORSTONE300_RUNNER = AOTTestRunner(
     },
 )
 
+AOT_SPIKE_RUNNER = AOTTestRunner(
+    makefile="spike",
+    # prologue="",
+    # includes=[],
+    # pass_config={},
+)
+
 
 def mangle_name(mod_name, name):
     mod_name = mangle_module_name(mod_name)
@@ -205,7 +212,7 @@ def parametrize_aot_options(test):
 
     interface_api = ["packed", "c"]
     use_unpacked_api = [True, False]
-    test_runner = [AOT_DEFAULT_RUNNER, AOT_CORSTONE300_RUNNER]
+    test_runner = [AOT_DEFAULT_RUNNER, AOT_CORSTONE300_RUNNER, AOT_SPIKE_RUNNER]
 
     all_combinations = itertools.product(interface_api, use_unpacked_api, test_runner)
 
@@ -815,6 +822,9 @@ def run_and_check(
         # TODO(@grant-arm): Remove once ci_cpu docker image has been updated to FVP_Corstone_SSE
         if not os.path.isdir(fvp_dir):
             fvp_dir = "/opt/arm/FVP_Corstone_SSE-300_Ethos-U55/models/Linux64_GCC-6.4/"
+        spike_dir = "/opt/arm/FVP_Corstone_SSE-300/models/Linux64_GCC-6.4/"  # TODO
+        if not os.path.isdir(spike_dir):
+            spike_dir = "/opt/arm/FVP_Corstone_SSE-300_Ethos-U55/models/Linux64_GCC-6.4/"  # TODO
         custom_params = " ".join(
             [f" {param}='{value}'" for param, value in runner.parameters.items()]
         )
@@ -826,6 +836,7 @@ def run_and_check(
             + f" CODEGEN_ROOT={codegen_path}"
             + f" STANDALONE_CRT_DIR={tvm.micro.get_standalone_crt_dir()}"
             + f" FVP_DIR={fvp_dir}"
+            + f" SPIKE_DIR={spike_dir}"
             + custom_params
         )
 

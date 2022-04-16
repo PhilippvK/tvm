@@ -80,4 +80,6 @@ run_pytest ctypes ${TVM_INTEGRATION_TESTSUITE_NAME}-target tests/python/target
 
 if [ -z "${TVM_INTEGRATION_GPU_ONLY:-}" ] && [ -z "${TVM_INTEGRATION_I386_ONLY:-}" ] ; then
     run_pytest ctypes ${TVM_INTEGRATION_TESTSUITE_NAME}-m7-simd tests/python/integration/test_arm_mprofile_dsp.py --enable-corstone300-tests
+    run_pytest ctypes ${TVM_INTEGRATION_TESTSUITE_NAME}-rv32gcp tests/python/integration/test_riscv_pext.py --enable-spike-tests
+    run_pytest ctypes ${TVM_INTEGRATION_TESTSUITE_NAME}-rv32gcv tests/python/integration/test_riscv_vext.py --enable-spike-tests
 fi

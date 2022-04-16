@@ -50,6 +50,7 @@ MARKERS = {
     "ethosn": "mark a test as requiring ethosn",
     "hexagon": "mark a test as requiring hexagon",
     "corstone300": "mark a test as requiring Corstone300 FVP",
+    "spike": "mark a test as requiring Spike (riscv-isa-sim)",
 }
 
 

@@ -775,6 +775,23 @@ def requires_corstone300(*args):
     return _compose(args, _requires_corstone300)
 
 
+def requires_spike(*args):
+    """Mark a test as requiring the Spike (riscv-isa-sim) simulator
+
+    Parameters
+    ----------
+    f : function
+        Function to mark
+    """
+    _requires_spike = [
+        pytest.mark.spike,
+        pytest.mark.skipif(
+            shutil.which("riscv64-unknown-elf-gcc") is None, reason="RISC-V multilib toolchain unavailable"
+        ),
+    ]
+    return _compose(args, _requires_spike)
+
+
 def requires_rocm(*args):
     """Mark a test as requiring the rocm runtime.
 
