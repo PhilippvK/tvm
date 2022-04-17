@@ -451,6 +451,7 @@ MICRO_SUPPORTED_MODELS = {
     "stm32l4r5zi": ["-mcpu=cortex-m4"],
     "stm32u5xx": ["-mcpu=cortex-m33"],
     "zynq_mp_r5": ["-mcpu=cortex-r5"],
+    # TODO: add riscv chips
 }
 
 
@@ -580,11 +581,14 @@ def riscv_cpu(model="sifive-u54", options=None):
     options : str or list of str
         Additional options
     """
+
+    # TODO: get rid of -mcpu and -mtriple?
     trans_table = {
         "sifive-e31": [
             "-model=sifive-e31",
             "-mtriple=riscv32-unknown-linux-gnu",
             "-mcpu=sifive-e31",
+            "-march=rv32imac",
             "-mabi=ilp32",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv32imac -mabi=ilp32 -mcpu=sifive-e31
         ],
@@ -592,6 +596,7 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=sifive-e76",
             "-mtriple=riscv32-unknown-linux-gnu",
             "-mcpu=sifive-e76",
+            "-march=rv32imafc",
             "-mabi=ilp32",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv32imafc -mabi=ilp32 -mcpu=sifive-e76
         ],
@@ -599,6 +604,7 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=sifive-u54",
             "-mtriple=riscv64-unknown-linux-gnu",
             "-mcpu=sifive-u54",
+            "-march=rv64gc",
             "-mabi=lp64d",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv64gc -mabi=lp64d -mcpu=sifive-u54
         ],
@@ -606,15 +612,50 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=sifive-u74",
             "-mtriple=riscv64-unknown-linux-gnu",
             "-mcpu=sifive-u74",
+            "-march=rv64gc",
             "-mabi=lp64d",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv64gc -mabi=lp64d -mcpu=sifive-u74
         ],
+        # See: https://github.com/riscvarchive/riscv-cores-list
+        "xuantie-c906": [  # licheerv/d1nezha
+            "-model=xuantie-c906",
+            "-mtriple=riscv64-unknown-linux-gnu",
+            "-mcpu=xuantie-c906",
+            "-march=rv64gcvxthead",
+            "-mabi=lp64d"
+            # cc: ?
+            # -mtune=c906 -mcmodel=?, rename to riscv_c906/xuantie c906?, also: C910,E906,E902
+        ]
+        "spike-rv32": [  # rename to generic_rv32?
+            "-model=spike-rv32",
+            "-mtriple=riscv64-unknown-elf",
+            "-march=rv32gc",  # rv32gcv/rv32gcp
+            "-mabi=ilp32d"
+            # cc: ?
+        ]
+        "spike-rv64": [  # rename to generic_rv32?
+            "-model=spike-rv32",
+            "-mtriple=riscv64-unknown-elf",
+            "-march=rv64gc",  # rv64gcv/rv64gcp
+            "-mabi=lp64d"
+            # cc: ?
+        ]
+        # "cv32e40p": ["?"],
+        # "ibex": ["?"],  # Zero-riscy, rv32
+        # "cva6": ["?"],  # Ariane, rv32
+        # "vexriscv": ["?"],  # rv32
+        # "picorv32": ["?"],  # rv32
+        # "sifive_e2": ["?"],  # rv32
+        # "sifive_s2": ["?"],  # rv64
+        # "sifive_s5": ["?"],  # rv64
+        # "sifive_s7": ["?"],  # rv64
+        # "kendryte_k210": ["?"],  # rv64
     }
     pre_defined_opt = trans_table.get(model, ["-model=%s" % model])
 
-    opts = ["-keys=arm_cpu,cpu", "-device=arm_cpu"] + pre_defined_opt
+    opts = ["-keys=riscv_cpu,cpu", "-device=riscv_cpu"] + pre_defined_opt
     opts = _merge_opts(opts, options)
-    return Target(" ".join(["llvm"] + opts))
+    return Target(" ".join(["llvm"] + opts))  # TODO: ?
 
 
 def hexagon(cpu_ver="v66", **kwargs):
