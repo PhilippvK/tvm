@@ -28,6 +28,7 @@ _injective_schedule = {
     "generic": topi.generic.schedule_injective,
     "cpu": topi.x86.schedule_injective,
     "arm_cpu": topi.arm_cpu.schedule_injective,
+    # "riscv_cpu": topi.riscv_cpu.schedule_injective,
     "gpu": topi.cuda.schedule_injective,
     "hls": topi.hls.schedule_injective,
 }
@@ -68,6 +69,10 @@ _conv2d_nchw_implement = {
         topi.arm_cpu.conv2d_nchw_spatial_pack,
         topi.arm_cpu.schedule_conv2d_nchw_spatial_pack,
     ),
+    # "riscv_cpu": (
+    #     topi.riscv_cpu.conv2d_nchw_spatial_pack,
+    #     topi.riscv_cpu.schedule_conv2d_nchw_spatial_pack,
+    # ),
     "gpu": (topi.cuda.conv2d_nchw, topi.cuda.schedule_conv2d_nchw),
     "mali": (topi.mali.conv2d_nchw_spatial_pack, topi.mali.schedule_conv2d_nchw_spatial_pack),
     "bifrost": (
