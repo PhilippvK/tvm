@@ -1,0 +1,14 @@
+{
+    "esp32": {
+        "board": "esp32",
+        "model": "esp32",
+        "vid_hex": "0483",
+        "pid_hex": "374e"
+    },
+    "esp32c3": {
+        "board": "esp32c3",
+        "model": "esp32c3",
+        "vid_hex": "0483",
+        "pid_hex": "374e"
+    }
+}
