@@ -613,21 +613,21 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-mabi=lp64d"
             # cc: ?
             # -mtune=c906 -mcmodel=?, rename to riscv_c906/xuantie c906?, also: C910,E906,E902
-        ]
+        ],
         "spike-rv32": [  # rename to generic_rv32?
             "-model=spike-rv32",
             "-mtriple=riscv64-unknown-elf",
             "-march=rv32gc",  # rv32gcv/rv32gcp
             "-mabi=ilp32d"
             # cc: ?
-        ]
+        ],
         "spike-rv64": [  # rename to generic_rv32?
             "-model=spike-rv32",
             "-mtriple=riscv64-unknown-elf",
             "-march=rv64gc",  # rv64gcv/rv64gcp
             "-mabi=lp64d"
             # cc: ?
-        ]
+        ],
         # "cv32e40p": ["?"],
         # "ibex": ["?"],  # Zero-riscy, rv32
         # "cva6": ["?"],  # Ariane, rv32
@@ -644,7 +644,6 @@ def riscv_cpu(model="sifive-u54", options=None):
     opts = ["-device=riscv_cpu"] + pre_defined_opt
     opts = _merge_opts(opts, options)
     return Target(" ".join(["llvm"] + opts))  # TODO: ?
-    }
 
 
 def hexagon(cpu_ver="v66", **kwargs):
