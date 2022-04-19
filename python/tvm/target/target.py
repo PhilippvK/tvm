@@ -338,6 +338,7 @@ MICRO_SUPPORTED_MODELS = {
     "atsamd51": ["-mcpu=cortex-m4"],
     "cxd5602gg": ["-mcpu=cortex-m4"],
     "esp32": [],
+    "esp32c3": [],
     "imxrt10xx": ["-mcpu=cortex-m7"],
     "mps2_an521": ["-mcpu=cortex-m33"],
     "mps3_an547": ["-mcpu=cortex-m55"],

@@ -37,6 +37,7 @@ STANDALONE_CRT_DIR = None
 
 class MicroTVMTemplateProject(enum.Enum):
     ZEPHYR = "zephyr"
+    ESPIDF = "espidf"
     ARDUINO = "arduino"
     CRT = "crt"
 

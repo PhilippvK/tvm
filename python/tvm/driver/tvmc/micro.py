@@ -56,7 +56,7 @@ def add_micro_parser(subparsers, main_parser):
 
     # Probe available default platform templates.
     templates = {}
-    for p in ("zephyr", "arduino"):
+    for p in ("zephyr", "espidf", "arduino"):
         try:
             templates[p] = get_microtvm_template_projects(p)
         except MicroTVMTemplateProjectNotFoundError:
