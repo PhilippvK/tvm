@@ -295,7 +295,10 @@ def compile_model(
     #         # 'qnn.conv2d': ['NHWC', 'HWOI'],  # dsp
     #         # 'qnn.conv2d': ['NHWC', 'HWIO'],  # default
     #         # 'qnn.conv2d': ['HWCN', 'HWIO'],  # alt1
-    #         'qnn.conv2d': ['NCHW', 'OIHW'],  # alt2
+    #         # 'qnn.conv2d': ['NCHW', 'OIHW'],  # alt2
+    #         # 'nn.max_pool2d': ['NHWC', 'HWIO'],
+    #         'nn.max_pool2d': ['NHWC', 'OHWI'],
+    #         'nn.avg_pool2d': ['NCHW', 'OIHW'],
     #     }
     #     seq = tvm.transform.Sequential([relay.transform.ConvertLayout(desired_layouts),
     #                             relay.transform.FoldConstant()])
