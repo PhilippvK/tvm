@@ -27,5 +27,5 @@
 # from .bitserial_dense import *
 # from .injective import *
 # from .group_conv2d import *
-# from .pooling import *
+from .pooling import *
 # from .dense import *

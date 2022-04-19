@@ -20,7 +20,7 @@ import re
 import logging
 
 from tvm import relay, topi
-from ....target import arm_isa
+from ....target import riscv_isa
 from ....topi.generic import conv2d as conv2d_generic
 from ....auto_scheduler import is_auto_scheduler_enabled
 from .generic import *
@@ -48,31 +48,26 @@ logger = logging.getLogger("strategy")
 #     """schedule concatenate for arm cpu"""
 #     with target:
 #         return topi.arm_cpu.schedule_concatenate(outs)
-#
-#
-# @schedule_pool.register(["arm_cpu"])
-# def schedule_pool_arm_cpu(attrs, outs, target):
-#     """schedule pooling ops arm cpu"""
-#     print("schedule_pool_arm_cpu")
-#     layout = attrs.layout
-#     print("layout", layout)
-#     isa = arm_isa.IsaAnalyzer(target)
-#     print("isa", isa)
-#     avg_pool = isinstance(attrs, relay.op.op_attrs.AvgPool2DAttrs)
-#     print("avg_pool", avg_pool)
-#     with target:
-#         if (
-#             avg_pool
-#             and isa.has_dsp_support
-#             and layout in ("NCW", "NCHW")
-#             or not avg_pool
-#             and isa.has_dsp_support
-#             and layout in ("NWC", "NHWC")
-#         ):
-#             print("if")
-#             return topi.arm_cpu.schedule_pool(outs, layout)
-#         print("else")
-#         return topi.generic.schedule_pool(outs, layout)
+
+
+@schedule_pool.register(["riscv_cpu"])
+def schedule_pool_riscv_cpu(attrs, outs, target):
+    """schedule pooling ops riscv cpu"""
+    print("schedule_pool_riscv_cpu")
+    layout = attrs.layout
+    print("layout", layout)
+    isa = riscv_isa.IsaAnalyzer(target)
+    print("isa", isa)
+    avg_pool = isinstance(attrs, relay.op.op_attrs.AvgPool2DAttrs)
+    print("avg_pool", avg_pool)
+    with target:
+        if (avg_pool and layout in ("NCW", "NCHW")) or (not avg_pool and layout in ("NWC", "NHWC")):
+            # TODO: prefer v over p extension?
+            if isa.has_vext_support:
+                return topi.riscv_cpu.schedule_pool_vext(outs, layout)
+            elif isa.has_pext_support:
+                return topi.riscv_cpu.schedule_pool_pext(outs, layout)
+        return topi.generic.schedule_pool(outs, layout)
 #
 #
 # @conv2d_strategy.register(["arm_cpu", "micro_dev"])
