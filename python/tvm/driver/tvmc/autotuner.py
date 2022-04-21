@@ -311,6 +311,10 @@ def tune_model(
     include_simple_tasks: bool = False,
     log_estimated_latency: bool = False,
     additional_target_options: Optional[Dict[str, Dict[str, Any]]] = None,
+    module_loader = None,  # TODO
+    build_func = "default",  # TODO
+    runtime = None,  # TODO
+    build_kwargs : dict = None,  # TODO
 ):
     """Use tuning to automatically optimize the functions in a model.
 
@@ -369,12 +373,29 @@ def tune_model(
         If using the autoscheduler, write the estimated latency at each step of tuning to file.
     additional_target_options: Optional[Dict[str, Dict[str, Any]]]
         Additional target options in a dictionary to combine with initial Target arguments
+    module_loader : TODO, optional
+        TODO
+    build_func : TODO, optional
+        TODO
+    runtime : TODO, optional
+        TODO
+    build_kwargs : dict, optional
+        TODO
 
     Returns
     -------
     tuning_records : str
         The path to the produced tuning log file.
     """
+    is_micro = module_loader is not None   # TODO: remove this workaround
+    # if module_loader is not None:
+    #     try:
+    #         from tvm.micro import AutoTvmModuleLoader
+    #         is_micro = isinstance(module_loader, AutoTvmModuleLoader)
+    #     except (ImportError, NameError):
+    #         pass
+
+
     target, extra_targets = target_from_cli(target, additional_target_options)
     target, target_host = Target.check_and_update_host_consist(target, target_host)
     # TODO(jwfromm) Remove this deepcopy once AlterOpLayout bug that mutates source
@@ -471,12 +492,20 @@ def tune_model(
         trials = int(trials / max(len(tasks), 1))
         logger.info("Autotuning with %d trials per task.", trials)
 
+        builder = autotvm.LocalBuilder(
+            # n_parallel=1,
+            build_kwargs=build_kwargs or {},
+            # do_fork=True,
+            build_func=build_func,
+            runtime=runtime,
+        )
+
         tuning_options = {
             "tuner": tuner,
             "trials": trials,
             "early_stopping": early_stopping,
             "measure_option": autotvm.measure_option(
-                builder=autotvm.LocalBuilder(build_func="default"), runner=runner
+                builder=builder, runner=runner
             ),
             "tuning_records": prior_records,
         }
