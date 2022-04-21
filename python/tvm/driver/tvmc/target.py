@@ -91,10 +91,7 @@ def generate_target_args(parser):
 
 def _reconstruct_target_kind_args(args, kind_name):
     kind_options = {}
-    print("_reconstruct_target_kind_args", kind_name)
-    print("items", TargetKind.options_from_name(kind_name).items())
     for target_option, target_type in TargetKind.options_from_name(kind_name).items():
-        print("target_option", target_option, "target_type", target_type)
         if target_type in INTERNAL_TO_NATIVE_TYPE:
             var_name = f"target_{kind_name.replace('-', '_')}_{target_option.replace('-', '_')}"
             if hasattr(args, var_name):
