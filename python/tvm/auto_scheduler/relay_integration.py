@@ -60,6 +60,7 @@ def call_all_topi_funcs(mod, params, target, error_list, opt_level=3):
         opt_level=opt_level,
         config={
             "relay.backend.use_auto_scheduler": True,
+            "tir.disable_vectorize": True,
         },
         disabled_pass={"AutoSchedulerLayoutRewrite"},
     ):
