@@ -116,7 +116,7 @@ def add_micro_tune_args(parser):
     #     default="llvm",
     # )
 
-    parser.add_argument("--timeout", type=int, default=10, help="compilation timeout, in seconds")
+    parser.add_argument("--timeout", type=int, default=1000, help="compilation timeout, in seconds")
     parser.add_argument(
         "--trials",
         type=int,
