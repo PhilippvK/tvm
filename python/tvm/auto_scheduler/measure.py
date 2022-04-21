@@ -1123,16 +1123,16 @@ def _rpc_run(
         # upload built module
         if module_loader is None:
             module_loader = default_module_loader()
-        remote_kwargs["device_key"] = "phi"
-        remote_kwargs["host"] = "regency.regent.e-technik.tu-muenchen.de"
-        remote_kwargs["port"] = 9000
-        remote_kwargs["priority"] = 5
-        remote_kwargs["timeout"] = 1000
-        import pathlib
-        module_loader = tvm.micro.AutoTvmModuleLoader(
-            template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
-            project_options={"verbose": False},
-        )
+        remote_kwargs["device_key"] = key
+        remote_kwargs["host"] = host
+        remote_kwargs["port"] = port
+        remote_kwargs["priority"] = priority
+        remote_kwargs["timeout"] = timeout
+        # import pathlib
+        # module_loader = tvm.micro.AutoTvmModuleLoader(
+        #     template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
+        #     project_options={"verbose": False},
+        # )
         print("module_loader", module_loader)
         with module_loader(remote_kwargs, build_res) as (remote, func):
             print("A")
@@ -1223,6 +1223,7 @@ def _rpc_run_worker(args):
     ----------
     args : Tuple[MeasureInput, BuildResult, ...]
         Single input and build result plus the rest of the arguments to `rpc_runner_run`.
+        TODO:
 
     Returns
     -------
@@ -1274,6 +1275,8 @@ def rpc_runner_run(
     enable_cpu_cache_flush=False,
     verbose=1,
     device=0,
+    # module_loader=None,
+    # remote_kwargs={},
 ):
     """Run function of RPCRunner to test the performance of the input BuildResults.
 
@@ -1325,12 +1328,22 @@ def rpc_runner_run(
     device: int = 0
         Which device to run on if multiple are available.
 
+        TODO:
+    remote_kwargs={},
+    module_loader=None
+
     Returns
     -------
     res : List[MeasureResult]
         The measure results of these MeasureInputs.
     """
     assert len(inputs) == len(build_results), "Measure input size should be equal to build results"
+    import pathlib
+    module_loader = tvm.micro.AutoTvmModuleLoader(
+        template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
+        project_options={"verbose": True},
+    )
+    remote_kwargs={}
     # This pool is not doing computationally intensive work, so we can use threads
     executor = PopenPoolExecutor(n_parallel)
     tuple_res = executor.map_with_error_catching(
@@ -1352,6 +1365,8 @@ def rpc_runner_run(
                 enable_cpu_cache_flush,
                 verbose,
                 device,
+                module_loader,
+                remote_kwargs,
             )
             for inp, build_res in zip(inputs, build_results)
         ],
