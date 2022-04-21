@@ -47,6 +47,7 @@ from tvm.contrib import tar, ndk
 from tvm.contrib.popen_pool import PopenWorker, PopenPoolExecutor, StatusKind
 from tvm.target import Target
 from tvm.autotvm.measure import default_module_loader
+from tvm.relay.backend import Runtime
 
 
 from . import _ffi_api
@@ -82,6 +83,7 @@ class BuildFunc:
 
     name = "default"
     build_func = tar.tar
+    runtime = Runtime("cpp")
 
 
 @tvm._ffi.register_object("auto_scheduler.MeasureCallback")
@@ -330,9 +332,15 @@ class LocalBuilder(ProgramBuilder):
         If is 'default', use default build function
         If is 'ndk', use function for android ndk
         If is callable, use it as custom build function, expect lib_format field.
+    build_kwargs: dict
+        If supplied, additional kwargs passed to build_func. Overrides any build_kwargs supplied
+        by the Runner.
+    runtime: Optional[Runtime]
+        Specify the runtime to generate artifacts for.
     """
 
-    def __init__(self, timeout=15, n_parallel=multiprocessing.cpu_count(), build_func="default"):
+    # def __init__(self, timeout=15, n_parallel=multiprocessing.cpu_count(), build_func="default", build_option=None, runtime=None):
+    def __init__(self, timeout=15, n_parallel=multiprocessing.cpu_count(), build_func="default", build_option=None, runtime=Runtime("cpp")):
         if build_func == "default":
             BuildFunc.name = "default"
             BuildFunc.build_func = tar.tar
@@ -344,9 +352,11 @@ class LocalBuilder(ProgramBuilder):
             BuildFunc.build_func = build_func
         else:
             raise ValueError("Invalid build_func" + build_func)
+        BuildFunc.runtime = runtime or Runtime("cpp")
 
         self.__init_handle_by_constructor__(
-            _ffi_api.LocalBuilder, timeout, n_parallel, BuildFunc.name
+            # _ffi_api.LocalBuilder, timeout, n_parallel, BuildFunc.name, build_option
+            _ffi_api.LocalBuilder, timeout, n_parallel, BuildFunc.name, build_option, runtime
         )
 
 
@@ -612,7 +622,7 @@ class MeasureErrorNo(object):
     UNKNOWN_ERROR = 8  # Unknown error
 
 
-def _local_build_worker(inp_serialized, build_func, verbose):
+def _local_build_worker(inp_serialized, build_func, verbose, runtime, build_option):
     tic = time.time()
     inp = MeasureInput.deserialize(inp_serialized)
     task = inp.task
@@ -638,9 +648,18 @@ def _local_build_worker(inp_serialized, build_func, verbose):
         filename = os.path.join(dirname, "tmp_func." + build_func.output_format)
 
         try:
-            with transform.PassContext():
-                func = build_module.build(sch, args, target=task.target)
-            func.export_library(filename, build_func)
+            opts = build_option or {}
+            print("opts", opts)
+            with transform.PassContext(config=opts):
+                func = build_module.build(sch, args, target=task.target, target_host=task.target_host, runtime=runtime)
+            if build_func.output_format == ".model-library-format":
+                try:
+                    from tvm import micro  # pylint: disable=import-outside-toplevel
+                except ImportError:
+                    raise ImportError("Requires USE_MICRO")
+                micro.export_model_library_format(func, filename)
+            else:
+                func.export_library(filename, build_func)
         # pylint: disable=broad-except
         except Exception:
             error_no = MeasureErrorNo.COMPILE_HOST
@@ -664,20 +683,20 @@ def local_build_worker(args):
     Parameters
     ----------
     args: Tuple[MeasureInput, callable, int]
-        inputs, build-func, verbose args passed to local_builder_build
+        inputs, build-func, verbose, runtime and build-option args passed to local_builder_build
 
     Returns
     -------
     res : BuildResult
         The build result of this Builder thread.
     """
-    inp, build_func, verbose = args
+    inp, build_func, verbose, runtime, build_option = args
 
-    return _local_build_worker(inp, build_func, verbose)
+    return _local_build_worker(inp, build_func, verbose, runtime, build_option)
 
 
 @tvm._ffi.register_func("auto_scheduler.local_builder.build")
-def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbose=1):
+def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbose=1, build_option=None):
     """
     Build function of LocalBuilder to build the MeasureInputs to runnable modules.
 
@@ -694,6 +713,7 @@ def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbo
         The name of build function to process the built module.
     verbose: int = 1
         Verbosity level. 0 for silent, 1 to output information during program building.
+    build_option: TODO
 
     Returns
     -------
@@ -713,6 +733,8 @@ def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbo
                 i.serialize(),
                 BuildFunc.build_func,
                 verbose,
+                BuildFunc.runtime,
+                build_option,
             )
             for i in inputs
         ],
@@ -1106,7 +1128,14 @@ def _rpc_run(
         remote_kwargs["port"] = 9000
         remote_kwargs["priority"] = 5
         remote_kwargs["timeout"] = 1000
+        import pathlib
+        module_loader = tvm.micro.AutoTvmModuleLoader(
+            template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
+            project_options={"verbose": False},
+        )
+        print("module_loader", module_loader)
         with module_loader(remote_kwargs, build_res) as (remote, func):
+            print("A")
             dev = remote.device(str(inp.task.target), device)  # TODO(@PhilippvK): find out what device means
             # remote = request_remote(key, host, port, priority, timeout)
             # remote.upload(build_res.filename)
@@ -1117,6 +1146,7 @@ def _rpc_run(
             # the PackedFunc as an object. Currently, we pass function name to work
             # around it.
             f_prepare = "cache_flush_cpu_non_first_arg" if enable_cpu_cache_flush else ""
+            print("B")
             time_f = func.time_evaluator(
                 func.entry_name,
                 dev,
@@ -1125,6 +1155,7 @@ def _rpc_run(
                 min_repeat_ms=min_repeat_ms,
                 f_preproc=f_prepare,
             )
+            print("C")
 
             try:
                 stream = dev.create_raw_stream()
@@ -1198,6 +1229,7 @@ def _rpc_run_worker(args):
     res : MeasureResult
         The measure result of this Runner thread.
     """
+    print("_rpc_run_worker")
     _, build_res, _, _, _, _, _, timeout, _, _, _, _, _, verbose, _ = args
     if build_res.error_no != MeasureErrorNo.NO_ERROR:
         return (

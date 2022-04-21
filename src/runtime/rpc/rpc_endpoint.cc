@@ -373,7 +373,9 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
       // switch to the state before sending exception.
       this->SwitchToState(kRecvPacketNumBytes);
       std::string msg = args[0];
+      // LOG(FATAL) << "Phi1\n";
       LOG(FATAL) << "RPCError: Error caught from RPC call:\n" << msg;
+      // LOG(FATAL) << "Phi2\n";
     }
 
     ICHECK(setreturn != nullptr) << "fsetreturn not available";
