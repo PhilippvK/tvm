@@ -437,6 +437,8 @@ def tune_model(
             n_parallel=parallel,
             timeout=timeout,
             min_repeat_ms=min_repeat_ms,
+            module_loader=module_loader,
+
         )
     else:
         logger.info("Starting localhost tuning.")
@@ -448,6 +450,7 @@ def tune_model(
             repeat=repeat,
             timeout=timeout,
             min_repeat_ms=min_repeat_ms,
+            module_loader=module_loader,
         )
 
         # For autoscheduling on some devices, we need to maintain a LocalRPCMeasureContext object.
