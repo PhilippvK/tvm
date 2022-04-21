@@ -17,11 +17,14 @@
 """
 Provides support for micro targets (microTVM).
 """
+import logging
 import argparse
 import os
 from pathlib import Path
 import shutil
 import sys
+
+from urllib.parse import urlparse
 
 from tvm import autotvm, auto_scheduler
 from tvm.relay.backend import Runtime
@@ -36,6 +39,9 @@ from .project import (
     get_and_check_options,
     get_project_dir,
 )
+
+# pylint: disable=invalid-name
+logger = logging.getLogger("TVMC")
 
 try:
     import tvm.micro.project as project
