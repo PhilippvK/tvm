@@ -534,7 +534,7 @@ def tune_handler(args):
         warp_size=None,
         target="c",
         # target_host="?",
-        target_host="c",
+        target_host=None,
         # target_host="llvm",
     )
 
@@ -577,7 +577,7 @@ def tune_handler(args):
         trials=args.trials,
         # target_host=args.target_host,
         # target_host="?",
-        target_host="c",
+        target_host=None,
         # target_host="llvm",
         tuner=args.tuner,
         min_repeat_ms=args.min_repeat_ms,
