@@ -596,4 +596,5 @@ def tune_handler(args):
         runtime=runtime,
         build_func=autotvm_build_func,
         build_kwargs={"build_option": {"tir.disable_vectorize": True}},
+        si_prefix="M",  # Display MFLOPS instead of GFLOPS
     )
