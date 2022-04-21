@@ -596,7 +596,7 @@ def tune_handler(args):
         log_estimated_latency=False,
         additional_target_options=reconstruct_target_args(args),
         module_loader=module_loader,
-        # runtime=runtime?,
+        runtime=runtime,
         build_func=autotvm_build_func,
         build_kwargs={"build_option": {"tir.disable_vectorize": True}},
     )
