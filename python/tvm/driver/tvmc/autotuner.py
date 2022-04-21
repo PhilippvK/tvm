@@ -503,10 +503,12 @@ def tune_model(
         trials = int(trials / max(len(tasks), 1))
         logger.info("Autotuning with %d trials per task.", trials)
 
+        # print("!!runtime!!", runtime)
         builder = autotvm.LocalBuilder(
-            # n_parallel=1,
+            n_parallel=1,
             build_kwargs=build_kwargs or {},
             # do_fork=True,
+            do_fork=False,
             build_func=build_func,
             runtime=runtime,
         )
@@ -561,11 +563,17 @@ def autotvm_get_tuning_tasks(
     if alter_layout:
         mod = convert_graph_layout(mod, alter_layout)
 
-    tasks = autotvm.task.extract_from_program(
-        mod["main"],
-        target=target,
-        params=params,
-    )
+    # print("target", target)
+    # input()
+
+    pass_context = tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True})
+    with pass_context:
+        tasks = autotvm.task.extract_from_program(
+            mod["main"],
+            target=target,
+            target_host=target_host,
+            params=params,
+        )
 
     return tasks
 
