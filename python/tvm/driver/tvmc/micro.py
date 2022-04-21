@@ -378,10 +378,10 @@ def add_micro_parser(subparsers, main_parser):
         sys.exit(f"Error: Project API server not found in {template_dir}!")
 
     template_info = template.info()
-    print("template_info", template_info)
+    # print("template_info", template_info)
 
     options_by_method = get_project_options(template_info)
-    print("options_by_method", options_by_method)
+    # print("options_by_method", options_by_method)
 
     # TODO(gromero): refactor to remove this map.
     subcmd_to_method = {
@@ -394,11 +394,11 @@ def add_micro_parser(subparsers, main_parser):
     }
 
     method = subcmd_to_method[subcmd]
-    print("method", method)
+    # print("method", method)
     parser_by_subcmd_n_platform = parser_by_subcmd[method][platform]
-    print("parser_by_subcmd_n_platform", parser_by_subcmd_n_platform)
+    # print("parser_by_subcmd_n_platform", parser_by_subcmd_n_platform)
     _, handler = subcmds[method]
-    print("handler", handler)
+    # print("handler", handler)
 
     # TODO: get rid of this workaround
     options_by_method["tune"] = sum([options_by_method[method] for method in ["generate_project", "build", "flash", "open_transport"]], [])
@@ -414,7 +414,7 @@ def add_micro_parser(subparsers, main_parser):
     )
 
     required = any([opt["required"] for opt in options_by_method[method]])
-    print("required", required)
+    # print("required", required)
     nargs = "+" if required else "*"
 
     help_text_by_option = [opt["help_text"] for opt in options_by_method[method]]
@@ -560,8 +560,8 @@ def tune_handler(args):
         project_options=options,
     )
 
-    print("options", options)
-    print("args", args)
+    # print("options", options)
+    # print("args", args)
     # drive_tune(args, micro=True, module_loader=module_loader)
 
     tune_model(
