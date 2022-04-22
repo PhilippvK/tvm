@@ -227,6 +227,7 @@ def recover_measure_input(inp, rebuild_state=False):
     from .search_task import SearchTask  # lazily import to avoid recursive dependency
 
     task = inp.task
+    task.target_host = None
     task.target, task.target_host = Target.canon_target_and_host(task.target, task.target_host)
     new_task = SearchTask(
         workload_key=task.workload_key,
