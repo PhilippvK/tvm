@@ -341,7 +341,7 @@ class LocalBuilder(ProgramBuilder):
     """
 
     # def __init__(self, timeout=15, n_parallel=multiprocessing.cpu_count(), build_func="default", build_option=None, runtime=None):
-    def __init__(self, timeout=15, n_parallel=multiprocessing.cpu_count(), build_func="default", build_option=None, runtime=Runtime("cpp")):
+    def __init__(self, timeout=1500, n_parallel=multiprocessing.cpu_count(), build_func="default", build_option=None, runtime=Runtime("cpp")):
         if build_func == "default":
             BuildFunc.name = "default"
             BuildFunc.build_func = tar.tar
@@ -400,8 +400,10 @@ class LocalRunner(ProgramRunner):
 
     def __init__(
         self,
-        timeout=10,
-        number=3,
+        # timeout=10,
+        timeout=1000,
+        # number=3,
+        number=1,
         repeat=1,
         min_repeat_ms=100,
         cooldown_interval=0.0,
@@ -481,8 +483,10 @@ class RPCRunner(ProgramRunner):
         port,
         priority=1,
         n_parallel=1,
+        # timeout=10,
         timeout=10,
-        number=3,
+        # number=3,
+        number=1,
         repeat=1,
         min_repeat_ms=100,
         cooldown_interval=0.0,
@@ -563,8 +567,10 @@ class LocalRPCMeasureContext:
         self,
         priority=1,
         n_parallel=1,
-        timeout=10,
-        number=3,
+        # timeout=10,
+        timeout=1000,
+        # number=3,
+        number=1,
         repeat=1,
         min_repeat_ms=0,
         cooldown_interval=0.0,
@@ -1269,7 +1275,8 @@ def rpc_runner_run(
     priority=1,
     n_parallel=1,
     timeout=10,
-    number=3,
+    number=1,
+    # number=3,
     repeat=1,
     min_repeat_ms=0,
     cooldown_interval=0.0,
