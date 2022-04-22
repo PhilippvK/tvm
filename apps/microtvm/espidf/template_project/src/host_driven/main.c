@@ -50,10 +50,13 @@
 
 static const char *TAG = "microtvm";
 
+#if CONFIG_IDF_TARGET_ESP32C3
+
 #define CONFIG_LED_PIN_RED ((gpio_num_t)3)
 #define CONFIG_LED_PIN_GREEN ((gpio_num_t)4)
 #define CONFIG_LED_PIN_BLUE ((gpio_num_t)5)
-#define CONFIG_LED_PIN 1
+
+#endif
 
 /**
  * This example shows how to use the UART driver to handle special UART events.
@@ -110,7 +113,11 @@ void TVMPlatformAbort(tvm_crt_error_t error) {
   TVMLogf("TVMPlatformAbort: CALL\n");
 #ifdef CONFIG_LED_PIN_RED
   gpio_set_level(CONFIG_LED_PIN_RED, 1);
+#endif
+#ifdef CONFIG_LED_PIN_GREEN
   gpio_set_level(CONFIG_LED_PIN_GREEN, 1);
+#endif
+#ifdef CONFIG_LED_PIN_BLUE
   gpio_set_level(CONFIG_LED_PIN_BLUE, 1);
 #endif
   for (;;)
@@ -258,8 +265,8 @@ static void uart_event_task(void *pvParameters)
                 other types of events. If we take too much time on data event, the queue might
                 be full.*/
                 case UART_DATA:
-#ifdef CONFIG_LED_PIN_RED
-    gpio_set_level(CONFIG_LED_PIN_BLUE, 1);
+#ifdef CONFIG_LED_PIN_BLUE
+                    gpio_set_level(CONFIG_LED_PIN_BLUE, 1);
 #endif
                     UBaseType_t res =  xRingbufferSendAcquire(buf_handle, (void**)&data, event.size, pdMS_TO_TICKS(10000));
                     if (res != pdTRUE) {
@@ -317,8 +324,8 @@ static void uart_event_task(void *pvParameters)
                     TVMLogf("uart event type: %d", event.type);
                     break;
             }
-#ifdef CONFIG_LED_PIN_RED
-    gpio_set_level(CONFIG_LED_PIN_BLUE, 0);
+#ifdef CONFIG_LED_PIN_BLUE
+            gpio_set_level(CONFIG_LED_PIN_BLUE, 0);
 #endif
         }
     }
