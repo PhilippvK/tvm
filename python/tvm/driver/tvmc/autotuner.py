@@ -473,11 +473,23 @@ def tune_model(
             include_simple_tasks=include_simple_tasks,
         )
 
+        builder = auto_scheduler.LocalBuilder(
+            # timeout = 1000
+            # n_parallel=1,
+            # build_kwargs=build_kwargs or {},
+            build_option=build_kwargs["build_option"],
+            # do_fork=True,
+            # do_fork=False,
+            build_func=build_func,
+            runtime=runtime,
+        )
+
         # Create the autoscheduler tuning options
         tuning_options = auto_scheduler.TuningOptions(
             num_measure_trials=trials,
             measure_callbacks=[auto_scheduler.RecordToFile(tuning_records)],
             runner=runner,
+            builder=builder,
             early_stopping=early_stopping,
         )
 
