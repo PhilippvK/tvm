@@ -195,7 +195,7 @@ def generic_find_serial_port(serial_number=None):
     if serial_number:
         regex = serial_number
     else:
-        prop = BOARD_PROPERTIES[CMAKE_CACHE["BOARD"]]
+        prop = BOARD_PROPERTIES[CMAKE_CACHE["IDF_TARGET"]]
         device_id = ":".join([prop["vid_hex"], prop["pid_hex"]])
         regex = device_id
 
