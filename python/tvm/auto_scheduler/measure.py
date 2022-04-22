@@ -227,6 +227,7 @@ def recover_measure_input(inp, rebuild_state=False):
     from .search_task import SearchTask  # lazily import to avoid recursive dependency
 
     task = inp.task
+    task.target_host = None
     task.target, task.target_host = Target.check_and_update_host_consist(
         task.target, task.target_host
     )
