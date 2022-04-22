@@ -654,7 +654,8 @@ def _local_build_worker(inp_serialized, build_func, verbose, runtime, build_opti
             opts = build_option or {}
             print("opts", opts)
             with transform.PassContext(config=opts):
-                func = build_module.build(sch, args, target=task.target, target_host=task.target_host, runtime=runtime)
+                func = build_module.build(sch, args, target=task.target, target_host=None, runtime=runtime)
+                # func = build_module.build(sch, args, target=task.target, target_host=task.target_host, runtime=runtime)
             if build_func.output_format == ".model-library-format":
                 try:
                     from tvm import micro  # pylint: disable=import-outside-toplevel
