@@ -112,7 +112,7 @@ print(task.compute_dag)
 # * see :any:`TuningOptions <auto_scheduler.TuningOptions>` for more parameters
 
 key = "phi"
-host = "regency.regent.e-technik.tu-muenchen.de"
+host = "127.0.0.1"
 port = 9000
 rpc_runner = auto_scheduler.RPCRunner( key, host, port, priority=1, n_parallel=1, timeout=10, number=3, repeat=1, min_repeat_ms=100, cooldown_interval=0.0, enable_cpu_cache_flush=False, device=0)
 
