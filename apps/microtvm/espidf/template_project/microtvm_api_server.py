@@ -279,6 +279,20 @@ PROJECT_OPTIONS = [
         help="Name of the Espressif board to build for.",
     ),
     server.ProjectOption(
+        "idf_serial_port",
+        optional=["open_transport"],
+        default="",
+        type="str",
+        help="Name of the serial port. (Leave empty to automatic lookup)",
+    ),
+    server.ProjectOption(
+        "idf_serial_baud",
+        optional=["open_transport"],
+        default=115200,
+        type="int",
+        help="Baudrate of the serial port.",
+    ),
+    server.ProjectOption(
         "warning_as_error",
         optional=["generate_project"],
         type="bool",
