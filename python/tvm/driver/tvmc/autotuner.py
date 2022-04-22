@@ -683,7 +683,9 @@ def schedule_tasks(
     )
 
     # Tune the tasks
-    tuner.tune(tuning_options)
+    tuner.tune(tuning_options,
+            search_policy="default")
+            # search_policy="sketch.random")
 
 
 def tune_tasks(

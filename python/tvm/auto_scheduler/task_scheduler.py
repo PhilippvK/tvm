@@ -576,6 +576,8 @@ class PrintTableInfo(TaskSchedulerCallback):
         if task_scheduler.tune_option.verbose < 1:
             return
 
+        print("task_scheduler.best_costs", task_scheduler.best_costs)
+        print("task_scheduler.tasks[i].compute_dag.flop_ct", [task_scheduler.tasks[i].compute_dag.flop_ct for i in range(len(task_scheduler.tasks))])
         _ffi_api.PrintTitle("Task Scheduler")
         print(
             "|  ID  "

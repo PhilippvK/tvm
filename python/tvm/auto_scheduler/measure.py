@@ -973,9 +973,9 @@ def _timed_eval_func(
 
     if verbose >= 1:
         if error_no == MeasureErrorNo.NO_ERROR:
-            print("*", end="", flush=True)
+            print("!*!", end="", flush=True)
         else:
-            print("*E", end="", flush=True)  # Run error
+            print("!*E!", end="", flush=True)  # Run error
     return costs, error_no, error_msg, toc - tic + build_res.time_cost, toc
 
 
@@ -1082,7 +1082,7 @@ def local_run(
                 )
             elif isinstance(res, Exception):
                 if verbose >= 1:
-                    print("*E", end="", flush=True)  # Run error
+                    print("@*E@", end="", flush=True)  # Run error
                 res = (
                     (MAX_FLOAT,),
                     MeasureErrorNo.RUNTIME_DEVICE,
@@ -1216,9 +1216,10 @@ def _rpc_run(
     time.sleep(cooldown_interval)
     if verbose >= 1:
         if error_no == MeasureErrorNo.NO_ERROR:
-            print("*", end="")
+            print("#*#", end="")
         else:
-            print("*E", end="")  # Run error
+            print("#*E#", end="")  # Run error
+            print("error_msg", error_msg)
 
     return costs, error_no, error_msg, toc - tic + build_res.time_cost, toc
 
@@ -1251,9 +1252,10 @@ def _rpc_run_worker(args):
     try:
         res = _rpc_run(*args)
     # pylint: disable=broad-except
-    except Exception:
+    except Exception as ex:
+        print("Exception")
         if verbose >= 1:
-            print("*E", end="")  # Run error
+            print("[*E]", end="")  # Run error
         res = (
             (MAX_FLOAT,),
             MeasureErrorNo.RUNTIME_DEVICE,
@@ -1261,6 +1263,7 @@ def _rpc_run_worker(args):
             build_res.time_cost + timeout,
             time.time(),
         )
+        raise ex
 
     return res
 
