@@ -201,6 +201,9 @@ def generic_find_serial_port(serial_number=None):
 
     serial_ports = list(serial.tools.list_ports.grep(regex))
 
+    # Workaround on MacOS
+    serial_ports = list(filter(lambda x: "wch" not in x.name and "SLAB" not in x.name, serial_ports))
+
     if len(serial_ports) == 0:
         raise Exception(f"No serial port found for board {prop['board']}!")
 
