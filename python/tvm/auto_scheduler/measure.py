@@ -1192,12 +1192,15 @@ def _rpc_run(
                 func.entry_func(*loc_args)
                 dev.sync()
 
+                print("loc_args", loc_args)
                 costs = time_f(*loc_args).results
+                print("costs", costs)
 
                 # clean up remote files
-                remote.remove(build_res.filename)
-                remote.remove(os.path.splitext(build_res.filename)[0] + ".so")
-                remote.remove("")
+                print("> clean up remote files")
+                # remote.remove(build_res.filename)
+                # remote.remove(os.path.splitext(build_res.filename)[0] + ".so")
+                # remote.remove("")
                 dev.free_raw_stream(stream)
             # pylint: disable=broad-except
             except Exception:
