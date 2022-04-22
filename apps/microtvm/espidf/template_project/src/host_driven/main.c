@@ -48,7 +48,7 @@
 
 #include "crt_config.h"
 
-static const char *TAG = "microtvm";
+static const char* TAG = "microtvm";
 
 #if CONFIG_IDF_TARGET_ESP32C3
 
@@ -83,7 +83,6 @@ static RingbufHandle_t buf_handle;
 #define BUF_SIZE (1024)
 static QueueHandle_t uart0_queue;
 
-
 // Called by TVM to write serial data to the UART.
 ssize_t write_serial(void* unused_context, const uint8_t* data, size_t size) {
 #ifdef CONFIG_LED_PIN_RED
@@ -107,8 +106,8 @@ size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes, const 
   return vsnprintf(out_buf, out_buf_size_bytes, fmt, args);
 }
 
-
-// Called by TVM when an internal invariant is violated, and execution cannot continue.
+// Called by TVM when an internal invariant is violated, and execution cannot
+// continue.
 void TVMPlatformAbort(tvm_crt_error_t error) {
   TVMLogf("TVMPlatformAbort: CALL\n");
 #ifdef CONFIG_LED_PIN_RED
@@ -120,10 +119,8 @@ void TVMPlatformAbort(tvm_crt_error_t error) {
 #ifdef CONFIG_LED_PIN_BLUE
   gpio_set_level(CONFIG_LED_PIN_BLUE, 1);
 #endif
-  for (;;)
-    vTaskDelay(1000);
+  for (;;) vTaskDelay(1000);
 }
-
 
 // Called by TVM to generate random data.
 tvm_crt_error_t TVMPlatformGenerateRandom(uint8_t* buffer, size_t num_bytes) {
@@ -150,16 +147,13 @@ tvm_crt_error_t TVMPlatformGenerateRandom(uint8_t* buffer, size_t num_bytes) {
   return kTvmErrorNoError;
 }
 
-
 // #define CRT_MEMORY_NUM_PAGES 216
 #define CRT_MEMORY_NUM_PAGES 108
 #define CRT_MEMORY_PAGE_SIZE_LOG2 10
 
-
 // Heap for use by TVMPlatformMemoryAllocate.
 static uint8_t tvm_heap[CRT_MEMORY_NUM_PAGES * (1 << CRT_MEMORY_PAGE_SIZE_LOG2)];
 static MemoryManagerInterface* g_memory_manager;
-
 
 tvm_crt_error_t TVMPlatformMemoryAllocate(size_t num_bytes, DLDevice dev, void** out_ptr) {
   return g_memory_manager->Allocate(g_memory_manager, num_bytes, dev, out_ptr);
@@ -169,10 +163,10 @@ tvm_crt_error_t TVMPlatformMemoryFree(void* ptr, DLDevice dev) {
   return g_memory_manager->Free(g_memory_manager, ptr, dev);
 }
 
-
 // #define MILLIS_TIL_EXPIRY 200
 // #define TIME_TIL_EXPIRY (K_MSEC(MILLIS_TIL_EXPIRY))
-// K_TIMER_DEFINE(g_microtvm_timer, /* expiry func */ NULL, /* stop func */ NULL);
+// K_TIMER_DEFINE(g_microtvm_timer, /* expiry func */ NULL, /* stop func */
+// NULL);
 // TODO
 
 uint32_t g_microtvm_start_time;
@@ -234,9 +228,10 @@ tvm_crt_error_t TVMPlatformTimerStop(double* elapsed_time_seconds) {
   //   return kTvmErrorSystemErrorMask | 3;
   // }
   // uint32_t num_expiries = k_timer_status_get(&g_microtvm_timer);
-  // uint32_t timer_res_ms = ((num_expiries * MILLIS_TIL_EXPIRY) + time_remaining_ms);
-  // double approx_num_cycles =
-  //     (double)k_ticks_to_cyc_floor32(1) * (double)k_ms_to_ticks_ceil32(timer_res_ms);
+  // uint32_t timer_res_ms = ((num_expiries * MILLIS_TIL_EXPIRY) +
+  // time_remaining_ms); double approx_num_cycles =
+  //     (double)k_ticks_to_cyc_floor32(1) *
+  //     (double)k_ms_to_ticks_ceil32(timer_res_ms);
   // // if we approach the limits of the HW clock datatype (uint32_t), use the
   // // coarse-grained timer result instead
   // if (approx_num_cycles > (0.5 * (~((uint32_t)0)))) {
@@ -251,85 +246,87 @@ tvm_crt_error_t TVMPlatformTimerStop(double* elapsed_time_seconds) {
   return kTvmErrorNoError;
 }
 
-static void uart_event_task(void *pvParameters)
-{
-    uart_event_t event;
-    size_t buffered_size;
-    uint8_t* data;
-    for(;;) {
-        // Waiting for UART event.
-        if(xQueueReceive(uart0_queue, (void * )&event, (portTickType)portMAX_DELAY)) {
-            switch(event.type) {
-                // Event of UART receving data
-                /*We'd better handler data event fast, there would be much more data events than
-                other types of events. If we take too much time on data event, the queue might
-                be full.*/
-                case UART_DATA:
+static void uart_event_task(void* pvParameters) {
+  uart_event_t event;
+  size_t buffered_size;
+  uint8_t* data;
+  for (;;) {
+    // Waiting for UART event.
+    if (xQueueReceive(uart0_queue, (void*)&event, (portTickType)portMAX_DELAY)) {
+      switch (event.type) {
+        // Event of UART receving data
+        /*We'd better handler data event fast, there would be much more data
+        events than other types of events. If we take too much time on data
+        event, the queue might be full.*/
+        case UART_DATA:
 #ifdef CONFIG_LED_PIN_BLUE
-                    gpio_set_level(CONFIG_LED_PIN_BLUE, 1);
+          gpio_set_level(CONFIG_LED_PIN_BLUE, 1);
 #endif
-                    UBaseType_t res =  xRingbufferSendAcquire(buf_handle, (void**)&data, event.size, pdMS_TO_TICKS(10000));
-                    if (res != pdTRUE) {
-                      TVMLogf("Failed to acquire memory for data\n");
-                      break;
-                    }
-                    uart_read_bytes(EX_UART_NUM, data, event.size, portMAX_DELAY);
-                    // Write it into the ring buffer.
-                    g_num_bytes_in_rx_buffer += event.size;
+          UBaseType_t res =
+              xRingbufferSendAcquire(buf_handle, (void**)&data, event.size, pdMS_TO_TICKS(10000));
+          if (res != pdTRUE) {
+            TVMLogf("Failed to acquire memory for data\n");
+            break;
+          }
+          uart_read_bytes(EX_UART_NUM, data, event.size, portMAX_DELAY);
+          // Write it into the ring buffer.
+          g_num_bytes_in_rx_buffer += event.size;
 
-                    if (g_num_bytes_in_rx_buffer > RING_BUF_SIZE_BYTES) {
-                       TVMPlatformAbort((tvm_crt_error_t)0xbeef3);
-                      TVMLogf("Buffer full\n");
-                    }
+          if (g_num_bytes_in_rx_buffer > RING_BUF_SIZE_BYTES) {
+            TVMPlatformAbort((tvm_crt_error_t)0xbeef3);
+            TVMLogf("Buffer full\n");
+          }
 
-                    res = xRingbufferSendComplete(buf_handle, (void*)data);
-                    if (res != pdTRUE) {
-                      TVMLogf("Failed to send item\n");
-                    }
-                    break;
-                // Event of HW FIFO overflow detected
-                case UART_FIFO_OVF:
-                    TVMLogf("hw fifo overflow");
-                    // If fifo overflow happened, you should consider adding flow control for your application.
-                    // The ISR has already reset the rx FIFO,
-                    // As an example, we directly flush the rx buffer here in order to read more data.
-                    uart_flush_input(EX_UART_NUM);
-                    xQueueReset(uart0_queue);
-                    break;
-                // Event of UART ring buffer full
-                case UART_BUFFER_FULL:
-                    TVMLogf("ring buffer full");
-                    // If buffer full happened, you should consider encreasing your buffer size
-                    // As an example, we directly flush the rx buffer here in order to read more data.
-                    uart_flush_input(EX_UART_NUM);
-                    xQueueReset(uart0_queue);
-                    break;
-                // Event of UART RX break detected
-                case UART_BREAK:
-                    TVMLogf("uart rx break");
-                    break;
-                // Event of UART parity check error
-                case UART_PARITY_ERR:
-                    TVMLogf("uart parity error");
-                    break;
-                // Event of UART frame error
-                case UART_FRAME_ERR:
-                    TVMLogf("uart frame error");
-                    break;
-                // UART_PATTERN_DET
-                case UART_PATTERN_DET:
-                    break;
-                // Others
-                default:
-                    TVMLogf("uart event type: %d", event.type);
-                    break;
-            }
+          res = xRingbufferSendComplete(buf_handle, (void*)data);
+          if (res != pdTRUE) {
+            TVMLogf("Failed to send item\n");
+          }
+          break;
+        // Event of HW FIFO overflow detected
+        case UART_FIFO_OVF:
+          TVMLogf("hw fifo overflow");
+          // If fifo overflow happened, you should consider adding flow control
+          // for your application. The ISR has already reset the rx FIFO, As an
+          // example, we directly flush the rx buffer here in order to read more
+          // data.
+          uart_flush_input(EX_UART_NUM);
+          xQueueReset(uart0_queue);
+          break;
+        // Event of UART ring buffer full
+        case UART_BUFFER_FULL:
+          TVMLogf("ring buffer full");
+          // If buffer full happened, you should consider encreasing your buffer
+          // size As an example, we directly flush the rx buffer here in order
+          // to read more data.
+          uart_flush_input(EX_UART_NUM);
+          xQueueReset(uart0_queue);
+          break;
+        // Event of UART RX break detected
+        case UART_BREAK:
+          TVMLogf("uart rx break");
+          break;
+        // Event of UART parity check error
+        case UART_PARITY_ERR:
+          TVMLogf("uart parity error");
+          break;
+        // Event of UART frame error
+        case UART_FRAME_ERR:
+          TVMLogf("uart frame error");
+          break;
+        // UART_PATTERN_DET
+        case UART_PATTERN_DET:
+          break;
+        // Others
+        default:
+          TVMLogf("uart event type: %d", event.type);
+          break;
+      }
 #ifdef CONFIG_LED_PIN_BLUE
-            gpio_set_level(CONFIG_LED_PIN_BLUE, 0);
+      gpio_set_level(CONFIG_LED_PIN_BLUE, 0);
 #endif
-        }
     }
-    vTaskDelete(NULL);
+  }
+  vTaskDelete(NULL);
 }
 
 void app_main(void) {
@@ -355,10 +352,11 @@ void app_main(void) {
   // buf_handle = xRingbufferCreate(RING_BUF_SIZE_BYTES, RINGBUF_TYPE_BYTEBUF);
   buf_handle = xRingbufferCreate(RING_BUF_SIZE_BYTES, RINGBUF_TYPE_NOSPLIT);
   if (buf_handle == NULL) {
-      printf("Failed to create ring buffer\n");
+    printf("Failed to create ring buffer\n");
   }
 
-  // Configure parameters of an UART driver, communication pins and install the driver
+  // Configure parameters of an UART driver, communication pins and install the
+  // driver
   uart_config_t uart_config = {
       .baud_rate = 115200,
       .data_bits = UART_DATA_8_BITS,
@@ -374,19 +372,22 @@ void app_main(void) {
   // Set UART log level
   esp_log_level_set(TAG, ESP_LOG_INFO);
   // Set UART pins (using UART0 default pins ie no changes.)
-  uart_set_pin(EX_UART_NUM, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+  uart_set_pin(EX_UART_NUM, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE,
+               UART_PIN_NO_CHANGE);
 
   // Create a task to handler UART event from ISR
   xTaskCreate(uart_event_task, "uart_event_task", 2048, NULL, 12, NULL);
 
   // setup memory manager
-  tvm_crt_error_t ret = PageMemoryManagerCreate(&g_memory_manager, tvm_heap, sizeof(tvm_heap), CRT_MEMORY_PAGE_SIZE_LOG2);
+  tvm_crt_error_t ret = PageMemoryManagerCreate(&g_memory_manager, tvm_heap, sizeof(tvm_heap),
+                                                CRT_MEMORY_PAGE_SIZE_LOG2);
 
   if (ret != kTvmErrorNoError) {
     TVMPlatformAbort(ret);
   }
 
-  // Initialize microTVM RPC server, which will receive commands from the UART and execute them.
+  // Initialize microTVM RPC server, which will receive commands from the UART
+  // and execute them.
   microtvm_rpc_server_t server = MicroTVMRpcServerInit(write_serial, NULL);
   TVMLogf("microTVM ESPIDF runtime - running\n");
 
@@ -397,8 +398,7 @@ void app_main(void) {
     uint8_t* data2;
     // unsigned int key = irq_lock(); // ??
     size_t bytes_read = 0;
-    data2 = (uint8_t*)xRingbufferReceive(buf_handle, &bytes_read,
-                                            pdMS_TO_TICKS(0));
+    data2 = (uint8_t*)xRingbufferReceive(buf_handle, &bytes_read, pdMS_TO_TICKS(0));
     data = data2;
 
     if (bytes_read > 0) {
