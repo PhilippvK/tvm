@@ -1348,8 +1348,9 @@ def rpc_runner_run(
     assert len(inputs) == len(build_results), "Measure input size should be equal to build results"
     import pathlib
     module_loader = tvm.micro.AutoTvmModuleLoader(
-        template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
-        project_options={"verbose": True},
+        # template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
+        template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("espidf")),
+        project_options={"idf_target": "esp32c3", "project_type": "host_driven"},
     )
     remote_kwargs={}
     # This pool is not doing computationally intensive work, so we can use threads
