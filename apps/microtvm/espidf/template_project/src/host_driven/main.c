@@ -37,14 +37,14 @@
 #include <tvm/runtime/crt/page_allocator.h>
 #include <unistd.h>
 
-#include "crt_config.h"
-#include "esp_log.h"
-#include "esp_spi_flash.h"
-#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "esp_log.h"
+#include "esp_spi_flash.h"
+#include "esp_system.h"
 #include "sdkconfig.h"
+#include "crt_config.h"
 
 static const char* TAG = "microtvm";
 
@@ -223,7 +223,7 @@ static void uart_event_task(void* pvParameters) {
         /*We'd better handler data event fast, there would be much more data
         events than other types of events. If we take too much time on data
         event, the queue might be full.*/
-        case UART_DATA:
+        case UART_DATA: {
 #ifdef CONFIG_LED_PIN_BLUE
           gpio_set_level(CONFIG_LED_PIN_BLUE, 1);
 #endif
@@ -247,6 +247,7 @@ static void uart_event_task(void* pvParameters) {
             TVMLogf("Failed to send item\n");
           }
           break;
+        }
         // Event of HW FIFO overflow detected
         case UART_FIFO_OVF:
           TVMLogf("hw fifo overflow");
