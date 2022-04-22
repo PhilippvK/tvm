@@ -28,25 +28,23 @@
  * intended to be a demonstration, since typically you will want to incorporate
  * this logic into your own application.
  */
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/queue.h"
-
-#include <stdio.h>
-#include <string.h>
-#include "sdkconfig.h"
-#include "esp_system.h"
-#include "esp_log.h"
-#include "esp_spi_flash.h"
-
 #include <driver/gpio.h>
 #include <driver/uart.h>
+#include <stdio.h>
+#include <string.h>
 #include <tvm/runtime/crt/logging.h>
 #include <tvm/runtime/crt/microtvm_rpc_server.h>
 #include <tvm/runtime/crt/page_allocator.h>
 #include <unistd.h>
 
 #include "crt_config.h"
+#include "esp_log.h"
+#include "esp_spi_flash.h"
+#include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+#include "sdkconfig.h"
 
 static const char* TAG = "microtvm";
 
@@ -101,8 +99,8 @@ ssize_t write_serial(void* unused_context, const uint8_t* data, size_t size) {
 }
 
 // Called by TVM when a message needs to be formatted.
-size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes, const char* fmt,
-                                va_list args) {
+size_t TVMPlatformFormatMessage(char* out_buf, size_t out_buf_size_bytes,
+                                const char* fmt, va_list args) {
   return vsnprintf(out_buf, out_buf_size_bytes, fmt, args);
 }
 
@@ -152,10 +150,12 @@ tvm_crt_error_t TVMPlatformGenerateRandom(uint8_t* buffer, size_t num_bytes) {
 #define CRT_MEMORY_PAGE_SIZE_LOG2 10
 
 // Heap for use by TVMPlatformMemoryAllocate.
-static uint8_t tvm_heap[CRT_MEMORY_NUM_PAGES * (1 << CRT_MEMORY_PAGE_SIZE_LOG2)];
+static uint8_t
+    tvm_heap[CRT_MEMORY_NUM_PAGES * (1 << CRT_MEMORY_PAGE_SIZE_LOG2)];
 static MemoryManagerInterface* g_memory_manager;
 
-tvm_crt_error_t TVMPlatformMemoryAllocate(size_t num_bytes, DLDevice dev, void** out_ptr) {
+tvm_crt_error_t TVMPlatformMemoryAllocate(size_t num_bytes, DLDevice dev,
+                                          void** out_ptr) {
   return g_memory_manager->Allocate(g_memory_manager, num_bytes, dev, out_ptr);
 }
 
@@ -216,7 +216,8 @@ static void uart_event_task(void* pvParameters) {
   uint8_t* data;
   for (;;) {
     // Waiting for UART event.
-    if (xQueueReceive(uart0_queue, (void*)&event, (portTickType)portMAX_DELAY)) {
+    if (xQueueReceive(uart0_queue, (void*)&event,
+                      (portTickType)portMAX_DELAY)) {
       switch (event.type) {
         // Event of UART receving data
         /*We'd better handler data event fast, there would be much more data
@@ -226,8 +227,8 @@ static void uart_event_task(void* pvParameters) {
 #ifdef CONFIG_LED_PIN_BLUE
           gpio_set_level(CONFIG_LED_PIN_BLUE, 1);
 #endif
-          UBaseType_t res =
-              xRingbufferSendAcquire(buf_handle, (void**)&data, event.size, pdMS_TO_TICKS(10000));
+          UBaseType_t res = xRingbufferSendAcquire(
+              buf_handle, (void**)&data, event.size, pdMS_TO_TICKS(10000));
           if (res != pdTRUE) {
             TVMLogf("Failed to acquire memory for data\n");
             break;
@@ -330,21 +331,22 @@ void app_main(void) {
       .source_clk = UART_SCLK_APB,
   };
   // Install UART driver, and get the queue.
-  uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 200, &uart0_queue, 0);
+  uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 200,
+                      &uart0_queue, 0);
   uart_param_config(EX_UART_NUM, &uart_config);
 
   // Set UART log level
   esp_log_level_set(TAG, ESP_LOG_INFO);
   // Set UART pins (using UART0 default pins ie no changes.)
-  uart_set_pin(EX_UART_NUM, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE,
-               UART_PIN_NO_CHANGE);
+  uart_set_pin(EX_UART_NUM, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE,
+               UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
   // Create a task to handler UART event from ISR
   xTaskCreate(uart_event_task, "uart_event_task", 2048, NULL, 12, NULL);
 
   // setup memory manager
-  tvm_crt_error_t ret = PageMemoryManagerCreate(&g_memory_manager, tvm_heap, sizeof(tvm_heap),
-                                                CRT_MEMORY_PAGE_SIZE_LOG2);
+  tvm_crt_error_t ret = PageMemoryManagerCreate(
+      &g_memory_manager, tvm_heap, sizeof(tvm_heap), CRT_MEMORY_PAGE_SIZE_LOG2);
 
   if (ret != kTvmErrorNoError) {
     TVMPlatformAbort(ret);
@@ -362,7 +364,8 @@ void app_main(void) {
     uint8_t* data2;
     // unsigned int key = irq_lock(); // ??
     size_t bytes_read = 0;
-    data2 = (uint8_t*)xRingbufferReceive(buf_handle, &bytes_read, pdMS_TO_TICKS(0));
+    data2 =
+        (uint8_t*)xRingbufferReceive(buf_handle, &bytes_read, pdMS_TO_TICKS(0));
     data = data2;
 
     if (bytes_read > 0) {
@@ -373,7 +376,8 @@ void app_main(void) {
       size_t bytes_remaining = bytes_read;
       while (bytes_remaining > 0) {
         // Pass the received bytes to the RPC server.
-        tvm_crt_error_t err = MicroTVMRpcServerLoop(server, &data, &bytes_remaining);
+        tvm_crt_error_t err =
+            MicroTVMRpcServerLoop(server, &data, &bytes_remaining);
         if (err != kTvmErrorNoError && err != kTvmErrorFramingShortPacket) {
           TVMPlatformAbort(err);
         }
