@@ -577,7 +577,7 @@ class PrintTableInfo(TaskSchedulerCallback):
             return
 
         _ffi_api.PrintTitle("Task Scheduler")
-        print("|  ID  | Latency (ms) | Speed (GFLOPS) | Trials |")
+        print("|  ID  | Latency (ms) | Speed (MFLOPS) | Trials |")
         print("-------------------------------------------------")
 
         # content
@@ -589,8 +589,8 @@ class PrintTableInfo(TaskSchedulerCallback):
                 else "-"
             )
             speed_str = (
-                "%.2f"
-                % (task_scheduler.tasks[i].compute_dag.flop_ct / task_scheduler.best_costs[i] / 1e9)
+                "%.5f"
+                % (task_scheduler.tasks[i].compute_dag.flop_ct / task_scheduler.best_costs[i] / 1e6)
                 if task_scheduler.best_costs[i] < 1e9
                 else "-"
             )
