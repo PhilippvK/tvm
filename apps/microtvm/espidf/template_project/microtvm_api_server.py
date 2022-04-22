@@ -358,33 +358,10 @@ class Handler(server.ProjectAPIHandler):
 
     def _create_prj_conf(self, project_dir, options):
         with open(project_dir / "sdkconfig.defaults", "w") as f:
-            f.write(
-                "# For UART used from main().\n"  # TODO(@PhilippvK)
-                "CONFIG_RING_BUFFER=y\n"
-                "CONFIG_UART_CONSOLE=n\n"
-                "CONFIG_UART_INTERRUPT_DRIVEN=y\n"
-                "\n"
-            )
-            f.write("# For TVMPlatformAbort().\n" "CONFIG_REBOOT=y\n" "\n")
-
-            if options["project_type"] == "host_driven":
-                f.write(
-                    "# For RPC server C++ bindings.\n"
-                    "CONFIG_CPLUSPLUS=y\n"  # TODO(@PhilippvK)
-                    "CONFIG_LIB_CPLUSPLUS=y\n"
-                    "\n"
-                )
-
-            f.write("# For math routines\n" "CONFIG_NEWLIB_LIBC=y\n" "\n")
-
-            # if self._has_fpu(options["zephyr_board"]):
-            #     f.write("# For models with floating point.\n" "CONFIG_FPU=y\n" "\n")
-
-            # Set main stack size, if needed.
-            # if options.get("config_main_stack_size") is not None:
-            #     f.write(f"CONFIG_MAIN_STACK_SIZE={options['config_main_stack_size']}\n")
-
-            # f.write("# For random number generation.\n" "CONFIG_TEST_RANDOM_GENERATOR=y\n")
+            # f.write("# For math routines\n" "CONFIG_NEWLIB_LIBC=y\n" "\n")
+            f.write("CONFIG_ESP_TASK_WDT=n\n")
+            f.write("CONFIG_ESP_CONSOLE_UART_NONE=y\n")
+            f.write("CONFIG_COMPILER_OPTIMIZATION_SIZE=y\n")
 
             f.write("\n# Extra sdkconfig.defaults directives\n")
             for line, board_list in self.EXTRA_PRJ_CONF_DIRECTIVES.items():
