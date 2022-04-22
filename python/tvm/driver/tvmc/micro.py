@@ -140,75 +140,75 @@ def add_micro_tune_args(parser):
         default=None,
         help="change the data layout of the whole graph",
     )
-    # parser.add_argument(
-    #     "--enable-autoscheduler",
-    #     help="enable tuning the graph through the AutoScheduler tuner",
-    #     action="store_true",
-    # )
+    parser.add_argument(
+        "--enable-autoscheduler",
+        help="enable tuning the graph through the AutoScheduler tuner",
+        action="store_true",
+    )
 
-    # auto_scheduler_group = parser.add_argument_group(
-    #     "AutoScheduler options",
-    #     "AutoScheduler options, used when --enable-autoscheduler is provided",
-    # )
+    auto_scheduler_group = parser.add_argument_group(
+        "AutoScheduler options",
+        "AutoScheduler options, used when --enable-autoscheduler is provided",
+    )
 
-    # auto_scheduler_group.add_argument(
-    #     "--cache-line-bytes",
-    #     type=int,
-    #     help="the size of cache line in bytes. "
-    #     "If not specified, it will be autoset for the current machine.",
-    # )
-    # auto_scheduler_group.add_argument(
-    #     "--num-cores",
-    #     type=int,
-    #     help="the number of device cores. "
-    #     "If not specified, it will be autoset for the current machine.",
-    # )
-    # auto_scheduler_group.add_argument(
-    #     "--vector-unit-bytes",
-    #     type=int,
-    #     help="the width of vector units in bytes. "
-    #     "If not specified, it will be autoset for the current machine.",
-    # )
-    # auto_scheduler_group.add_argument(
-    #     "--max-shared-memory-per-block",
-    #     type=int,
-    #     help="the max shared memory per block in bytes. "
-    #     "If not specified, it will be autoset for the current machine.",
-    # )
-    # auto_scheduler_group.add_argument(
-    #     "--max-local-memory-per-block",
-    #     type=int,
-    #     help="the max local memory per block in bytes. "
-    #     "If not specified, it will be autoset for the current machine.",
-    # )
-    # auto_scheduler_group.add_argument(
-    #     "--max-threads-per-block",
-    #     type=int,
-    #     help="the max number of threads per block. "
-    #     "If not specified, it will be autoset for the current machine.",
-    # )
-    # auto_scheduler_group.add_argument(
-    #     "--max-vthread-extent",
-    #     type=int,
-    #     help="the max vthread extent. "
-    #     "If not specified, it will be autoset for the current machine.",
-    # )
-    # auto_scheduler_group.add_argument(
-    #     "--warp-size",
-    #     type=int,
-    #     help="the thread numbers of a warp. "
-    #     "If not specified, it will be autoset for the current machine.",
-    # )
-    # auto_scheduler_group.add_argument(
-    #     "--include-simple-tasks",
-    #     help="whether to extract simple tasks that do not include complicated ops",
-    #     action="store_true",
-    # )
-    # auto_scheduler_group.add_argument(
-    #     "--log-estimated-latency",
-    #     help="whether to log the estimated latency to the file after tuning a task",
-    #     action="store_true",
-    # )
+    auto_scheduler_group.add_argument(
+        "--cache-line-bytes",
+        type=int,
+        help="the size of cache line in bytes. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--num-cores",
+        type=int,
+        help="the number of device cores. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--vector-unit-bytes",
+        type=int,
+        help="the width of vector units in bytes. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--max-shared-memory-per-block",
+        type=int,
+        help="the max shared memory per block in bytes. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--max-local-memory-per-block",
+        type=int,
+        help="the max local memory per block in bytes. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--max-threads-per-block",
+        type=int,
+        help="the max number of threads per block. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--max-vthread-extent",
+        type=int,
+        help="the max vthread extent. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--warp-size",
+        type=int,
+        help="the thread numbers of a warp. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--include-simple-tasks",
+        help="whether to extract simple tasks that do not include complicated ops",
+        action="store_true",
+    )
+    auto_scheduler_group.add_argument(
+        "--log-estimated-latency",
+        help="whether to log the estimated latency to the file after tuning a task",
+        action="store_true",
+    )
     autotvm_group = parser.add_argument_group(
         "AutoTVM options",
         "AutoTVM options, used when the AutoScheduler is not enabled",
@@ -533,14 +533,22 @@ def tune_handler(args):
 
     # Specify hardware parameters, although they'll only be used if autoscheduling.
     hardware_params = auto_scheduler.HardwareParams(
-        num_cores=None,
-        vector_unit_bytes=None,
-        cache_line_bytes=None,
-        max_shared_memory_per_block=None,
-        max_local_memory_per_block=None,
-        max_threads_per_block=None,
-        max_vthread_extent=None,
-        warp_size=None,
+        num_cores=1,
+        # vector_unit_bytes=0,  # VLEN on riscv?
+        # cache_line_bytes=0,
+        max_shared_memory_per_block=0,
+        max_local_memory_per_block=0,
+        max_threads_per_block=0,
+        max_vthread_extent=0,
+        warp_size=0,
+        # num_cores=None,
+        # vector_unit_bytes=None,
+        # cache_line_bytes=None,
+        # max_shared_memory_per_block=None,
+        # max_local_memory_per_block=None,
+        # max_threads_per_block=None,
+        # max_vthread_extent=None,
+        # warp_size=None,
         target="c",
         # target_host="?",
         target_host=None,
@@ -578,8 +586,7 @@ def tune_handler(args):
         "c",
         tuning_records=args.output,
         prior_records=args.tuning_records,
-        # enable_autoscheduler=args.enable_autoscheduler,
-        enable_autoscheduler=False,
+        enable_autoscheduler=args.enable_autoscheduler,
         rpc_key=args.rpc_key,
         hostname=rpc_hostname,
         port=rpc_port,
