@@ -528,7 +528,7 @@ class EspidfSerialTransport:
 
     @classmethod
     def _lookup_baud_rate(cls, options):
-        return options.get("idf_serial_baud")
+        return int(options.get("idf_serial_baud", 115200))
 
     def __init__(self, options):
         self._options = options
