@@ -169,12 +169,11 @@ tvm_crt_error_t TVMPlatformMemoryFree(void* ptr, DLDevice dev) {
 // NULL);
 // TODO
 
-uint32_t g_microtvm_start_time;
+int64_t g_microtvm_start_time;
 int g_microtvm_timer_running = 0;
 
 // Called to start system timer.
 tvm_crt_error_t TVMPlatformTimerStart() {
-  TVMLogf("TVMPlatformTimerStart: CALL\n");
   if (g_microtvm_timer_running) {
     TVMLogf("timer already running");
     return kTvmErrorPlatformTimerBadState;
@@ -183,9 +182,7 @@ tvm_crt_error_t TVMPlatformTimerStart() {
 #ifdef CONFIG_LED_PIN
   // gpio_set_level(CONFIG_LED_PIN, 1);
 #endif
-  // k_timer_start(&g_microtvm_timer, TIME_TIL_EXPIRY, TIME_TIL_EXPIRY);
-  esp_cpu_ccount_t ccount = esp_cpu_get_ccount();
-  g_microtvm_start_time = ccount;
+  g_microtvm_start_time = esp_timer_get_time();
   g_microtvm_timer_running = 1;
   return kTvmErrorNoError;
 }
@@ -193,56 +190,23 @@ tvm_crt_error_t TVMPlatformTimerStart() {
 // Called to stop system timer.
 tvm_crt_error_t TVMPlatformTimerStop(double* elapsed_time_seconds) {
   if (!g_microtvm_timer_running) {
-    // TVMLogf("TVMPlatformTimerStop: !g_microtvm_timer_running\n");
     TVMLogf("timer not running");
     return kTvmErrorSystemErrorMask | 2;
   }
 
-  // uint32_t stop_time = k_cycle_get_32();
-  esp_cpu_ccount_t ccount = esp_cpu_get_ccount();
-  uint32_t stop_time = ccount;
+  int64_t stop_time = esp_timer_get_time();
 #ifdef CONFIG_LED_PIN
   // gpio_set_level(CONFIG_LED_PIN, 0);
 #endif
 
   // compute how long the work took
-  uint32_t cycles_spent = stop_time - g_microtvm_start_time;
-  if (stop_time < g_microtvm_start_time) {
-    // we rolled over *at least* once, so correct the rollover it was *only*
-    // once, because we might still use this result
-    cycles_spent = ~((uint32_t)0) - (g_microtvm_start_time - stop_time);
-  }
+  int64_t us_spent = stop_time - g_microtvm_start_time;
 
-  // uint32_t ns_spent = (uint32_t)k_cyc_to_ns_floor64(cycles_spent);
-  // uint32_t ns_spent = cycles_spent /100 * 625;  // (1000000000/160000000)
-  // TODO: get frequency?
-  double hw_clock_res_us = cycles_spent / 6.25;
+  // we do not expect a rollover because of using a 64 bit data type
 
-  // need to grab time remaining *before* stopping. when stopped, this function
-  // always returns 0.
-  // int32_t time_remaining_ms = k_timer_remaining_get(&g_microtvm_timer);
-  // k_timer_stop(&g_microtvm_timer);
-  // // check *after* stopping to prevent extra expiries on the happy path
-  // if (time_remaining_ms < 0) {
-  //   TVMLogf("negative time remaining");
-  //   return kTvmErrorSystemErrorMask | 3;
-  // }
-  // uint32_t num_expiries = k_timer_status_get(&g_microtvm_timer);
-  // uint32_t timer_res_ms = ((num_expiries * MILLIS_TIL_EXPIRY) +
-  // time_remaining_ms); double approx_num_cycles =
-  //     (double)k_ticks_to_cyc_floor32(1) *
-  //     (double)k_ms_to_ticks_ceil32(timer_res_ms);
-  // // if we approach the limits of the HW clock datatype (uint32_t), use the
-  // // coarse-grained timer result instead
-  // if (approx_num_cycles > (0.5 * (~((uint32_t)0)))) {
-  //   *elapsed_time_seconds = timer_res_ms / 1000.0;
-  // } else {
-  //   *elapsed_time_seconds = hw_clock_res_us / 1e6;
-  // }
-  *elapsed_time_seconds = hw_clock_res_us / 1e6;  // TODO: overflow possible!
+  *elapsed_time_seconds = us_spent / 1e6;
 
   g_microtvm_timer_running = 0;
-  TVMLogf("TVMPlatformTimerStop: CALL\n");
   return kTvmErrorNoError;
 }
 
