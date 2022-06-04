@@ -478,14 +478,11 @@ class LocalRunner(RPCRunner):
         # pylint: disable=import-outside-toplevel
         from ...rpc.server import Server
         from ...rpc.tracker import Tracker
-        import pdb
-        #pdb.set_trace()
 
         self.task = task
         tracker = Tracker(port=9000, port_end=10000, silent=self.silent)
         device_key = "$local$device$%d" % tracker.port
         servers = []
-        # TODO: check if None!
         for i in range(self.n_parallel):
             server = Server(
                 port=9000,
