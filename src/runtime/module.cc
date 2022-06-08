@@ -87,8 +87,8 @@ Module Module::LoadFromFile(const std::string& file_name, const std::string& for
   const PackedFunc* f = Registry::Get(load_f_name);
   ICHECK(f != nullptr) << "Loader for `." << format << "` files is not registered,"
                        << " resolved to (" << load_f_name << ") in the global registry."
-                       << "Ensure that you have loaded the correct runtime code, and"
-                       << "that you are on the correct hardware architecture.";
+                       << " Ensure that you have loaded the correct runtime code, and"
+                       << " that you are on the correct hardware architecture.";
   Module m = (*f)(file_name, format);
   return m;
 }
