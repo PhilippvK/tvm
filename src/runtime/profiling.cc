@@ -804,56 +804,98 @@ TVM_REGISTER_GLOBAL("runtime.profiling.ProfileFunction")
 PackedFunc WrapTimeEvaluator(PackedFunc pf, Device dev, int number, int repeat, int min_repeat_ms,
                              PackedFunc f_preproc) {
   ICHECK(pf != nullptr);
+  std::cout << "WrapTimeEvaluator" << std::endl;
+  std::cout << "dev.device_type" << static_cast<int>(dev.device_type) << std::endl;
+  std::cout << "kDLMicroDev" << static_cast<int>(kDLMicroDev) << std::endl;
 
   if (static_cast<int>(dev.device_type) == static_cast<int>(kDLMicroDev)) {
-    auto get_micro_time_evaluator = runtime::Registry::Get("micro._GetMicroTimeEvaluator");
-    ICHECK(get_micro_time_evaluator != nullptr) << "micro backend not enabled";
-    return (*get_micro_time_evaluator)(pf, dev, number, repeat);
-  }
-
-  auto ftimer = [pf, dev, number, repeat, min_repeat_ms, f_preproc](TVMArgs args,
+  // if (1) {
+    // auto get_micro_time_evaluator = runtime::Registry::Get("micro._GetMicroTimeEvaluator");
+    // ICHECK(get_micro_time_evaluator != nullptr) << "micro backend not enabled";
+    // return (*get_micro_time_evaluator)(pf, dev, number, repeat);
+    auto ftimer = [pf, dev, number, repeat, min_repeat_ms, f_preproc](TVMArgs args,
                                                                     TVMRetValue* rv) mutable {
-    TVMRetValue temp;
-    std::ostringstream os;
-    // skip first time call, to activate lazy compilation components.
-    pf.CallPacked(args, &temp);
+      // const Device& dev = data_entry_[entry_id(index, 0)]->device;
+      // TVMOpParam param = nodes_[index].param;
+      // std::string name = param.func_name;
+      // uint32_t num_inputs = param.num_inputs;
+      // uint32_t num_outputs = param.num_outputs;
 
-    DeviceAPI::Get(dev)->StreamSync(dev, nullptr);
+      PackedFunc time_eval = runtime::Registry::Get("runtime.RPCTimeEvaluator")
+                                 ->
+                                 operator()(nullptr, "run", static_cast<int>(dev.device_type),
+                                            dev.device_id, number, repeat, min_repeat_ms, "");
 
-    for (int i = 0; i < repeat; ++i) {
-      if (f_preproc != nullptr) {
-        f_preproc.CallPacked(args, &temp);
+      // int num_flat_args = num_inputs + num_outputs;
+      // std::unique_ptr<TVMValue> values(new TVMValue[num_flat_args]);
+      // std::unique_ptr<int> type_codes(new int[num_flat_args]);
+      // TVMArgsSetter setter(values.get(), type_codes.get());
+      // int offs = 0;
+      // const auto& inode = nodes_[index];
+      // for (const auto& e : inode.inputs) {
+      //   uint32_t eid = this->entry_id(e);
+      //   DLTensor* arg = const_cast<DLTensor*>(data_entry_[eid].operator->());
+      //   setter(offs, arg);
+      //   offs++;
+      // }
+      // for (uint32_t i = 0; i < num_outputs; ++i) {
+      //   uint32_t eid = this->entry_id(index, i);
+      //   DLTensor* arg = const_cast<DLTensor*>(data_entry_[eid].operator->());
+      //   setter(offs, arg);
+      //   offs++;
+      // }
+      TVMRetValue temp;
+      time_eval.CallPacked(args, &temp);
+      *rv = temp;
+    };
+    return PackedFunc(ftimer);
+  } else {
+
+    auto ftimer = [pf, dev, number, repeat, min_repeat_ms, f_preproc](TVMArgs args,
+                                                                    TVMRetValue* rv) mutable {
+      TVMRetValue temp;
+      std::ostringstream os;
+      // skip first time call, to activate lazy compilation components.
+      pf.CallPacked(args, &temp);
+
+      DeviceAPI::Get(dev)->StreamSync(dev, nullptr);
+
+      for (int i = 0; i < repeat; ++i) {
+        if (f_preproc != nullptr) {
+          f_preproc.CallPacked(args, &temp);
+        }
+        double duration_ms = 0.0;
+
+        do {
+          if (duration_ms > 0.0) {
+            number = static_cast<int>(std::max((min_repeat_ms / (duration_ms / number) + 1),
+                                               number * 1.618));  // 1.618 is chosen by random
+          }
+
+          Timer t = Timer::Start(dev);
+          // start timing
+          for (int i = 0; i < number; ++i) {
+            pf.CallPacked(args, &temp);
+          }
+          t->Stop();
+          int64_t t_nanos = t->SyncAndGetElapsedNanos();
+          duration_ms = t_nanos / 1e6;
+        } while (duration_ms < min_repeat_ms);
+
+        double speed = duration_ms / 1e3 / number;
+        os.write(reinterpret_cast<char*>(&speed), sizeof(speed));
       }
-      double duration_ms = 0.0;
 
-      do {
-        if (duration_ms > 0.0) {
-          number = static_cast<int>(std::max((min_repeat_ms / (duration_ms / number) + 1),
-                                             number * 1.618));  // 1.618 is chosen by random
-        }
-
-        Timer t = Timer::Start(dev);
-        // start timing
-        for (int i = 0; i < number; ++i) {
-          pf.CallPacked(args, &temp);
-        }
-        t->Stop();
-        int64_t t_nanos = t->SyncAndGetElapsedNanos();
-        duration_ms = t_nanos / 1e6;
-      } while (duration_ms < min_repeat_ms);
-
-      double speed = duration_ms / 1e3 / number;
-      os.write(reinterpret_cast<char*>(&speed), sizeof(speed));
-    }
-
-    std::string blob = os.str();
-    TVMByteArray arr;
-    arr.size = blob.length();
-    arr.data = blob.data();
-    // return the time.
-    *rv = arr;
-  };
-  return PackedFunc(ftimer);
+      std::string blob = os.str();
+      TVMByteArray arr;
+      arr.size = blob.length();
+      arr.data = blob.data();
+      // return the time.
+      *rv = arr;
+    };
+    return PackedFunc(ftimer);
+  }
+  // return PackedFunc(ftimer);
 }
 
 TVM_REGISTER_GLOBAL("runtime.profiling.Report")
