@@ -50,6 +50,8 @@ class TuningOptionsNode : public Object {
   ProgramRunner runner;
   /*! \brief MeasureCallback functions to be called after each measure batch */
   Optional<Array<MeasureCallback>> measure_callbacks;
+  /*! \brief SI prefox for FLOPS in callbacks */
+  String si_prefix;
 
   void VisitAttrs(tvm::AttrVisitor* v) {
     v->Visit("num_measure_trials", &num_measure_trials);
@@ -59,6 +61,7 @@ class TuningOptionsNode : public Object {
     v->Visit("builder", &builder);
     v->Visit("runner", &runner);
     v->Visit("measure_callbacks", &measure_callbacks);
+    v->Visit("si_prefix", &si_prefix);
   }
 
   static constexpr const char* _type_key = "auto_scheduler.TuningOptions";
@@ -84,7 +87,7 @@ class TuningOptions : public ObjectRef {
    */
   TuningOptions(int num_measure_trials, int early_stopping, int num_measures_per_round, int verbose,
                 ProgramBuilder builder, ProgramRunner runner,
-                Optional<Array<MeasureCallback>> measure_callbacks);
+                Optional<Array<MeasureCallback>> measure_callbacks, String si_prefix);
 
   TVM_DEFINE_OBJECT_REF_METHODS(TuningOptions, ObjectRef, TuningOptionsNode);
 };
