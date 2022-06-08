@@ -46,6 +46,8 @@ from tvm.autotvm.env import AutotvmGlobalScope, reset_global_scope
 from tvm.contrib import tar, ndk
 from tvm.contrib.popen_pool import PopenWorker, PopenPoolExecutor, StatusKind
 from tvm.target import Target
+from tvm.autotvm.measure import default_module_loader
+from tvm.relay.backend import Runtime
 
 
 from . import _ffi_api
@@ -81,6 +83,18 @@ class BuildFunc:
 
     name = "default"
     build_func = tar.tar
+    runtime = Runtime("cpp")
+
+class RunnerState:
+    """TODO
+    module_loader: ?
+        Module loader for MicroTVM Support.
+    remote_kwargs: ?
+        TODO.
+    """
+
+    module_loader = None
+    remote_kwargs = {}
 
 
 @tvm._ffi.register_object("auto_scheduler.MeasureCallback")
@@ -224,6 +238,7 @@ def recover_measure_input(inp, rebuild_state=False):
     from .search_task import SearchTask  # lazily import to avoid recursive dependency
 
     task = inp.task
+    task.target_host = None
     task.target, task.target_host = Target.canon_target_and_host(task.target, task.target_host)
     new_task = SearchTask(
         workload_key=task.workload_key,
@@ -327,9 +342,14 @@ class LocalBuilder(ProgramBuilder):
         If is 'default', use default build function
         If is 'ndk', use function for android ndk
         If is callable, use it as custom build function, expect lib_format field.
+    build_option: dict
+        TODO.
+    runtime: Optional[Runtime]
+        Specify the runtime to generate artifacts for.
     """
 
-    def __init__(self, timeout=15, n_parallel=multiprocessing.cpu_count(), build_func="default"):
+    # def __init__(self, timeout=15, n_parallel=multiprocessing.cpu_count(), build_func="default", build_option=None, runtime=None):
+    def __init__(self, timeout=1500, n_parallel=multiprocessing.cpu_count(), build_func="default", build_option=None, runtime=Runtime("cpp")):
         if build_func == "default":
             BuildFunc.name = "default"
             BuildFunc.build_func = tar.tar
@@ -341,6 +361,7 @@ class LocalBuilder(ProgramBuilder):
             BuildFunc.build_func = build_func
         else:
             raise ValueError("Invalid build_func" + build_func)
+        BuildFunc.runtime = runtime or Runtime("cpp")
 
         self.__init_handle_by_constructor__(
             _ffi_api.LocalBuilder, timeout, n_parallel, BuildFunc.name
@@ -382,17 +403,23 @@ class LocalRunner(ProgramRunner):
         This is only has effect on CPU task.
     device: int = 0
         Which device to run on if multiple are available.
+    module_loader: TODO
+    remote_kwargs: TODO
     """
 
     def __init__(
         self,
-        timeout=10,
-        number=3,
+        # timeout=10,
+        timeout=1000,
+        # number=3,
+        number=1,
         repeat=1,
         min_repeat_ms=100,
         cooldown_interval=0.0,
         enable_cpu_cache_flush=False,
         device=0,
+        module_loader=None,
+        remote_kwargs={},
     ):
         if enable_cpu_cache_flush:
             number = 1
@@ -408,6 +435,11 @@ class LocalRunner(ProgramRunner):
             enable_cpu_cache_flush,
             device,
         )
+
+        if module_loader is None:
+            module_loader = default_module_loader()
+        RunnerState.module_loader = module_loader
+        RunnerState.remote_kwargs = remote_kwargs
 
 
 @tvm._ffi.register_object("auto_scheduler.RPCRunner")
@@ -457,6 +489,8 @@ class RPCRunner(ProgramRunner):
         This is only has effect on CPU task.
     device: int = 0
         Which device to run on if multiple are available.
+    module_loader: TODO
+    remote_kwargs: TODO
     """
 
     def __init__(
@@ -466,13 +500,17 @@ class RPCRunner(ProgramRunner):
         port,
         priority=1,
         n_parallel=1,
+        # timeout=10,
         timeout=10,
-        number=3,
+        # number=3,
+        number=1,
         repeat=1,
         min_repeat_ms=100,
         cooldown_interval=0.0,
         enable_cpu_cache_flush=False,
         device=0,
+        module_loader=None,
+        remote_kwargs={},
     ):
         self.__init_handle_by_constructor__(
             _ffi_api.RPCRunner,
@@ -489,6 +527,10 @@ class RPCRunner(ProgramRunner):
             enable_cpu_cache_flush,
             device,
         )
+        if module_loader is None:
+            module_loader = default_module_loader()
+        RunnerState.module_loader = module_loader
+        RunnerState.remote_kwargs = remote_kwargs
 
         if check_remote(key, host, port, priority, timeout):
             print("Get devices for measurement successfully!")
@@ -540,19 +582,25 @@ class LocalRPCMeasureContext:
         This is only has effect on CPU task.
     device: int = 0
         Which device to run on if multiple are available.
+    module_loader: TODO
+    remote_kwargs: TODO
     """
 
     def __init__(
         self,
         priority=1,
         n_parallel=1,
-        timeout=10,
-        number=3,
+        # timeout=10,
+        timeout=1000,
+        # number=3,
+        number=1,
         repeat=1,
         min_repeat_ms=0,
         cooldown_interval=0.0,
         enable_cpu_cache_flush=False,
         device=0,
+        module_loader=None,
+        remote_kwargs={},
     ):
         # pylint: disable=import-outside-toplevel
         from tvm.rpc.tracker import Tracker
@@ -580,6 +628,8 @@ class LocalRPCMeasureContext:
             cooldown_interval,
             enable_cpu_cache_flush,
             device,
+            module_loader,
+            remote_kwargs,
         )
         # Wait for the processes to start
         time.sleep(0.5)
@@ -606,7 +656,7 @@ class MeasureErrorNo(object):
     UNKNOWN_ERROR = 8  # Unknown error
 
 
-def _local_build_worker(inp_serialized, build_func, verbose):
+def _local_build_worker(inp_serialized, build_func, verbose, runtime, build_option):
     tic = time.time()
     inp = MeasureInput.deserialize(inp_serialized)
     task = inp.task
@@ -630,9 +680,19 @@ def _local_build_worker(inp_serialized, build_func, verbose):
         filename = os.path.join(dirname, "tmp_func." + build_func.output_format)
 
         try:
-            with transform.PassContext():
-                func = build_module.build(sch, args, target=task.target)
-            func.export_library(filename, build_func)
+            opts = build_option or {}
+            print("opts", opts)
+            with transform.PassContext(config=opts):
+                func = build_module.build(sch, args, target=task.target, target_host=None, runtime=runtime)
+                # func = build_module.build(sch, args, target=task.target, target_host=task.target_host, runtime=runtime)
+            if build_func.output_format == ".model-library-format":
+                try:
+                    from tvm import micro  # pylint: disable=import-outside-toplevel
+                except ImportError:
+                    raise ImportError("Requires USE_MICRO")
+                micro.export_model_library_format(func, filename)
+            else:
+                func.export_library(filename, build_func)
         # pylint: disable=broad-except
         except Exception:
             error_no = MeasureErrorNo.COMPILE_HOST
@@ -656,20 +716,20 @@ def local_build_worker(args):
     Parameters
     ----------
     args: Tuple[MeasureInput, callable, int]
-        inputs, build-func, verbose args passed to local_builder_build
+        inputs, build-func, verbose, runtime and build-option args passed to local_builder_build
 
     Returns
     -------
     res : BuildResult
         The build result of this Builder thread.
     """
-    inp, build_func, verbose = args
+    inp, build_func, verbose, runtime, build_option = args
 
-    return _local_build_worker(inp, build_func, verbose)
+    return _local_build_worker(inp, build_func, verbose, runtime, build_option)
 
 
 @tvm._ffi.register_func("auto_scheduler.local_builder.build")
-def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbose=1):
+def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbose=1, build_option=None):
     """
     Build function of LocalBuilder to build the MeasureInputs to runnable modules.
 
@@ -686,6 +746,7 @@ def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbo
         The name of build function to process the built module.
     verbose: int = 1
         Verbosity level. 0 for silent, 1 to output information during program building.
+    build_option: TODO
 
     Returns
     -------
@@ -705,6 +766,8 @@ def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbo
                 i.serialize(),
                 BuildFunc.build_func,
                 verbose,
+                BuildFunc.runtime,
+                build_option,
             )
             for i in inputs
         ],
@@ -939,9 +1002,9 @@ def _timed_eval_func(
 
     if verbose >= 1:
         if error_no == MeasureErrorNo.NO_ERROR:
-            print("*", end="", flush=True)
+            print("!*!", end="", flush=True)
         else:
-            print("*E", end="", flush=True)  # Run error
+            print("!*E!", end="", flush=True)  # Run error
     return costs, error_no, error_msg, toc - tic + build_res.time_cost, toc
 
 
@@ -1048,7 +1111,7 @@ def local_run(
                 )
             elif isinstance(res, Exception):
                 if verbose >= 1:
-                    print("*E", end="", flush=True)  # Run error
+                    print("@*E@", end="", flush=True)  # Run error
                 res = (
                     (MAX_FLOAT,),
                     MeasureErrorNo.RUNTIME_DEVICE,
@@ -1081,78 +1144,97 @@ def _rpc_run(
     enable_cpu_cache_flush,
     verbose,
     device,
+    module_loader,
+    remote_kwargs,
 ):
+    print("_rpc_run")
     inp = MeasureInput.deserialize(inp_serialized)
     tic = time.time()
     error_no = 0
     error_msg = None
     try:
         # upload built module
-        remote = request_remote(key, host, port, priority, timeout)
-        remote.upload(build_res.filename)
-        func = remote.load_module(os.path.split(build_res.filename)[1])
-        dev = remote.device(str(inp.task.target), device)
-        # Limitation:
-        # We can not get PackFunction directly in the remote mode as it is wrapped
-        # under the std::function. We could lift the restriction later once we fold
-        # the PackedFunc as an object. Currently, we pass function name to work
-        # around it.
-        f_prepare = "cache_flush_cpu_non_first_arg" if enable_cpu_cache_flush else ""
-        time_f = func.time_evaluator(
-            func.entry_name,
-            dev,
-            number=number,
-            repeat=repeat,
-            min_repeat_ms=min_repeat_ms,
-            f_preproc=f_prepare,
-        )
+        remote_kwargs["device_key"] = key
+        remote_kwargs["host"] = host
+        remote_kwargs["port"] = port
+        remote_kwargs["priority"] = priority
+        remote_kwargs["timeout"] = timeout
+        # import pathlib
+        # module_loader = tvm.micro.AutoTvmModuleLoader(
+        #     template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
+        #     project_options={"verbose": False},
+        # )
+        with module_loader(remote_kwargs, build_res) as (remote, func):
+            print("A")
+            dev = remote.device(str(inp.task.target), device)  # TODO(@PhilippvK): find out what device means
+            # remote = request_remote(key, host, port, priority, timeout)
+            # remote.upload(build_res.filename)
+            # func = remote.load_module(os.path.split(build_res.filename)[1])
+            # Limitation:
+            # We can not get PackFunction directly in the remote mode as it is wrapped
+            # under the std::function. We could lift the restriction later once we fold
+            # the PackedFunc as an object. Currently, we pass function name to work
+            # around it.
+            f_prepare = "cache_flush_cpu_non_first_arg" if enable_cpu_cache_flush else ""
+            print("B")
+            time_f = func.time_evaluator(
+                func.entry_name,
+                dev,
+                number=number,
+                repeat=repeat,
+                min_repeat_ms=min_repeat_ms,
+                f_preproc=f_prepare,
+            )
+            print("C")
+
+            try:
+                stream = dev.create_raw_stream()
+                dev.set_raw_stream(stream)
+                random_fill = remote.get_function("tvm.contrib.random.random_fill")
+                assert (
+                    random_fill
+                ), "Please make sure USE_RANDOM is ON in the config.cmake on the remote devices"
+
+                assert len(args) == len(build_res.args)
+                loc_args = []
+                # pylint: disable=consider-using-enumerate
+                for idx in range(len(args)):
+                    if args[idx] is None:
+                        build_res_arg = build_res.args[idx]
+                        empty_array = ndarray.empty(
+                            get_const_tuple(build_res_arg.shape), build_res_arg.dtype, dev
+                        )
+                        random_fill(empty_array)
+                        loc_args.append(empty_array)
+                    else:
+                        loc_args.append(ndarray.array(args[idx], dev))
+                dev.sync()
+
+                # First run for check that the kernel is correct
+                func.entry_func(*loc_args)
+                dev.sync()
+
+                # print("loc_args", loc_args)
+                costs = time_f(*loc_args).results
+                # print("costs", costs)
+
+                # clean up remote files
+                print("> clean up remote files")
+                # remote.remove(build_res.filename)
+                # remote.remove(os.path.splitext(build_res.filename)[0] + ".so")
+                # remote.remove("")
+                dev.free_raw_stream(stream)
+            # pylint: disable=broad-except
+            except Exception:
+                dev.free_raw_stream(stream)
+                costs = (MAX_FLOAT,)
+                error_no = MeasureErrorNo.RUNTIME_DEVICE
+                error_msg = make_traceback_info()
     # pylint: disable=broad-except
     except Exception:
         costs = (MAX_FLOAT,)
         error_no = MeasureErrorNo.COMPILE_DEVICE
         error_msg = make_traceback_info()
-
-    if error_no == 0:
-        try:
-            stream = dev.create_raw_stream()
-            dev.set_raw_stream(stream)
-            random_fill = remote.get_function("tvm.contrib.random.random_fill")
-            assert (
-                random_fill
-            ), "Please make sure USE_RANDOM is ON in the config.cmake on the remote devices"
-
-            assert len(args) == len(build_res.args)
-            loc_args = []
-            # pylint: disable=consider-using-enumerate
-            for idx in range(len(args)):
-                if args[idx] is None:
-                    build_res_arg = build_res.args[idx]
-                    empty_array = ndarray.empty(
-                        get_const_tuple(build_res_arg.shape), build_res_arg.dtype, dev
-                    )
-                    random_fill(empty_array)
-                    loc_args.append(empty_array)
-                else:
-                    loc_args.append(ndarray.array(args[idx], dev))
-            dev.sync()
-
-            # First run for check that the kernel is correct
-            func.entry_func(*loc_args)
-            dev.sync()
-
-            costs = time_f(*loc_args).results
-
-            # clean up remote files
-            remote.remove(build_res.filename)
-            remote.remove(os.path.splitext(build_res.filename)[0] + ".so")
-            remote.remove("")
-            dev.free_raw_stream(stream)
-        # pylint: disable=broad-except
-        except Exception:
-            dev.free_raw_stream(stream)
-            costs = (MAX_FLOAT,)
-            error_no = MeasureErrorNo.RUNTIME_DEVICE
-            error_msg = make_traceback_info()
 
     shutil.rmtree(os.path.dirname(build_res.filename))
     toc = time.time()
@@ -1160,9 +1242,10 @@ def _rpc_run(
     time.sleep(cooldown_interval)
     if verbose >= 1:
         if error_no == MeasureErrorNo.NO_ERROR:
-            print("*", end="")
+            print("#*#", end="")
         else:
-            print("*E", end="")  # Run error
+            print("#*E#", end="")  # Run error
+            print("error_msg", error_msg)
 
     return costs, error_no, error_msg, toc - tic + build_res.time_cost, toc
 
@@ -1174,13 +1257,15 @@ def _rpc_run_worker(args):
     ----------
     args : Tuple[MeasureInput, BuildResult, ...]
         Single input and build result plus the rest of the arguments to `rpc_runner_run`.
+        TODO:
 
     Returns
     -------
     res : MeasureResult
         The measure result of this Runner thread.
     """
-    _, build_res, _, _, _, _, _, timeout, _, _, _, _, _, verbose, _ = args
+    print("_rpc_run_worker")
+    _, build_res, _, _, _, _, _, timeout, _, _, _, _, _, verbose, _, _, _ = args
     if build_res.error_no != MeasureErrorNo.NO_ERROR:
         return (
             (MAX_FLOAT,),
@@ -1193,9 +1278,10 @@ def _rpc_run_worker(args):
     try:
         res = _rpc_run(*args)
     # pylint: disable=broad-except
-    except Exception:
+    except Exception as ex:
+        print("Exception")
         if verbose >= 1:
-            print("*E", end="")  # Run error
+            print("[*E]", end="")  # Run error
         res = (
             (MAX_FLOAT,),
             MeasureErrorNo.RUNTIME_DEVICE,
@@ -1203,6 +1289,7 @@ def _rpc_run_worker(args):
             build_res.time_cost + timeout,
             time.time(),
         )
+        raise ex
 
     return res
 
@@ -1217,7 +1304,8 @@ def rpc_runner_run(
     priority=1,
     n_parallel=1,
     timeout=10,
-    number=3,
+    number=1,
+    # number=3,
     repeat=1,
     min_repeat_ms=0,
     cooldown_interval=0.0,
@@ -1275,12 +1363,20 @@ def rpc_runner_run(
     device: int = 0
         Which device to run on if multiple are available.
 
+        TODO:
+    module_loader=None
+    remote_kwargs={},
+
     Returns
     -------
     res : List[MeasureResult]
         The measure results of these MeasureInputs.
     """
     assert len(inputs) == len(build_results), "Measure input size should be equal to build results"
+    module_loader = RunnerState.module_loader
+    remote_kwargs = RunnerState.remote_kwargs
+    print("module_loader", module_loader)
+    print("remote_kwargs", remote_kwargs)
     # This pool is not doing computationally intensive work, so we can use threads
     executor = PopenPoolExecutor(n_parallel)
     tuple_res = executor.map_with_error_catching(
@@ -1302,6 +1398,8 @@ def rpc_runner_run(
                 enable_cpu_cache_flush,
                 verbose,
                 device,
+                module_loader,
+                remote_kwargs,
             )
             for inp, build_res in zip(inputs, build_results)
         ],
