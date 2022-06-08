@@ -57,11 +57,13 @@ def create(graph_json_str, libmod, device):
     assert isinstance(graph_json_str, string_types)
 
     dev, num_rpc_dev, device_type_id = get_device(libmod, device)
+    print("ccrreeaattee", dev, num_rpc_dev, device_type_id, libmod, device)
 
     if num_rpc_dev == len(dev):
         fcreate = dev[0]._rpc_sess.get_function("tvm.graph_executor.create")
     else:
         fcreate = tvm._ffi.get_global_func("tvm.graph_executor.create")
+    print("fcreate", fcreate)
 
     return GraphModule(fcreate(graph_json_str, libmod, *device_type_id))
 
@@ -82,6 +84,7 @@ def get_device(libmod, device):
     num_rpc_dev : Number of rpc devices
     device_type_id : List of device type and device id
     """
+    print("~get_device", libmod, device)
 
     if isinstance(device, Device):
         device = [device]
@@ -431,6 +434,7 @@ class GraphModule(object):
             )(device.device_type % rpc_base.RPC_SESS_MASK, device.device_id, *args)
         if kwargs:
             self.set_input(**kwargs)
+        print("~~~", self, self.module, dir(self), dir(self.module))
         return self.module.time_evaluator(
             func_name, device, repeat=repeat, number=number, min_repeat_ms=min_repeat_ms
         )()

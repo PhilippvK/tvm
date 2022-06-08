@@ -662,6 +662,7 @@ void RPCEndpoint::Init() {
 
   // Quick function to for syscall remote.
   syscall_remote_ = PackedFunc([this](TVMArgs all_args, TVMRetValue* rv) {
+    LOG(WARNING) << "syscall_remote_";
     std::lock_guard<std::mutex> lock(mutex_);
     RPCCode code = static_cast<RPCCode>(all_args[0].operator int());
     TVMArgs args(all_args.values + 1, all_args.type_codes + 1, all_args.num_args - 1);
@@ -1001,6 +1002,7 @@ class RPCClientSession : public RPCSession, public DeviceAPI {
 
   // function overrides
   PackedFuncHandle GetFunction(const std::string& name) final {
+    LOG(WARNING) << "?GetFunction - " << name;
     return endpoint_->SysCallRemote(RPCCode::kGetGlobalFunc, name);
   }
 

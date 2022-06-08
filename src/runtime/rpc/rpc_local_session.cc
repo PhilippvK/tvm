@@ -32,6 +32,7 @@ namespace tvm {
 namespace runtime {
 
 RPCSession::PackedFuncHandle LocalSession::GetFunction(const std::string& name) {
+  LOG(WARNING) << "LocalSession::GetFunction";
   if (auto* fp = tvm::runtime::Registry::Get(name)) {
     // return raw handle because the remote need to explicitly manage it.
     tvm::runtime::TVMRetValue ret;

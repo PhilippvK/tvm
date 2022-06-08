@@ -59,9 +59,16 @@ class GraphExecutorDebug : public GraphExecutor {
    *         iteration only, because returning a long string over rpc can be expensive.
    */
   std::string RunIndividual(int number, int repeat, int min_repeat_ms) {
+    std::cout << "RunIndividual" << std::endl;
+    std::cout << "number=" << number << std::endl;
+    std::cout << "repeat=" << repeat << std::endl;
+    std::cout << "min_repeat_ms=" << min_repeat_ms << std::endl;
     // warmup run
+    std::string tkey2 = Module(module_)->type_key();
+    std::cout << "tkey!=" << tkey2 << std::endl;
     GraphExecutor::Run();
     std::string tkey = module_->type_key();
+    std::cout << "tkey=" << tkey << std::endl;
     std::vector<double> time_sec_per_op(op_execs_.size(), 0);
     if (tkey == "rpc") {
       // RPC modules rely on remote timing which implements the logic from the else branch.
@@ -126,6 +133,7 @@ class GraphExecutorDebug : public GraphExecutor {
   }
 
   double RunOpRPC(int index, int number, int repeat, int min_repeat_ms) {
+    std::cout << "RunOpRPC" << std::endl;
     // Right now we expect either "tvm_op" for nodes which run PackedFunc or "null" for nodes
     // which represent inputs/parameters to the graph. Other types may be supported in the
     // future, but consideration would be needed as to how to do that over RPC before we support
@@ -148,6 +156,7 @@ class GraphExecutorDebug : public GraphExecutor {
     const Device& dev = data_entry_[entry_id(index, 0)]->device;
     TVMOpParam param = nodes_[index].param;
     std::string name = param.func_name;
+    std::cout << "namee:" << name << std::endl;
     uint32_t num_inputs = param.num_inputs;
     uint32_t num_outputs = param.num_outputs;
 
@@ -348,6 +357,8 @@ class GraphExecutorDebug : public GraphExecutor {
  */
 PackedFunc GraphExecutorDebug::GetFunction(const std::string& name,
                                            const ObjectPtr<Object>& sptr_to_self) {
+  std::cout << "@@@" << this->type_key() << std::endl;
+  std::cout << "@@@" << this->module_->type_key() << std::endl;
   // return member functions during query.
   if (name == "debug_get_output") {
     return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
@@ -365,6 +376,9 @@ PackedFunc GraphExecutorDebug::GetFunction(const std::string& name,
       *rv = this->GetNodeOutput(args[0], args[1]);
     });
   } else if (name == "run_individual") {
+    std::cout << "this1:" << this << std::endl;
+    std::cout << "this1->module_:" << this->module_ << std::endl;
+    // // // // // // // // ICHECK(1 == 0);
     return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
       int number = args[0];
       int repeat = args[1];
@@ -372,6 +386,8 @@ PackedFunc GraphExecutorDebug::GetFunction(const std::string& name,
       ICHECK_GT(number, 0);
       ICHECK_GT(repeat, 0);
       ICHECK_GE(min_repeat_ms, 0);
+      std::cout << "this2:" << this << std::endl;
+      std::cout << "this->module_:" << this->module_ << std::endl;
       *rv = this->RunIndividual(number, repeat, min_repeat_ms);
     });
   } else if (name == "run_individual_node") {

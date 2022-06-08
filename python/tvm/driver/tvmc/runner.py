@@ -508,6 +508,7 @@ def run_module(
             # Local
             logger.debug("Running a local session.")
             session = rpc.LocalSession()
+            print("sessionlocal", session, type(session), dir(session))
 
         # Micro targets don't support uploading a model. The model to be run
         # must be already flashed into the micro target before one tries
@@ -534,6 +535,8 @@ def run_module(
         else:
             assert device == "cpu"
             dev = session.cpu()
+        print("~dev", dev)
+        print("~lib", lib)
 
         if tvmc_package.type == "vm":
             assert inputs is not None, "vm runner requires inputs to be provided as a dict"
@@ -577,7 +580,9 @@ def run_module(
             else:
                 if device == "micro":
                     logger.debug("Creating runtime (micro) with profiling disabled.")
+                    print("sessionmicrorpc", session._rpc, type(session._rpc), dir(session._rpc))
                     module = tvm.micro.create_local_graph_executor(tvmc_package.graph, lib, dev)
+                    print("sessionmicrorpc2", session._rpc, type(session._rpc), dir(session._rpc))
                 else:
                     logger.debug("Creating runtime with profiling disabled.")
                     module = executor.create(tvmc_package.graph, lib, dev)

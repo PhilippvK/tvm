@@ -175,6 +175,8 @@ class RPCModuleNode final : public ModuleNode {
   const char* type_key() const final { return "rpc"; }
 
   PackedFunc GetFunction(const std::string& name, const ObjectPtr<Object>& sptr_to_self) final {
+    LOG(WARNING) << "RPC GetFunction";
+    LOG(WARNING) << "module_handle_:" << module_handle_;
     if (module_handle_ == nullptr) {
       return WrapRemoteFunc(sess_->GetFunction(name));
     } else {
@@ -190,17 +192,23 @@ class RPCModuleNode final : public ModuleNode {
 
   PackedFunc GetTimeEvaluator(const std::string& name, Device dev, int number, int repeat,
                               int min_repeat_ms, const std::string& f_preproc_name) {
+    std::cout << "GetTimeEvaluator" << std::endl;
     InitRemoteFunc(&remote_get_time_evaluator_, "runtime.RPCTimeEvaluator");
+    std::cout << "123" << std::endl;
     // Remove session mask because we pass dev by parts.
     ICHECK_EQ(GetRPCSessionIndex(dev), sess_->table_index())
         << "ValueError: Need to pass the matched remote device to RPCModule.GetTimeEvaluator";
+    std::cout << "456" << std::endl;
     dev = RemoveRPCSessionMask(dev);
+    std::cout << "789" << std::endl;
 
     if (module_handle_ != nullptr) {
+      std::cout << "1122" << std::endl;
       return remote_get_time_evaluator_(GetRef<Module>(this), name,
                                         static_cast<int>(dev.device_type), dev.device_id, number,
                                         repeat, min_repeat_ms, f_preproc_name);
     } else {
+      std::cout << "2211" << std::endl;
       return remote_get_time_evaluator_(Optional<Module>(nullptr), name,
                                         static_cast<int>(dev.device_type), dev.device_id, number,
                                         repeat, min_repeat_ms, f_preproc_name);
@@ -224,6 +232,7 @@ class RPCModuleNode final : public ModuleNode {
  private:
   template <typename FType>
   void InitRemoteFunc(FType* func, const std::string& name) {
+    LOG(WARNING) << "InitRemoteFunc";
     if (*func != nullptr) return;
     RPCSession::PackedFuncHandle handle = sess_->GetFunction(name);
     ICHECK(handle != nullptr) << "Cannot found remote function " << name;
@@ -231,6 +240,7 @@ class RPCModuleNode final : public ModuleNode {
   }
 
   PackedFunc WrapRemoteFunc(RPCSession::PackedFuncHandle handle) {
+    LOG(WARNING) << "WrapRemoteFunc";
     if (handle == nullptr) return PackedFunc();
     auto wf = std::make_shared<RPCWrappedFunc>(handle, sess_);
     return PackedFunc([wf](TVMArgs args, TVMRetValue* rv) { return wf->operator()(args, rv); });
@@ -363,13 +373,21 @@ TVM_REGISTER_GLOBAL("runtime.RPCTimeEvaluator")
       Device dev;
       dev.device_type = static_cast<DLDeviceType>(device_type);
       dev.device_id = device_id;
+      std::cout << "dev:" << dev << std::endl;
+      std::cout << "nnaammee:" << name << std::endl;
+      std::cout << "device_type=" << device_type << std::endl;
+      std::cout << "device_id=" << device_id << std::endl;
       if (opt_mod.defined()) {
         Module m = opt_mod.value();
+        std::cout << "m=" << m << std::endl;
         std::string tkey = m->type_key();
+        std::cout << "tkey:" << tkey << std::endl;
         if (tkey == "rpc") {
+          LOG(WARNING) << "RPC TIME";
           return static_cast<RPCModuleNode*>(m.operator->())
               ->GetTimeEvaluator(name, dev, number, repeat, min_repeat_ms, f_preproc_name);
         } else {
+          LOG(WARNING) << "NON RPC TIME";
           PackedFunc f_preproc;
           if (!f_preproc_name.empty()) {
             auto* pf_preproc = runtime::Registry::Get(f_preproc_name);
@@ -378,6 +396,7 @@ TVM_REGISTER_GLOBAL("runtime.RPCTimeEvaluator")
             f_preproc = *pf_preproc;
           }
           PackedFunc pf = m.GetFunction(name, true);
+          std::cout << "name:" << name << std::endl;
           CHECK(pf != nullptr) << "Cannot find " << name << " in the global registry";
           return profiling::WrapTimeEvaluator(pf, dev, number, repeat, min_repeat_ms, f_preproc);
         }

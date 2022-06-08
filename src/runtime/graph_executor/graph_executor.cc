@@ -57,6 +57,8 @@ inline size_t GetDataAlignment(const DLTensor& arr) {
  * \brief Run all the operations one by one.
  */
 void GraphExecutor::Run() {
+  // LOG(FATAL) << "RUNRUNRUN";
+  LOG(WARNING) << "RUNRUNRUN";
   // setup the array and requirements.
   for (size_t i = 0; i < op_execs_.size(); ++i) {
     if (op_execs_[i]) op_execs_[i]();
@@ -541,6 +543,7 @@ GraphExecutor::CreateTVMOp(const TVMOpParam& param, const std::vector<DLTensor>&
 
 PackedFunc GraphExecutor::GetFunction(const std::string& name,
                                       const ObjectPtr<Object>& sptr_to_self) {
+  LOG(WARNING) << "GraphExecutor::GetFunction";
   // Return member functions during query.
   if (name == "set_input") {
     return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {

@@ -405,6 +405,8 @@ int TVMModImport(TVMModuleHandle mod, TVMModuleHandle dep) {
 int TVMModGetFunction(TVMModuleHandle mod, const char* func_name, int query_imports,
                       TVMFunctionHandle* func) {
   API_BEGIN();
+  std::cout << "TVMModGetFunction" << std::endl;
+  std::cout << "?:" << ObjectInternal::GetModuleNode(mod)->type_key() << std::endl;
   PackedFunc pf = ObjectInternal::GetModuleNode(mod)->GetFunction(func_name, query_imports != 0);
   if (pf != nullptr) {
     tvm::runtime::TVMRetValue ret;

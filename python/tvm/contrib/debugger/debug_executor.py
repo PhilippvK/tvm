@@ -34,6 +34,7 @@ _DUMP_PATH_PREFIX = "_tvmdbg_"
 
 
 def create(graph_json_str, libmod, device, dump_root=None):
+    print("!create!")
     """Create a runtime executor module given a graph and module.
 
     Parameters
@@ -61,6 +62,8 @@ def create(graph_json_str, libmod, device, dump_root=None):
 
     try:
         dev, num_rpc_dev, device_type_id = graph_executor.get_device(libmod, device)
+        print("dev, num_rpc_dev, device_type_id", dev, num_rpc_dev, device_type_id)
+        print("len(dev)", len(dev))
         if num_rpc_dev == len(dev):
             fcreate = dev[0]._rpc_sess.get_function("tvm.graph_executor_debug.create")
         else:
@@ -110,6 +113,8 @@ class GraphModuleDebug(graph_executor.GraphModule):
     """
 
     def __init__(self, module, device, graph_json_str, dump_root):
+        print("!GraphModuleDebug.__init__!")
+        print("module", module, type(module), dir(module), module.type_key)
         self._dump_root = dump_root
         self._dump_path = None
         self._run_individual = module["run_individual"]
@@ -207,6 +212,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         return output_tensors
 
     def _run_per_layer(self):
+        print("!_run_per_layer!")
         """Execute up to each node and each debug output will be
         copied to the buffer.
 
@@ -223,6 +229,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         self.debug_datum.update_output_tensors(output_tensors)
 
     def _run_debug(self):
+        print("!_run_debug!")
         """Execute the node specified with index will be executed.
         Each debug output will be copied to the buffer
         Time consumed for each execution will be set as debug output.
@@ -260,6 +267,8 @@ class GraphModuleDebug(graph_executor.GraphModule):
         self._debug_get_output(node_index, out)
 
     def run(self, **input_dict):
+        print("!run!")
+        print("m", self.module)
         """Run forward execution of the graph with debug
 
         Parameters
@@ -271,19 +280,26 @@ class GraphModuleDebug(graph_executor.GraphModule):
             self.set_input(**input_dict)
 
         # Step 1. Execute the graph
+        print("step 1")
         self._run_debug()
         # Step 2. Dump the output tensors to the dump folder
+        print("step 2")
         self.debug_datum.dump_output_tensor()
         # Step 3. Dump the Chrome trace to the dump folder
+        print("step 3")
         self.debug_datum.dump_chrome_trace()
         # Step 4. Display the collected information
+        print("step 4")
         self.debug_datum.display_debug_result()
 
     def run_individual(self, number, repeat=1, min_repeat_ms=0):
+        print("!run_individual!")
+        print("m2", self.module)
         ret = self._run_individual(number, repeat, min_repeat_ms)
         return ret.strip(",").split(",") if ret else []
 
     def run_individual_node(self, index, number=10, repeat=1, min_repeat_ms=0):
+        print("!run_individual_node!")
         """Benchmark a single node in the serialized graph.
 
         This does not do any data transfers and uses arrays already on the device.
@@ -327,6 +343,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         return BenchmarkResult(answer)
 
     def profile(self, collectors=None, **input_dict):
+        print("!profile!")
         """Run forward execution of the graph and collect overall and per-op
         performance metrics.
 
