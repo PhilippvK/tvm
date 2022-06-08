@@ -586,14 +586,14 @@ def run_module(
             module.load_params(tvmc_package.params)
 
             logger.debug("Collecting graph input shape and type:")
-            shape_dict, dtype_dict = module.get_input_info()
-            logger.debug("Graph input shape: %s", shape_dict)
-            logger.debug("Graph input type: %s", dtype_dict)
+            # shape_dict, dtype_dict = module.get_input_info()
+            # logger.debug("Graph input shape: %s", shape_dict)
+            # logger.debug("Graph input type: %s", dtype_dict)
 
-            inputs_dict = make_inputs_dict(shape_dict, dtype_dict, inputs, fill_mode)
+            # inputs_dict = make_inputs_dict(shape_dict, dtype_dict, inputs, fill_mode)
 
-            logger.debug("Setting inputs to the module.")
-            module.set_input(**inputs_dict)
+            # logger.debug("Setting inputs to the module.")
+            # module.set_input(**inputs_dict)
 
             # Run must be called explicitly if profiling
             if profile:
