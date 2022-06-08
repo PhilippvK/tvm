@@ -232,8 +232,8 @@ def drive_run(args):
         if args.profile:
             raise TVMCException("--profile is not currently supported for micro devices.")
 
-        if args.print_time:
-            raise TVMCException("--print-time is not currently supported for micro devices.")
+        # if args.print_time:
+        #     raise TVMCException("--print-time is not currently supported for micro devices.")
 
         # Get and check options for micro targets.
         options = get_and_check_options(args.project_option, args.valid_options)
@@ -606,8 +606,7 @@ def run_module(
                 # TODO(gromero): Fix time_evaluator() for micro targets. Once it's
                 # fixed module.benchmark() can be used instead and this if/else can
                 # be removed.
-                module.run()
-                times = []
+                times = module.benchmark(dev, number=number, repeat=repeat, end_to_end=end_to_end)
             else:
                 # Call the benchmarking function of the executor.
                 # Optionally measure e2e data transfers from the
