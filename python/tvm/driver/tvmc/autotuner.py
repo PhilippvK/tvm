@@ -319,6 +319,11 @@ def tune_model(
     include_simple_tasks: bool = False,
     log_estimated_latency: bool = False,
     additional_target_options: Optional[Dict[str, Dict[str, Any]]] = None,
+    module_loader = None,  # TODO
+    build_func = "default",  # TODO
+    runtime = None,  # TODO
+    build_option : dict = None,
+    si_prefix : str = "G",
 ):
     """Use tuning to automatically optimize the functions in a model.
 
@@ -377,12 +382,23 @@ def tune_model(
         If using the autoscheduler, write the estimated latency at each step of tuning to file.
     additional_target_options: Optional[Dict[str, Dict[str, Any]]]
         Additional target options in a dictionary to combine with initial Target arguments
+    module_loader : TODO, optional
+        TODO
+    build_func : TODO, optional
+        TODO
+    runtime : TODO, optional
+        TODO
+    build_option : dict, optional
+        TODO
+    si_prefix : str
+        SI prefix for FLOPS.
 
     Returns
     -------
     tuning_records : str
         The path to the produced tuning log file.
     """
+
     target, extra_targets = target_from_cli(target, additional_target_options)
     target, target_host = Target.canon_target_and_host(target, target_host)
     # TODO(jwfromm) Remove this deepcopy once AlterOpLayout bug that mutates source
@@ -424,6 +440,8 @@ def tune_model(
             n_parallel=parallel,
             timeout=timeout,
             min_repeat_ms=min_repeat_ms,
+            module_loader=module_loader,
+
         )
     else:
         logger.info("Starting localhost tuning.")
@@ -435,6 +453,7 @@ def tune_model(
             repeat=repeat,
             timeout=timeout,
             min_repeat_ms=min_repeat_ms,
+            module_loader=module_loader,
         )
 
         # For autoscheduling on some devices, we need to maintain a LocalRPCMeasureContext object.
@@ -452,6 +471,20 @@ def tune_model(
             alter_layout=desired_layout,
             hardware_params=hardware_params,
             include_simple_tasks=include_simple_tasks,
+            extra_config=build_option,
+        )
+
+        if build_option is None:
+            build_option = {}
+        builder = auto_scheduler.LocalBuilder(
+            # timeout = 1000
+            # n_parallel=1,
+            # build_kwargs=build_kwargs or {},
+            # do_fork=True,
+            # do_fork=False,
+            build_func=build_func,
+            runtime=runtime,
+            build_option=build_option,
         )
 
         # Create the autoscheduler tuning options
@@ -459,7 +492,9 @@ def tune_model(
             num_measure_trials=trials,
             measure_callbacks=[auto_scheduler.RecordToFile(tuning_records)],
             runner=runner,
+            builder=builder,
             early_stopping=early_stopping,
+            si_prefix=si_prefix,
         )
 
         logger.info("Autoscheduling with configuration: %s", tuning_options)
@@ -479,14 +514,25 @@ def tune_model(
         trials = int(trials / max(len(tasks), 1))
         logger.info("Autotuning with %d trials per task.", trials)
 
+        # print("!!runtime!!", runtime)
+        builder = autotvm.LocalBuilder(
+            n_parallel=5,
+            build_kwargs={"build_option": build_option},
+            do_fork=True,
+            # do_fork=False,
+            build_func=build_func,
+            runtime=runtime,
+        )
+
         tuning_options = {
             "tuner": tuner,
             "trials": trials,
             "early_stopping": early_stopping,
             "measure_option": autotvm.measure_option(
-                builder=autotvm.LocalBuilder(build_func="default"), runner=runner
+                builder=builder, runner=runner
             ),
             "tuning_records": prior_records,
+            "si_prefix": si_prefix,
         }
         logger.info("Autotuning with configuration: %s", tuning_options)
 
@@ -529,11 +575,17 @@ def autotvm_get_tuning_tasks(
     if alter_layout:
         mod = convert_graph_layout(mod, alter_layout)
 
-    tasks = autotvm.task.extract_from_program(
-        mod["main"],
-        target=target,
-        params=params,
-    )
+    # print("target", target)
+    # input()
+
+    pass_context = tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True})
+    with pass_context:
+        tasks = autotvm.task.extract_from_program(
+            mod["main"],
+            target=target,
+            target_host=target_host,
+            params=params,
+        )
 
     return tasks
 
@@ -627,7 +679,9 @@ def schedule_tasks(
     )
 
     # Tune the tasks
-    tuner.tune(tuning_options)
+    tuner.tune(tuning_options,
+            search_policy="default")
+            # search_policy="sketch.random")
 
 
 def tune_tasks(
@@ -638,6 +692,7 @@ def tune_tasks(
     trials: int,
     early_stopping: Optional[int] = None,
     tuning_records: Optional[str] = None,
+    si_prefix: str = "G",
 ):
     """Tune a list of tasks and output the history to a log file.
 
@@ -659,6 +714,8 @@ def tune_tasks(
     tuning_records: str, optional
         Path to the file produced by the tuning, to be used during
         tuning.
+    si_prefix : str
+        SI prefix for FLOPS.
     """
     if not tasks:
         logger.warning("there were no tasks found to be tuned")
@@ -696,7 +753,8 @@ def tune_tasks(
             early_stopping=early_stopping,
             measure_option=measure_option,
             callbacks=[
-                autotvm.callback.progress_bar(trials, prefix=prefix),
+                autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix),
                 autotvm.callback.log_to_file(log_file),
             ],
+            si_prefix=si_prefix,
         )
