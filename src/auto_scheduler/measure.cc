@@ -106,7 +106,8 @@ MeasureResult MeasureResultNode::copy() const {
 }
 
 /********** LocalBuilder **********/
-LocalBuilder::LocalBuilder(int timeout, int n_parallel, const String& build_func, tvm::Map<String, tvm::PrimExpr> build_option, const tvm::relay::Runtime& runtime) {
+LocalBuilder::LocalBuilder(int timeout, int n_parallel, const String& build_func, tvm::Map<String, tvm::PrimExpr> build_option) {
+// LocalBuilder::LocalBuilder(int timeout, int n_parallel, const String& build_func, tvm::Map<String, tvm::PrimExpr> build_option, const tvm::relay::Runtime& runtime) {
   auto node = make_object<LocalBuilderNode>();
   node->timeout = timeout;
   node->n_parallel = n_parallel;
@@ -406,8 +407,9 @@ TVM_REGISTER_GLOBAL("auto_scheduler.ProgramRunnerRun")
                        int verbose) { return runner->Run(inputs, build_results, verbose); });
 
 TVM_REGISTER_GLOBAL("auto_scheduler.LocalBuilder")
-    .set_body_typed([](int timeout, int n_parallel, const String& build_func, tvm::Map<String, tvm::PrimExpr> build_option, const tvm::relay::Runtime& runtime) {
-      return LocalBuilder(timeout, n_parallel, build_func, build_option, runtime);
+    // .set_body_typed([](int timeout, int n_parallel, const String& build_func, tvm::Map<String, tvm::PrimExpr> build_option, const tvm::relay::Runtime& runtime) {
+    .set_body_typed([](int timeout, int n_parallel, const String& build_func, tvm::Map<String, tvm::PrimExpr> build_option) {
+      return LocalBuilder(timeout, n_parallel, build_func, build_option);
     });
 
 TVM_REGISTER_GLOBAL("auto_scheduler.LocalRunner")

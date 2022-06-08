@@ -40,7 +40,7 @@
 
 #include <tvm/auto_scheduler/loop_state.h>
 #include <tvm/auto_scheduler/search_task.h>
-#include <tvm/relay/runtime.h>
+// #include <tvm/relay/runtime.h>
 
 #include <string>
 #include <unordered_map>
@@ -365,7 +365,8 @@ class LocalBuilder : public ProgramBuilder {
    * \param n_parallel The number of threads used to build in parallel.
    * \param build_func The name of the registered build function.
    */
-  LocalBuilder(int timeout, int n_parallel, const String& build_func, tvm::Map<String, tvm::PrimExpr> build_option, const tvm::relay::Runtime& runtime);
+  // LocalBuilder(int timeout, int n_parallel, const String& build_func, tvm::Map<String, tvm::PrimExpr> build_option, const tvm::relay::Runtime& runtime);
+  LocalBuilder(int timeout, int n_parallel, const String& build_func, tvm::Map<String, tvm::PrimExpr> build_option);
 
   TVM_DEFINE_OBJECT_REF_METHODS(LocalBuilder, ProgramBuilder, LocalBuilderNode);
 };

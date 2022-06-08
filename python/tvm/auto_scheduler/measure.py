@@ -354,8 +354,8 @@ class LocalBuilder(ProgramBuilder):
         BuildFunc.runtime = runtime or Runtime("cpp")
 
         self.__init_handle_by_constructor__(
-            # _ffi_api.LocalBuilder, timeout, n_parallel, BuildFunc.name, build_option
-            _ffi_api.LocalBuilder, timeout, n_parallel, BuildFunc.name, build_option, runtime
+            _ffi_api.LocalBuilder, timeout, n_parallel, BuildFunc.name, build_option
+            # _ffi_api.LocalBuilder, timeout, n_parallel, BuildFunc.name, build_option, runtime
         )
 
 
