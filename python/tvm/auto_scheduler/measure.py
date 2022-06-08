@@ -83,6 +83,7 @@ class BuildFunc:
 
     name = "default"
     build_func = tar.tar
+    build_option = {}
     runtime = Runtime("cpp")
 
 class RunnerState:
@@ -362,6 +363,7 @@ class LocalBuilder(ProgramBuilder):
         else:
             raise ValueError("Invalid build_func" + build_func)
         BuildFunc.runtime = runtime or Runtime("cpp")
+        BuildFunc.build_option = build_option or {}
 
         self.__init_handle_by_constructor__(
             _ffi_api.LocalBuilder, timeout, n_parallel, BuildFunc.name
@@ -728,7 +730,7 @@ def local_build_worker(args):
 
 
 @tvm._ffi.register_func("auto_scheduler.local_builder.build")
-def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbose=1, build_option=None):
+def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbose=1):
     """
     Build function of LocalBuilder to build the MeasureInputs to runnable modules.
 
@@ -766,7 +768,7 @@ def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbo
                 BuildFunc.build_func,
                 verbose,
                 BuildFunc.runtime,
-                build_option,
+                BuildFunc.build_option,
             )
             for i in inputs
         ],
