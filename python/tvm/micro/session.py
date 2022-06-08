@@ -210,9 +210,10 @@ def create_local_graph_executor(graph_json_str, mod, device):
          A local graph executor instance that executes on the remote device.
     """
     device_type_id = [device.device_type, device.device_id]
-    fcreate = get_global_func("tvm.graph_executor.create")
+    dev, num_rpc_dev, device_type_id = graph_executor.get_device(mod, device)
+    fcreate = dev[0]._rpc_sess.get_function("tvm.graph_executor.create")
     return graph_executor.GraphModule(
-        fcreate(graph_json_str, mod, lookup_remote_linked_param, *device_type_id)
+        fcreate(graph_json_str, mod, *device_type_id)
     )
 
 
