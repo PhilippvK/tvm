@@ -167,7 +167,7 @@ class TuningOptions(Object):
         Callback functions called after each measurement.
         Candidates:
         - auto_scheduler.RecordToFile
-    si_prefix:  str = "G"
+    si_preifx:  str = "G"
         SI prefix for FLOPS.
     """
 
