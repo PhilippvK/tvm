@@ -85,6 +85,17 @@ class BuildFunc:
     build_func = tar.tar
     runtime = Runtime("cpp")
 
+class RunnerState:
+    """TODO
+    module_loader: ?
+        Module loader for MicroTVM Support.
+    remote_kwargs: ?
+        TODO.
+    """
+
+    module_loader = None
+    remote_kwargs = {}
+
 
 @tvm._ffi.register_object("auto_scheduler.MeasureCallback")
 class MeasureCallback(Object):
@@ -394,6 +405,8 @@ class LocalRunner(ProgramRunner):
         This is only has effect on CPU task.
     device: int = 0
         Which device to run on if multiple are available.
+    module_loader: TODO
+    remote_kwargs: TODO
     """
 
     def __init__(
@@ -407,6 +420,8 @@ class LocalRunner(ProgramRunner):
         cooldown_interval=0.0,
         enable_cpu_cache_flush=False,
         device=0,
+        module_loader=None,
+        remote_kwargs={},
     ):
         if enable_cpu_cache_flush:
             number = 1
@@ -422,6 +437,11 @@ class LocalRunner(ProgramRunner):
             enable_cpu_cache_flush,
             device,
         )
+
+        if module_loader is None:
+            module_loader = default_module_loader()
+        RunnerState.module_loader = module_loader
+        RunnerState.remote_kwargs = remote_kwargs
 
 
 @tvm._ffi.register_object("auto_scheduler.RPCRunner")
@@ -472,6 +492,7 @@ class RPCRunner(ProgramRunner):
     device: int = 0
         Which device to run on if multiple are available.
     module_loader: TODO
+    remote_kwargs: TODO
     """
 
     def __init__(
@@ -491,6 +512,7 @@ class RPCRunner(ProgramRunner):
         enable_cpu_cache_flush=False,
         device=0,
         module_loader=None,
+        remote_kwargs={},
     ):
         self.__init_handle_by_constructor__(
             _ffi_api.RPCRunner,
@@ -506,8 +528,11 @@ class RPCRunner(ProgramRunner):
             cooldown_interval,
             enable_cpu_cache_flush,
             device,
-            # module_loader,
         )
+        if module_loader is None:
+            module_loader = default_module_loader()
+        RunnerState.module_loader = module_loader
+        RunnerState.remote_kwargs = remote_kwargs
 
         if check_remote(key, host, port, priority, timeout):
             print("Get devices for measurement successfully!")
@@ -559,6 +584,8 @@ class LocalRPCMeasureContext:
         This is only has effect on CPU task.
     device: int = 0
         Which device to run on if multiple are available.
+    module_loader: TODO
+    remote_kwargs: TODO
     """
 
     def __init__(
@@ -574,6 +601,8 @@ class LocalRPCMeasureContext:
         cooldown_interval=0.0,
         enable_cpu_cache_flush=False,
         device=0,
+        module_loader=None,
+        remote_kwargs={},
     ):
         # pylint: disable=import-outside-toplevel
         from tvm.rpc.tracker import Tracker
@@ -601,6 +630,8 @@ class LocalRPCMeasureContext:
             cooldown_interval,
             enable_cpu_cache_flush,
             device,
+            module_loader,
+            remote_kwargs,
         )
         # Wait for the processes to start
         time.sleep(0.5)
@@ -1115,8 +1146,8 @@ def _rpc_run(
     enable_cpu_cache_flush,
     verbose,
     device,
-    module_loader=None,
-    remote_kwargs={},
+    module_loader,
+    remote_kwargs,
 ):
     print("_rpc_run")
     inp = MeasureInput.deserialize(inp_serialized)
@@ -1125,8 +1156,6 @@ def _rpc_run(
     error_msg = None
     try:
         # upload built module
-        if module_loader is None:
-            module_loader = default_module_loader()
         remote_kwargs["device_key"] = key
         remote_kwargs["host"] = host
         remote_kwargs["port"] = port
@@ -1137,7 +1166,6 @@ def _rpc_run(
         #     template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
         #     project_options={"verbose": False},
         # )
-        print("module_loader", module_loader)
         with module_loader(remote_kwargs, build_res) as (remote, func):
             print("A")
             dev = remote.device(str(inp.task.target), device)  # TODO(@PhilippvK): find out what device means
@@ -1188,9 +1216,9 @@ def _rpc_run(
                 func.entry_func(*loc_args)
                 dev.sync()
 
-                print("loc_args", loc_args)
+                # print("loc_args", loc_args)
                 costs = time_f(*loc_args).results
-                print("costs", costs)
+                # print("costs", costs)
 
                 # clean up remote files
                 print("> clean up remote files")
@@ -1286,8 +1314,6 @@ def rpc_runner_run(
     enable_cpu_cache_flush=False,
     verbose=1,
     device=0,
-    # module_loader=None,
-    # remote_kwargs={},
 ):
     """Run function of RPCRunner to test the performance of the input BuildResults.
 
@@ -1340,8 +1366,8 @@ def rpc_runner_run(
         Which device to run on if multiple are available.
 
         TODO:
-    remote_kwargs={},
     module_loader=None
+    remote_kwargs={},
 
     Returns
     -------
@@ -1349,13 +1375,10 @@ def rpc_runner_run(
         The measure results of these MeasureInputs.
     """
     assert len(inputs) == len(build_results), "Measure input size should be equal to build results"
-    import pathlib
-    module_loader = tvm.micro.AutoTvmModuleLoader(
-        # template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
-        template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("espidf")),
-        project_options={"idf_target": "esp32c3", "project_type": "host_driven"},
-    )
-    remote_kwargs={}
+    module_loader = RunnerState.module_loader
+    remote_kwargs = RunnerState.remote_kwargs
+    print("module_loader", module_loader)
+    print("remote_kwargs", remote_kwargs)
     # This pool is not doing computationally intensive work, so we can use threads
     executor = PopenPoolExecutor(n_parallel)
     tuple_res = executor.map_with_error_catching(
