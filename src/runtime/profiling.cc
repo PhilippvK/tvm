@@ -89,10 +89,10 @@ TVM_REGISTER_GLOBAL("profiling.timer.cpu").set_body_typed([](Device dev) {
 });
 
 Timer Timer::Start(Device dev) {
-  auto f = Registry::Get(std::string("profiling.timer.") + DeviceName(dev.device_type));
   std::cout << "Timer::Start" << std::endl;
   std::cout << "dev=" << dev << std::endl;
   std::cout << "dev.device_type=" << dev.device_type << std::endl;
+  auto f = Registry::Get(std::string("profiling.timer.") + DeviceName(dev.device_type % 128));
   if (f == nullptr) {
     Timer t = DefaultTimer(dev);
     t->Start();
