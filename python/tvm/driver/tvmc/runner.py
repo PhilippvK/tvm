@@ -217,10 +217,10 @@ def drive_run(args):
 
         # Check for options unavailable for micro targets.
 
-        if args.rpc_key or args.rpc_tracker:
-            raise TVMCException(
-                "--rpc-key and/or --rpc-tracker can't be specified for micro targets."
-            )
+        # if args.rpc_key or args.rpc_tracker:
+        #     raise TVMCException(
+        #         "--rpc-key and/or --rpc-tracker can't be specified for micro targets."
+        #     )
 
         if args.device != "micro":
             raise TVMCException(
@@ -581,6 +581,7 @@ def run_module(
                 if device == "micro":
                     logger.debug("Creating runtime (micro) with profiling disabled.")
                     print("sessionmicrorpc", session._rpc, type(session._rpc), dir(session._rpc))
+                    # module = tvm.micro.create_local_debug_executor(tvmc_package.graph, lib, dev)
                     module = tvm.micro.create_local_graph_executor(tvmc_package.graph, lib, dev)
                     print("sessionmicrorpc2", session._rpc, type(session._rpc), dir(session._rpc))
                 else:
@@ -611,7 +612,9 @@ def run_module(
                 # TODO(gromero): Fix time_evaluator() for micro targets. Once it's
                 # fixed module.benchmark() can be used instead and this if/else can
                 # be removed.
+                # module.run()
                 times = module.benchmark(dev, number=number, repeat=repeat, end_to_end=end_to_end)
+                # times = []
             else:
                 # Call the benchmarking function of the executor.
                 # Optionally measure e2e data transfers from the
