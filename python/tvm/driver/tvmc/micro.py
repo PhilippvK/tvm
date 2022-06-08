@@ -351,6 +351,9 @@ def add_micro_parser(subparsers, main_parser, json_params):
         new_parser = subcmd_parser.add_parser(
             "template", add_help=False, help="select an adhoc template."
         )
+        new_parser.add_argument(
+            "--template-dir", required=True, help="Project API template directory."
+        )
         new_parser.set_defaults(platform="template")
         parser_by_platform["template"] = new_parser
 
