@@ -176,7 +176,7 @@ class Handler(server.ProjectAPIHandler):
             to_return = 0
 
         if not to_return:
-            self.disconnect_transport()
+            self.close_transport()
             raise server.TransportClosedError()
 
         return to_return
@@ -197,7 +197,7 @@ class Handler(server.ProjectAPIHandler):
                 num_written = 0
 
             if not num_written:
-                self.disconnect_transport()
+                self.close_transport()
                 raise server.TransportClosedError()
 
             data = data[num_written:]

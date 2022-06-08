@@ -758,8 +758,8 @@ def write_with_timeout(fd, data, timeout_sec, dbg_fd=None):  # pylint: disable=i
         time.sleep(0.01)
 
         num_written_this_cycle = os.write(fd, data)
-        if dbg_fd:
-            os.write(dbg_fd, data)
+        # if dbg_fd:
+        #     os.write(dbg_fd, data)
         #print("WRITE OS")
 
         if not num_written_this_cycle:
