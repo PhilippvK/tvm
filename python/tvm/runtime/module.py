@@ -165,7 +165,7 @@ class Module(object):
         f : tvm.runtime.PackedFunc
             The result function.
         """
-        print("#get_function#", self, name, query_imports, self.handle.value)
+        # print("#get_function#", self, name, query_imports, self.handle.value)
         ret_handle = PackedFuncHandle()
         check_call(
             _LIB.TVMModGetFunction(
@@ -314,11 +314,11 @@ class Module(object):
             The function that takes same argument as func and returns a BenchmarkResult.
             The ProfileResult reports `repeat` time costs in seconds.
         """
-        import traceback
-        traceback.print_stack()
-        print("!time_evaluator!")
-        print("self", self, type(self), dir(self), self.type_key)
-        print(self, func_name, dev)
+        # import traceback
+        # traceback.print_stack()
+        # print("!time_evaluator!")
+        # print("self", self, type(self), dir(self), self.type_key)
+        # print(self, func_name, dev)
         try:
             feval = _ffi_api.RPCTimeEvaluator(
                 self,

@@ -89,9 +89,9 @@ TVM_REGISTER_GLOBAL("profiling.timer.cpu").set_body_typed([](Device dev) {
 });
 
 Timer Timer::Start(Device dev) {
-  std::cout << "Timer::Start" << std::endl;
-  std::cout << "dev=" << dev << std::endl;
-  std::cout << "dev.device_type=" << dev.device_type << std::endl;
+  // std::cout << "Timer::Start" << std::endl;
+  // std::cout << "dev=" << dev << std::endl;
+  // std::cout << "dev.device_type=" << dev.device_type << std::endl;
   auto f = Registry::Get(std::string("profiling.timer.") + DeviceName(dev.device_type % 128));
   if (f == nullptr) {
     Timer t = DefaultTimer(dev);
@@ -804,9 +804,9 @@ TVM_REGISTER_GLOBAL("runtime.profiling.ProfileFunction")
 PackedFunc WrapTimeEvaluator(PackedFunc pf, Device dev, int number, int repeat, int min_repeat_ms,
                              PackedFunc f_preproc) {
   ICHECK(pf != nullptr);
-  std::cout << "WrapTimeEvaluator" << std::endl;
-  std::cout << "dev.device_type" << static_cast<int>(dev.device_type) << std::endl;
-  std::cout << "kDLMicroDev" << static_cast<int>(kDLMicroDev) << std::endl;
+  // std::cout << "WrapTimeEvaluator" << std::endl;
+  // std::cout << "dev.device_type" << static_cast<int>(dev.device_type) << std::endl;
+  // std::cout << "kDLMicroDev" << static_cast<int>(kDLMicroDev) << std::endl;
 
   if (static_cast<int>(dev.device_type) == static_cast<int>(kDLMicroDev)) {
   // if (1) {

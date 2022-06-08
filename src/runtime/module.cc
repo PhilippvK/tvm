@@ -62,7 +62,7 @@ void ModuleNode::Import(Module other) {
 }
 
 PackedFunc ModuleNode::GetFunction(const std::string& name, bool query_imports) {
-  LOG(WARNING) << "ModuleNode::GetFunction";
+  // LOG(WARNING) << "ModuleNode::GetFunction";
   ModuleNode* self = this;
   PackedFunc pf = self->GetFunction(name, GetObjectPtr<Object>(this));
   if (pf != nullptr) return pf;

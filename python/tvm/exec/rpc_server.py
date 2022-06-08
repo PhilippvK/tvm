@@ -20,7 +20,7 @@ import argparse
 import logging
 from .. import rpc
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 def main(args):
     """Main function

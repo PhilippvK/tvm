@@ -140,7 +140,8 @@ class Transport(metaclass=abc.ABCMeta):
 class TransportLogger(Transport):
     """Wraps a Transport implementation and logs traffic to the Python logging infrastructure."""
 
-    def __init__(self, name, child, logger=None, level=logging.DEBUG):
+    def __init__(self, name, child, logger=None, level=logging.INFO):
+    # def __init__(self, name, child, logger=None, level=logging.DEBUG):
         self.name = name
         self.child = child
         self.logger = logger or _LOG
@@ -207,15 +208,15 @@ class TransportLogger(Transport):
         hex_lines = self._to_hex(data)
         #print("READ DATA", list(bytes(data)))
         if len(hex_lines) > 1:
-            print(
-                # self.level,
-                "%s: read {%s} %4d B -> [%3d B]:\n%s" % (
-                self.name,
-                timeout_str,
-                n,
-                len(data),
-                "\n".join(hex_lines))
-            )
+            # print(
+            #     # self.level,
+            #     "%s: read {%s} %4d B -> [%3d B]:\n%s" % (
+            #     self.name,
+            #     timeout_str,
+            #     n,
+            #     len(data),
+            #     "\n".join(hex_lines))
+            # )
             self.logger.log(
                 self.level,
                 "%s: read {%s} %4d B -> [%3d B]:\n%s",
@@ -226,15 +227,15 @@ class TransportLogger(Transport):
                 "\n".join(hex_lines),
             )
         else:
-            print(
-                # self.level,
-                "%s: read {%s} %4d B -> [%3d B]: %s" % (
-                self.name,
-                timeout_str,
-                n,
-                len(data),
-                hex_lines[0])
-            )
+            # print(
+            #     # self.level,
+            #     "%s: read {%s} %4d B -> [%3d B]: %s" % (
+            #     self.name,
+            #     timeout_str,
+            #     n,
+            #     len(data),
+            #     hex_lines[0])
+            # )
             self.logger.log(
                 self.level,
                 "%s: read {%s} %4d B -> [%3d B]: %s",
@@ -276,13 +277,13 @@ class TransportLogger(Transport):
         hex_lines = self._to_hex(data)
         #print("WRITE DATA", list(bytes(data)))
         if len(hex_lines) > 1:
-            print(
-                "%s: write {%s}        <- [%3d B]:\n%s" % (
-                self.name,
-                timeout_str,
-                len(data),
-                "\n".join(hex_lines))
-            )
+            # print(
+            #     "%s: write {%s}        <- [%3d B]:\n%s" % (
+            #     self.name,
+            #     timeout_str,
+            #     len(data),
+            #     "\n".join(hex_lines))
+            # )
             self.logger.log(
                 self.level,
                 "%s: write {%s}        <- [%3d B]:\n%s",
@@ -292,14 +293,14 @@ class TransportLogger(Transport):
                 "\n".join(hex_lines),
             )
         else:
-            print(
-                self.level,
-                "%s: write {%s}        <- [%3d B]: %s" % (
-                self.name,
-                timeout_str,
-                len(data),
-                hex_lines[0])
-            )
+            # print(
+            #     self.level,
+            #     "%s: write {%s}        <- [%3d B]: %s" % (
+            #     self.name,
+            #     timeout_str,
+            #     len(data),
+            #     hex_lines[0])
+            # )
             self.logger.log(
                 self.level,
                 "%s: write {%s}        <- [%3d B]: %s",

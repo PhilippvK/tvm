@@ -460,7 +460,7 @@ class ProjectAPIServer:
         """
         try:
             line = self._read_file.readline()
-            _LOG.debug("read request <- %s", line)
+            # _LOG.debug("read request <- %s", line)
             if not line:
                 return False
 
@@ -608,7 +608,7 @@ class ProjectAPIServer:
             reply_dict["result"] = result
 
         reply_str = json.dumps(reply_dict)
-        _LOG.debug("write reply -> %r", reply_dict)
+        # _LOG.debug("write reply -> %r", reply_dict)
         self._write_file.write(reply_str)
         self._write_file.write("\n")
 
