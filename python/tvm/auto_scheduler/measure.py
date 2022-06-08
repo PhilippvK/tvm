@@ -681,7 +681,6 @@ def _local_build_worker(inp_serialized, build_func, verbose, runtime, build_opti
 
         try:
             opts = build_option or {}
-            print("opts", opts)
             with transform.PassContext(config=opts):
                 func = build_module.build(sch, args, target=task.target, target_host=None, runtime=runtime)
                 # func = build_module.build(sch, args, target=task.target, target_host=task.target_host, runtime=runtime)
@@ -1002,9 +1001,9 @@ def _timed_eval_func(
 
     if verbose >= 1:
         if error_no == MeasureErrorNo.NO_ERROR:
-            print("!*!", end="", flush=True)
+            print("*", end="", flush=True)
         else:
-            print("!*E!", end="", flush=True)  # Run error
+            print("*E", end="", flush=True)  # Run error
     return costs, error_no, error_msg, toc - tic + build_res.time_cost, toc
 
 
@@ -1111,7 +1110,7 @@ def local_run(
                 )
             elif isinstance(res, Exception):
                 if verbose >= 1:
-                    print("@*E@", end="", flush=True)  # Run error
+                    print("*E", end="", flush=True)  # Run error
                 res = (
                     (MAX_FLOAT,),
                     MeasureErrorNo.RUNTIME_DEVICE,
@@ -1147,7 +1146,6 @@ def _rpc_run(
     module_loader,
     remote_kwargs,
 ):
-    print("_rpc_run")
     inp = MeasureInput.deserialize(inp_serialized)
     tic = time.time()
     error_no = 0
@@ -1165,7 +1163,6 @@ def _rpc_run(
         #     project_options={"verbose": False},
         # )
         with module_loader(remote_kwargs, build_res) as (remote, func):
-            print("A")
             dev = remote.device(str(inp.task.target), device)  # TODO(@PhilippvK): find out what device means
             # remote = request_remote(key, host, port, priority, timeout)
             # remote.upload(build_res.filename)
@@ -1176,7 +1173,6 @@ def _rpc_run(
             # the PackedFunc as an object. Currently, we pass function name to work
             # around it.
             f_prepare = "cache_flush_cpu_non_first_arg" if enable_cpu_cache_flush else ""
-            print("B")
             time_f = func.time_evaluator(
                 func.entry_name,
                 dev,
@@ -1185,7 +1181,6 @@ def _rpc_run(
                 min_repeat_ms=min_repeat_ms,
                 f_preproc=f_prepare,
             )
-            print("C")
 
             try:
                 stream = dev.create_raw_stream()
@@ -1214,9 +1209,7 @@ def _rpc_run(
                 func.entry_func(*loc_args)
                 dev.sync()
 
-                # print("loc_args", loc_args)
                 costs = time_f(*loc_args).results
-                # print("costs", costs)
 
                 # clean up remote files
                 print("> clean up remote files")
@@ -1242,9 +1235,9 @@ def _rpc_run(
     time.sleep(cooldown_interval)
     if verbose >= 1:
         if error_no == MeasureErrorNo.NO_ERROR:
-            print("#*#", end="")
+            print("*", end="")
         else:
-            print("#*E#", end="")  # Run error
+            print("*E", end="")  # Run error
             print("error_msg", error_msg)
 
     return costs, error_no, error_msg, toc - tic + build_res.time_cost, toc
@@ -1264,7 +1257,6 @@ def _rpc_run_worker(args):
     res : MeasureResult
         The measure result of this Runner thread.
     """
-    print("_rpc_run_worker")
     _, build_res, _, _, _, _, _, timeout, _, _, _, _, _, verbose, _, _, _ = args
     if build_res.error_no != MeasureErrorNo.NO_ERROR:
         return (
@@ -1279,9 +1271,9 @@ def _rpc_run_worker(args):
         res = _rpc_run(*args)
     # pylint: disable=broad-except
     except Exception as ex:
-        print("Exception")
+        # print("Exception")
         if verbose >= 1:
-            print("[*E]", end="")  # Run error
+            print("*E", end="")  # Run error
         res = (
             (MAX_FLOAT,),
             MeasureErrorNo.RUNTIME_DEVICE,
@@ -1375,8 +1367,6 @@ def rpc_runner_run(
     assert len(inputs) == len(build_results), "Measure input size should be equal to build results"
     module_loader = RunnerState.module_loader
     remote_kwargs = RunnerState.remote_kwargs
-    print("module_loader", module_loader)
-    print("remote_kwargs", remote_kwargs)
     # This pool is not doing computationally intensive work, so we can use threads
     executor = PopenPoolExecutor(n_parallel)
     tuple_res = executor.map_with_error_catching(
