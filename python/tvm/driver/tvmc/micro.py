@@ -374,6 +374,7 @@ def add_micro_parser(subparsers, main_parser, json_params):
 
     # Augment parser with project options.
 
+    print("known_args", known_args)
     if platform == "template":
         # adhoc template
         template_dir = str(Path(known_args.template_dir).resolve())
@@ -606,7 +607,7 @@ def tune_handler(args):
         repeat=args.repeat,
         number=args.number,
         # parallel=args.parallel,
-        parallel=1,
+        parallel=5,
         hardware_params=hardware_params,
         include_simple_tasks=False,
         log_estimated_latency=False,

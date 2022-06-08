@@ -322,7 +322,7 @@ def tune_model(
     module_loader = None,  # TODO
     build_func = "default",  # TODO
     runtime = None,  # TODO
-    build_kwargs : dict = None,  # TODO
+    build_kwargs : dict = None,
     si_prefix : str = "G",
 ):
     """Use tuning to automatically optimize the functions in a model.
@@ -481,15 +481,17 @@ def tune_model(
             include_simple_tasks=include_simple_tasks,
         )
 
+        if build_kwargs is None:
+            build_kwargs = {}
         builder = auto_scheduler.LocalBuilder(
             # timeout = 1000
             # n_parallel=1,
             # build_kwargs=build_kwargs or {},
-            build_option=build_kwargs["build_option"],
             # do_fork=True,
             # do_fork=False,
             build_func=build_func,
             runtime=runtime,
+            **build_kwargs,
         )
 
         # Create the autoscheduler tuning options
@@ -521,10 +523,10 @@ def tune_model(
 
         # print("!!runtime!!", runtime)
         builder = autotvm.LocalBuilder(
-            n_parallel=1,
+            n_parallel=5,
             build_kwargs=build_kwargs or {},
-            # do_fork=True,
-            do_fork=False,
+            do_fork=True,
+            # do_fork=False,
             build_func=build_func,
             runtime=runtime,
         )
