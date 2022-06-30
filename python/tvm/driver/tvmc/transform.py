@@ -29,20 +29,25 @@ def convert_graph_layout(mod, desired_layout):
     mod : tvm.IRModule
         The relay module to convert.
     desired_layout : str
-        The layout to convert to.
+        The layout to convert to. Either only data layour or data and kernel (colon-separated).
 
     Returns
     -------
     mod : tvm.IRModule
         The converted module.
     """
+    if ":" in desired_layout:
+        data_layout, kernel_layout = desired_layout.split(":")[:2]
+    else:
+        data_layout = desired_layout
+        kernel_layout = "default"
 
     # Assume for the time being that graphs only have
     # conv2d as heavily-sensitive operators.
     desired_layouts = {
-        "nn.conv2d": [desired_layout, "default"],
-        "nn.conv2d_transpose": [desired_layout, "default"],
-        "qnn.conv2d": [desired_layout, "default"],
+        "nn.conv2d": [data_layout, kernel_layout],
+        "nn.conv2d_transpose": [data_layout, kernel_layout],
+        "qnn.conv2d": [data_layout, kernel_layout],
     }
 
     # Convert the layout of the graph where possible.
