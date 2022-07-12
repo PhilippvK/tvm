@@ -405,7 +405,9 @@ def is_fast_int8_on_intel():
 def is_fast_int8_on_arm():
     """Checks whether the hardware has support for fast Int8 arithmetic operations."""
     target = tvm.target.Target.current(allow_none=False)
-    return "+v8.2a" in target.mattr and "+dotprod" in target.mattr
+    # return False
+    return True
+    # return "+v8.2a" in target.mattr and "+dotprod" in target.mattr
 
 
 def is_aarch64_arm():
@@ -429,7 +431,9 @@ def _qnn_conv2d_legalize_arm_cpu(attrs, inputs, types):
         attrs["kernel_layout"],
         attrs["groups"],
     )
-    use_int8_on_arm = (not is_depthwise) and is_aarch64_arm() and attrs["data_layout"] == "NHWC"
+    # use_int8_on_arm = (not is_depthwise) and is_aarch64_arm() and attrs["data_layout"] == "NHWC"
+    # use_int8_on_arm = (not is_depthwise) and True and attrs["data_layout"] == "NHWC"
+    use_int8_on_arm = False
     if use_int8_on_arm or is_fast_int8_on_arm():
         return helper_change_dtypes_to_be_same(attrs, inputs, types, relay.qnn.op.conv2d)
     return helper_no_fast_int8_hw_legalization(attrs, inputs, types, relay.nn.conv2d)
