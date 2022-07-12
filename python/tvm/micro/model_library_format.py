@@ -444,7 +444,8 @@ def _export_graph_model_library_format(
             f.write(param_dict.save_param_dict(mod.params))
 
         with open(src_dir / f"{mod.libmod_name}.relay", "w") as f:
-            f.write(str(mod.ir_mod))
+            # f.write(str(mod.ir_mod))
+            f.write(mod.ir_mod.astext())
 
         if not is_aot:
             if not graph_config_dir.exists():
