@@ -207,7 +207,8 @@ __STATIC_FORCEINLINE int32_t gemm_{M}x{K}x{N}_body_{uniq_id}(
   int16_t bb_pad[{bb_pad_size}];
   int32_t retcode = 0;
 
-  if ( {M} < 16 || {N} < 16 ) {{
+  // if ( {M} < 16 || {N} < 16 ) {{
+  if (0) {{
     retcode = gemm_{M}x{K}x{N}_body_loop_{uniq_id}(aa, bb, cc, A_stride, B_stride, C_stride);
     goto out;
   }}
@@ -313,7 +314,8 @@ __STATIC_FORCEINLINE int32_t gemm_{M}x{K}x{N}_update_{uniq_id}(
   int16_t bb_pad[{bb_pad_size}];
   int32_t retcode = 0;
 
-  if ( {M} < 16 || {N} < 16 ) {{
+  // if ( {M} < 16 || {N} < 16 ) {{
+  if (0) {{
     retcode = gemm_{M}x{K}x{N}_update_loop_{uniq_id}(aa, bb, cc, A_stride, B_stride, C_stride);
     goto out;
   }}
@@ -393,7 +395,8 @@ __STATIC_FORCEINLINE int32_t gemm16_{M}x{K}x{N}_body_{uniq_id}(
     int A_stride, int B_stride, int C_stride) {{
   int32_t retcode = 0;
 
-  if ( {M} < 2 || {N} < 2 ) {{
+  // if ( {M} < 2 || {N} < 2 ) {{
+  if (0) {{
     retcode = gemm16_{M}x{K}x{N}_body_loop_{uniq_id}(aa, bb, cc, A_stride, B_stride, C_stride);
     goto out;
   }}
@@ -471,7 +474,8 @@ __STATIC_FORCEINLINE int32_t gemm16_{M}x{K}x{N}_update_{uniq_id}(
     int A_stride, int B_stride, int C_stride) {{
   int32_t retcode = 0;
 
-  if ( {M} < 2 || {N} < 2 ) {{
+  // if ( {M} < 2 || {N} < 2 ) {{
+  if (0) {{
     retcode = gemm16_{M}x{K}x{N}_update_loop_{uniq_id}(aa, bb, cc, A_stride, B_stride, C_stride);
     goto out;
   }}
