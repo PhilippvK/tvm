@@ -17,6 +17,7 @@
 # pylint: disable=invalid-name, unused-variable, no-else-return, unused-argument, import-outside-toplevel
 """Dense schedule for ARM CPU"""
 
+from tvm import autotvm
 from .mprofile.dsp.dense import dense_dsp_schedule
 
 
