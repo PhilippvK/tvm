@@ -202,6 +202,11 @@ class Target(Object):
         return list(self.attrs.get("mattr", []))
 
     @property
+    def march(self):
+        """Returns the march from the target if it exists."""
+        return list(self.attrs.get("march", []))
+
+    @property
     def supports_integer_dot_product(self):
         if self.attrs.get("supports_integer_dot_product", []):
             return bool(self.attrs["supports_integer_dot_product"])
