@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=invalid-name, no-value-for-parameter
-"""Defines gemm intrinsics for matrix multiplication with v7e-m DSP instructions."""
+"""Defines gemm intrinsics for matrix multiplication with RISC-V P-Extension instructions."""
 
 import random
 import string
@@ -31,9 +31,7 @@ from . import common
 
 # NOTE this is transposed matmul (A * B^T)
 def intrin_gemm_MxKxN(M, K, N, in_dtype, out_dtype, stride_w=1):
-    """Defines a v7e-m DSP-accelerated transposed matmul."""
-    print(f"!intrin_gemm_{M}x{K}x{N}!")
-    print("in_dtype =", in_dtype, "out_dtype =", out_dtype, "stride_w =", stride_w)
+    """Defines a RISC-V P-Extension accelerated transposed matmul."""
     # we generate a unique ID for every intrinsic definition, to prevent name
     # collisions in the generated source (e.g., if there are multiple operators
     # in the same module that use the same intrinsic)
@@ -127,7 +125,6 @@ def intrin_gemm_MxKxN(M, K, N, in_dtype, out_dtype, stride_w=1):
 
 def gemm_MxKxN_impl(M, K, N, uniq_id):
     """Emit C code for gemm impl."""
-    print(f"!gemm_{M}x{K}x{N}_impl!")
     # TODO(weberlo, areusch): are there any SIMD tricks to zero out arrays quickly?
     # aa_pad_size = M * K
     bb_pad_size = N * K

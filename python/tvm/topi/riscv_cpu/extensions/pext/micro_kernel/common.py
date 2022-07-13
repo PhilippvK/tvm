@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=invalid-name, no-value-for-parameter
-"""Defines common C code for all microkernel operations."""
+"""Defines common C code for all p-extension microkernel operations."""
 
 
 common_includes = """

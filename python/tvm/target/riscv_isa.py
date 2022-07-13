@@ -14,20 +14,19 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+"""Defines functions to analyze available opcodes in the RISC-V ISA."""
 
-# pylint: disable=wildcard-import
-"""Relay op strategies."""
-from __future__ import absolute_import as _abs
+import tvm.target
 
-from .generic import *
-from . import x86
-from . import arm_cpu
-from . import cuda
-from . import hls
-from . import mali
-from . import bifrost
-from . import rocm
-from . import intel_graphics
-from . import hexagon
-from . import adreno
-from . import riscv_cpu
+
+class IsaAnalyzer(object):
+    """Checks ISA support for given target"""
+
+    def __init__(self, target):
+        self.target = tvm.target.Target(target)
+
+    @property
+    def has_pext(self):
+        return (self.target.mattr is not None and "+p" in self.target.mattr) or (
+            self.target.march is not None and "p" in self.target.march[4:]
+        )

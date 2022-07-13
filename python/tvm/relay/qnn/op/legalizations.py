@@ -413,6 +413,12 @@ def is_fast_int8_on_arm():
     # return "+v8.2a" in target.mattr and "+dotprod" in target.mattr
 
 
+def is_fast_int8_on_riscv():
+    """Checks whether the hardware has support for fast Int8 arithmetic operations."""
+    target = tvm.target.Target.current(allow_none=False)
+    return "+p" in target.mattr or "p" in target.march[4:]
+
+
 def is_aarch64_arm():
     """Checks whether we are compiling for an AArch64 target."""
     target = tvm.target.Target.current(allow_none=False)
@@ -501,3 +507,31 @@ def _qnn_dense_legalize_cuda(attrs, inputs, types):
         # CUDA prefers both datatypes to be the int8.
         return helper_change_dtypes_to_int8(attrs, inputs, types, relay.qnn.op.dense)
     return None
+
+###########################
+# RISC_V CPU legalizations.
+###########################
+
+
+@qnn_conv2d_legalize.register("riscv_cpu")
+def _qnn_conv2d_legalize_riscv_cpu(attrs, inputs, types):
+    # is_depthwise = relay.op.strategy.is_depthwise_conv2d(
+    #     types[0].shape,
+    #     attrs["data_layout"],
+    #     types[1].shape,
+    #     attrs["kernel_layout"],
+    #     attrs["groups"],
+    # )
+    # TODO: depthwise relevant?
+    if is_fast_int8_on_riscv():
+        return helper_change_dtypes_to_be_same(attrs, inputs, types, relay.qnn.op.conv2d)
+    # TODO: find out if this helps on RISC-V
+    return helper_no_fast_int8_hw_legalization(attrs, inputs, types, relay.nn.conv2d)
+
+
+@qnn_dense_legalize.register("riscv_cpu")
+def _qnn_dense_legalize_riscv_cpu(attrs, inputs, types):
+    if is_fast_int8_on_riscv():
+        return helper_change_dtypes_to_be_same(attrs, inputs, types, relay.qnn.op.dense)
+    # TODO: find out if this helps on RISC-V
+    return helper_no_fast_int8_hw_legalization(attrs, inputs, types, relay.nn.dense)

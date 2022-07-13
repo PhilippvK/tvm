@@ -18,9 +18,9 @@
 """Dense schedule for ARM CPU"""
 
 from tvm import autotvm
-from .mprofile.dsp.dense import dense_dsp_schedule
+from .extensions.pext.dense import dense_pext_schedule
 
 
-def schedule_dense_dsp(outs):
-    """Create schedule for dense_dsp"""
-    return dense_dsp_schedule(outs)
+def schedule_dense_pext(outs):
+    """Create schedule for dense_pext"""
+    return dense_pext_schedule(outs)

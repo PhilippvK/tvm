@@ -14,24 +14,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-# pylint: disable=invalid-name, unused-variable, no-else-return, unused-argument, import-outside-toplevel
-"""Conv1D schedule for ARM CPU"""
-from __future__ import absolute_import as _abs
+# pylint: disable=invalid-name,unused-variable,unused-argument,no-member
+"""RISC-V target utility functions"""
 
-from tvm import autotvm
-
-from .mprofile.dsp.conv1d import (
-    conv1d_nwc_dsp_compute,
-    conv1d_nwc_dsp_schedule,
-)
+import re
+import tvm
 
 
-@autotvm.register_topi_compute("conv1d_nwc_dsp.arm_cpu")
-def conv1d_nwc_dsp(cfg, data, kernel, strides, padding, dilation, out_dtype):
-    """Compute conv1d with v7e-m DSP instructions."""
-    return conv1d_nwc_dsp_compute(cfg, data, kernel, strides, padding, dilation, out_dtype)
-
-
-@autotvm.register_topi_schedule("conv1d_nwc_dsp.arm_cpu")
-def schedule_conv1d_nwc_dsp(cfg, outs):
-    return conv1d_nwc_dsp_schedule(cfg, outs)
+def is_riscv64():
+    """Checks whether we are compiling for an riscv64 target."""
+    target = tvm.target.Target.current(allow_none=False)
+    return "riscv64" in target.attrs.get("mtriple", "")  # or +64bit in mattr?

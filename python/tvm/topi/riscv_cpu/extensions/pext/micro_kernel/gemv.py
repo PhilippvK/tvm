@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=invalid-name, no-value-for-parameter
-"""Defines gemv intrinsics for matrix multiplication with v7e-m DSP instructions."""
+"""Defines gemv intrinsics for matrix multiplication with RISC-V P-Extension instructions."""
 
 import random
 import string
@@ -31,9 +31,7 @@ from . import common
 
 # NOTE this is transposed matvecmul (A * b)
 def intrin_gemv_MxN(M, N, in_dtype, out_dtype, stride_w=1):
-    """Defines a v7e-m DSP-accelerated matvecmul."""
-    print(f"!intrin_gemv_{M}x{N}!")
-    print("in_dtype =", in_dtype, "out_dtype =", out_dtype, "stride_w =", stride_w)
+    """Defines a RISC-V P-Extension accelerated matvecmul."""
     # we generate a unique ID for every intrinsic definition, to prevent name
     # collisions in the generated source (e.g., if there are multiple operators
     # in the same module that use the same intrinsic)
@@ -125,7 +123,6 @@ def intrin_gemv_MxN(M, N, in_dtype, out_dtype, stride_w=1):
 
 def gemv_MxN_impl(M, N, uniq_id):
     """Emit C code for gemv impl."""
-    print(f"!gemv_{M}x{N}_impl!")
     # TODO(weberlo, areusch): are there any SIMD tricks to zero out arrays quickly?
     bb_pad_size = N * M  # ?
     # code reference: CMSIS-NN paper (https://arxiv.org/abs/1801.06601)

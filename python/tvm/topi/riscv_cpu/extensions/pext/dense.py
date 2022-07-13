@@ -27,6 +27,7 @@ from .micro_kernel.gemm import (
     gemm_MxKxN_impl,
 )
 
+# Warning: broken, untested
 from .micro_kernel.gemv import (
     intrin_gemv_MxN,
     gemv_MxN_impl,
@@ -38,8 +39,8 @@ from .micro_kernel.dotp import (
 )
 
 
-def dense_dsp_schedule(outs):
-    """Schedule function for v7e-m DSP instructions of dense."""
+def dense_pext_schedule(outs):
+    """Schedule function for RISC-V P-Extension instructions of dense."""
     sched = te.create_schedule([x.op for x in outs])
     cfg = autotvm.get_config()
 
