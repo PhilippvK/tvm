@@ -69,7 +69,7 @@ def schedule_pool_riscv_cpu(attrs, outs, target):
             and isa.has_pext
             and layout in ("NWC", "NHWC")
         ):
-            return topi.riscv_cpu.schedule_pool(outs, layout)
+            return topi.riscv_cpu.schedule_pool_pext(outs, layout)
         logger.warning("pool is not optimized for riscv cpu.")
         return topi.generic.schedule_pool(outs, layout)
 
