@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=invalid-name, no-value-for-parameter
-"""Defines sum intrinsics for sum operation with v7e-m DSP instructions."""
+"""Defines max intrinsics for elemwise max operation with RISC-V P-Extension instructions."""
 
 import random
 import string
@@ -25,27 +25,18 @@ from tvm import te
 from . import common
 
 
-def intrin_sum(shape, in_dtype, out_dtype, reset=False):
-    """Defines a v7e-m DSP-accelerated sum operation."""
+def intrin_max(shape, in_dtype, out_dtype):
+    """Defines a RISC-V P-Extension accelerated max pool."""
     UNIQ_ID_LEN = 8
     uniq_id = "".join(random.choices(string.ascii_uppercase, k=UNIQ_ID_LEN))
-    func_prefix = "sum16"
+    func_prefix = "max8"
 
-    assert in_dtype == "int16"
-    assert out_dtype == "int16"
+    assert in_dtype == "int8"
+    assert out_dtype == "int8"
 
-    width = shape[-1]
     x = te.placeholder(shape, name="x", dtype=in_dtype)
-    k = te.reduce_axis((0, width), name="rc")
-
-    def get_slice(indices, k):
-        s = list(indices)
-        s[-1] = s[-1] + k
-        return tuple(s)
-
-    z = te.compute(
-        (1,) * len(shape), lambda *i: te.sum(x[get_slice(i, k)], axis=[k]).astype(out_dtype)
-    )
+    k = te.reduce_axis((0, 1), name="rc")
+    z = te.compute(shape, lambda *i: tvm.tir.max(x[i], axis=[k]).astype(out_dtype))
 
     def _intrin_func(ins, outs):
         aa = ins[0]
@@ -56,11 +47,10 @@ def intrin_sum(shape, in_dtype, out_dtype, reset=False):
             ib.emit(
                 tvm.tir.call_extern(
                     cc.dtype,
-                    f"{func_prefix}_{width}_{uniq_id}",
+                    f"{func_prefix}_{uniq_id}",
                     aa.access_ptr("r"),
                     cc.access_ptr("w"),
-                    aa.elem_offset,
-                    1 if reset else 0,
+                    cc.strides[0],
                 )
             )
             return ib.get()
@@ -68,7 +58,9 @@ def intrin_sum(shape, in_dtype, out_dtype, reset=False):
         def _reduce_reset():
             ib = tvm.tir.ir_builder.create()
             ib.emit(
-                tvm.tir.call_extern(cc.dtype, f"{func_prefix}_reset_{uniq_id}", cc.access_ptr("w"))
+                tvm.tir.call_extern(
+                    cc.dtype, f"{func_prefix}_reset_{uniq_id}", cc.access_ptr("w"), cc.strides[0]
+                )
             )
             return ib.get()
 
@@ -92,53 +84,79 @@ def intrin_sum(shape, in_dtype, out_dtype, reset=False):
     return intrin_decl, uniq_id
 
 
-def sum_impl(N, uniq_id):
-    """Emit C code for sum impl."""
+def max_impl(uniq_id):
+    """Emit C code for pool impl."""
     cc_code = (
         common.common_includes
         + f"""
 
+
 #ifdef __cplusplus
 extern "C"
-#endif // __cplusplus
-__STATIC_FORCEINLINE int32_t sum16_reset_{uniq_id}(
-    int16_t *res) {{
-  *res = (int16_t)0;
+#endif
+__STATIC_FORCEINLINE int32_t max8_reset_{uniq_id}(
+    int8_t *res,
+    int N) {{
+  memset(res, (int8_t)-128, N * sizeof(*res));
   return 0;
 }}
 
 #ifdef __cplusplus
 extern "C"
 #endif
-__STATIC_FORCEINLINE int32_t sum16_{N}_{uniq_id}(
-    int16_t *arr,
-    int16_t *res16,
-    long arr_offset,
-    int reset) {{
-  int n;
-  int32_t *p32;
-  int32_t res = reset ? 0 : *res16;
-
-  if ( arr_offset % 4 != 0 ) {{
-    res += *arr;
-    p32 = (int32_t *)(&arr[1]);
-    n = {N} - 1;
-  }} else {{
-    p32 = (int32_t *)arr;
-    n = {N};
-  }}
-
-  for ( int i = 0; i < n / 2; ++ i ) {{
-    res = __SMLAD(*p32, 0x00010001, res);
-    ++ p32;
-  }}
-
-  if ( n % 2 != 0 )
-    res += *(int16_t *)p32;
-
-  *res16 = res;
-
+__STATIC_FORCEINLINE int32_t max8_loop_{uniq_id}(
+    int8_t *arg,
+    int8_t *res,
+    int N) {{
+  for ( int i = 0; i < N; ++ i )
+    if ( arg[i] > res[i] )
+      res[i] = arg[i];
   return 0;
+}}
+
+#ifdef __cplusplus
+extern "C"
+#endif
+__STATIC_FORCEINLINE int32_t max8_{uniq_id}(
+    int8_t *arg,
+    int8_t *res,
+    int N) {{
+  int32_t *parg32, *pres32;
+  int una_arg = (int32_t)arg & 0x3, una_res = (int32_t)res & 0x3;
+  int32_t retcode = 0;
+
+  if ( N < 4 || ((una_arg || una_res) && una_arg != una_res) ) {{
+    retcode = max8_loop_{uniq_id}(arg, res, N);
+    goto out;
+  }}
+  if ( una_arg ) {{
+    int n = (4 - una_arg);
+    if ( n > N || (N - n) < 4 )
+      n = N;
+    retcode = max8_loop_{uniq_id}(arg, res, n);
+    N -= n;
+    if ( N == 0 )
+      goto out;
+    arg += n; res += n;
+  }}
+
+  parg32 = (int32_t *)arg;
+  pres32 = (int32_t *)res;
+
+  for ( int i = 0; i < N / 4; ++ i ) {{
+    int32_t arg32 = *parg32 ++;
+    int32_t res32 = *pres32;
+    res32 = __rv_smax8(arg32, res32);
+    *pres32 ++ = res32;
+  }}
+
+  if ( N & 0x3 ) {{
+    retcode = max8_loop_{uniq_id}((int8_t *)parg32, (int8_t *)pres32, N & 0x3);
+    goto out;
+  }}
+
+out:
+  return retcode;
 }}
 
 """
