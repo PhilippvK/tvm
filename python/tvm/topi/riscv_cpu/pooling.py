@@ -20,6 +20,6 @@
 from .extensions.pext.pool import pool_pext_schedule
 
 
-def schedule_pool(outs, layout):
+def schedule_pool_pext(outs, layout):
     """Create schedule for avgpool/maxpool with p extension"""
-    return pool_dsp_schedule(outs, layout)
+    return pool_pext_schedule(outs, layout)
