@@ -593,7 +593,7 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=sifive-e31",
             "-mtriple=riscv32-unknown-linux-gnu",
             "-mcpu=sifive-e31",
-            "-march=rv32imac",
+            "-march=rv32imac",  # ignored by llvm?
             "-mabi=ilp32",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv32imac -mabi=ilp32 -mcpu=sifive-e31
         ],
@@ -601,7 +601,7 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=sifive-e76",
             "-mtriple=riscv32-unknown-linux-gnu",
             "-mcpu=sifive-e76",
-            "-march=rv32imafc",
+            "-march=rv32imafc",  # ignored by llvm?
             "-mabi=ilp32",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv32imafc -mabi=ilp32 -mcpu=sifive-e76
         ],
@@ -609,7 +609,7 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=sifive-u54",
             "-mtriple=riscv64-unknown-linux-gnu",
             "-mcpu=sifive-u54",
-            "-march=rv64gc",
+            "-march=rv64gc",  # ignored by llvm?
             "-mabi=lp64d",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv64gc -mabi=lp64d -mcpu=sifive-u54
         ],
@@ -617,7 +617,7 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=sifive-u74",
             "-mtriple=riscv64-unknown-linux-gnu",
             "-mcpu=sifive-u74",
-            "-march=rv64gc",
+            "-march=rv64gc",  # ignored by llvm?
             "-mabi=lp64d",
             # cc: riscv64-unknown-linux-gnu-g++ -march=rv64gc -mabi=lp64d -mcpu=sifive-u74
         ],
@@ -626,23 +626,34 @@ def riscv_cpu(model="sifive-u54", options=None):
             "-model=xuantie-c906",
             "-mtriple=riscv64-unknown-linux-gnu",
             "-mcpu=xuantie-c906",
-            "-march=rv64gcvxthead",
+            "-march=rv64gcvxthead",  # ignored by llvm?
             "-mabi=lp64d"
             # cc: ?
             # -mtune=c906 -mcmodel=?, rename to riscv_c906/xuantie c906?, also: C910,E906,E902
-        ]
+        ],
         "spike-rv32": [  # rename to generic_rv32?
             "-model=spike-rv32",
+            "-mcpu=generic-rv32",
             "-mtriple=riscv64-unknown-elf",
-            "-march=rv32gc",  # rv32gcv/rv32gcp
-            "-mabi=ilp32d"
+            "-march=rv32gc",  # rv32gcv/rv32gcp  # ignored by llvm?
+            "-mabi=ilp32d",
+            "-mattr=+a,+c,+d,+f,+m,",  # Required? +v? +p?
             # cc: ?
-        ]
+        ],
         "spike-rv64": [  # rename to generic_rv32?
-            "-model=spike-rv32",
+            "-model=spike-rv64",
+            "-mcpu=generic-rv64",
             "-mtriple=riscv64-unknown-elf",
-            "-march=rv64gc",  # rv64gcv/rv64gcp
+            "-march=rv64gc",  # rv64gcv/rv64gcp  # ignored by llvm?
             "-mabi=lp64d"
+            # cc: ?
+        ],
+        "esp32c3": [
+            "-model=esp32c3",
+            "-mcpu=esp32c3",
+            "-mtriple=riscv32-esp-elf",
+            "-march=rv32imafc",  # ignored by llvm?
+            "-mabi=ilp32f"
             # cc: ?
         ]
         # "cv32e40p": ["?"],
