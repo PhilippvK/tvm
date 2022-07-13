@@ -17,9 +17,9 @@
 # pylint: disable=invalid-name, unused-variable
 """Schedule for pooling operators"""
 
-from .mprofile.dsp.pool import pool_dsp_schedule
+from .extensions.pext.pool import pool_pext_schedule
 
 
 def schedule_pool(outs, layout):
-    """Create schedule for avgpool/maxpool with dsp"""
+    """Create schedule for avgpool/maxpool with p extension"""
     return pool_dsp_schedule(outs, layout)
