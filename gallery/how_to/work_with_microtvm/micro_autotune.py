@@ -133,7 +133,8 @@ assert len(tasks) > 0
 #
 
 module_loader = tvm.micro.AutoTvmModuleLoader(
-    template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
+    # template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
+    template_project_dir=pathlib.Path("/tmp/vankempen/tvm/apps/microtvm/spike/"),
     project_options={"verbose": False},
 )
 builder = tvm.autotvm.LocalBuilder(

@@ -24,6 +24,8 @@
  * \brief implement graph executor in pure C
  */
 
+#include <inttypes.h>
+
 #include <tvm/runtime/c_runtime_api.h>
 #include <tvm/runtime/crt/internal/graph_executor/graph_executor.h>
 #include <tvm/runtime/crt/logging.h>
@@ -836,7 +838,7 @@ int TVMGraphExecutor_LoadParams(TVMGraphExecutor* executor, const char* param_bl
              names + TVM_CRT_MAX_STRLEN_PARAM_NAME * idx);
     uint32_t eid = TVMGraphExecutor_GetEntryId(executor, executor->input_nodes[in_idx], 0);
     if (!(eid < executor->data_entry_count)) {
-      fprintf(stderr, "`entry_id`=%d is greater than expected(%d).\n", eid,
+      fprintf(stderr, "`entry_id`="PRIu32" is greater than expected("PRIu32").\n", eid,
               executor->data_entry_count);
       status = -1;
     }
@@ -1085,7 +1087,7 @@ int TVMGraphExecutor_SetupOpExecs(TVMGraphExecutor* executor) {
         break;
       }
       if (args_count >= TVM_CRT_MAX_ARGS) {
-        fprintf(stderr, "too many arguments: expected less than %d args, but got %d.\n",
+        fprintf(stderr, "too many arguments: expected less than %d args, but got "PRIu32".\n",
                 TVM_CRT_MAX_ARGS, args_count);
         status = -1;
         break;
