@@ -63,6 +63,15 @@ def schedule_pool_riscv_cpu(attrs, outs, target):
     with target:
         if (
             avg_pool
+            and isa.has_vext
+            and layout in ("NCW", "NCHW")
+            or not avg_pool
+            and isa.has_vext
+            and layout in ("NWC", "NHWC")
+        ):
+            return topi.riscv_cpu.schedule_pool_vext(outs, layout)
+        elif (
+            avg_pool
             and isa.has_pext
             and layout in ("NCW", "NCHW")
             or not avg_pool
@@ -142,7 +151,13 @@ def conv2d_strategy_rsicv_cpu(attrs, inputs, out_type, target):
             #     name="conv2d_hwcn.generic",
             # )
         elif layout == "NHWC":
-            if isa.has_pext and kernel_layout == "HWOI":
+            if isa.has_vext and kernel_layout == "HWOI":
+                strategy.add_implementation(
+                    wrap_compute_conv2d(topi.riscv_cpu.conv2d_nhwc_vext),
+                    wrap_topi_schedule(topi.riscv_cpu.schedule_conv2d_nhwc_vext),
+                    name="conv2d_nhwc_vext.riscv_cpu",
+                )
+            elif isa.has_pext and kernel_layout == "HWOI":
                 strategy.add_implementation(
                     wrap_compute_conv2d(topi.riscv_cpu.conv2d_nhwc_pext),
                     wrap_topi_schedule(topi.riscv_cpu.schedule_conv2d_nhwc_pext),
@@ -356,7 +371,13 @@ def schedule_dense_riscv_cpu(attrs, inputs, out_type, target):
     """dense riscv cpu strategy"""
     strategy = _op.OpStrategy()
     isa = riscv_isa.IsaAnalyzer(target)
-    if isa.has_pext:
+    if isa.has_vext:
+        strategy.add_implementation(
+            wrap_compute_dense(topi.nn.dense),
+            wrap_topi_schedule(topi.riscv_cpu.schedule_dense_vext),
+            name="dense_vext",
+        )
+    elif isa.has_pext:
         strategy.add_implementation(
             wrap_compute_dense(topi.nn.dense),
             wrap_topi_schedule(topi.riscv_cpu.schedule_dense_pext),
