@@ -19,8 +19,14 @@
 
 from tvm import autotvm
 from .extensions.pext.dense import dense_pext_schedule
+from .extensions.vext.dense import dense_vext_schedule
 
 
 def schedule_dense_pext(outs):
     """Create schedule for dense_pext"""
     return dense_pext_schedule(outs)
+
+
+def schedule_dense_vext(outs):
+    """Create schedule for dense_vext"""
+    return dense_vext_schedule(outs)

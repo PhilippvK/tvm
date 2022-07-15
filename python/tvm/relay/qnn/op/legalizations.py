@@ -416,7 +416,7 @@ def is_fast_int8_on_arm():
 def is_fast_int8_on_riscv():
     """Checks whether the hardware has support for fast Int8 arithmetic operations."""
     target = tvm.target.Target.current(allow_none=False)
-    return "+p" in target.mattr or "p" in target.march[4:]
+    return "+p" in target.mattr or "p" in target.march[4:] or "+v" in target.mattr or "v" in target.march[4:]
 
 
 def is_aarch64_arm():

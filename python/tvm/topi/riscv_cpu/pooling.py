@@ -18,8 +18,13 @@
 """Schedule for pooling operators"""
 
 from .extensions.pext.pool import pool_pext_schedule
+from .extensions.vext.pool import pool_vext_schedule
 
 
 def schedule_pool_pext(outs, layout):
     """Create schedule for avgpool/maxpool with p extension"""
     return pool_pext_schedule(outs, layout)
+
+def schedule_pool_vext(outs, layout):
+    """Create schedule for avgpool/maxpool with v extension"""
+    return pool_vext_schedule(outs, layout)

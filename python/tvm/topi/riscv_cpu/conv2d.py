@@ -36,6 +36,10 @@ from .extensions.pext.conv2d import (
     conv2d_nhwc_pext_compute,
     conv2d_nhwc_pext_schedule,
 )
+from .extensions.vext.conv2d import (
+    conv2d_nhwc_vext_compute,
+    conv2d_nhwc_vext_schedule,
+)
 
 
 # @autotvm.register_topi_compute("conv2d_nchw_spatial_pack.riscv_cpu")
@@ -104,3 +108,14 @@ def conv2d_nhwc_pext(cfg, data, kernel, strides, padding, dilation, out_dtype):
 def schedule_conv2d_nhwc_pext(cfg, outs):
     """Create schedule for conv2d_nhwc_pext"""
     return conv2d_nhwc_pext_schedule(cfg, outs)
+
+@autotvm.register_topi_compute("conv2d_nhwc_vext.riscv_cpu")
+def conv2d_nhwc_vext(cfg, data, kernel, strides, padding, dilation, out_dtype):
+    """Compute conv2d_nhwc with vector extension."""
+    return conv2d_nhwc_vext_compute(cfg, data, kernel, strides, padding, dilation, out_dtype)
+
+
+@autotvm.register_topi_schedule("conv2d_nhwc_vext.riscv_cpu")
+def schedule_conv2d_nhwc_vext(cfg, outs):
+    """Create schedule for conv2d_nhwc_vext"""
+    return conv2d_nhwc_vext_schedule(cfg, outs)

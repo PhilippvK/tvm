@@ -30,3 +30,9 @@ class IsaAnalyzer(object):
         return (self.target.mattr is not None and "+p" in self.target.mattr) or (
             self.target.march is not None and "p" in self.target.march[4:]
         )
+
+    @property
+    def has_vext(self):
+        return (self.target.mattr is not None and "+v" in self.target.mattr) or (
+            self.target.march is not None and "v" in self.target.march[4:]
+        )
