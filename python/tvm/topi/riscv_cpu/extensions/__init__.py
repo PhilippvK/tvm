@@ -14,4 +14,4 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Schedules specialized for cortex-m DSP instructions."""
+"""Schedules specialized for RISC-V specific instructions."""
