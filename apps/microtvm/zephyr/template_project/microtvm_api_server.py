@@ -63,7 +63,7 @@ BOARDS = API_SERVER_DIR / "boards.json"
 
 # Used to check Zephyr version installed on the host.
 # We only check two levels of the version.
-ZEPHYR_VERSION = 2.7
+ZEPHYR_VERSION = 3.1
 
 WEST_CMD = default = sys.executable + " -m west" if sys.executable else None
 
