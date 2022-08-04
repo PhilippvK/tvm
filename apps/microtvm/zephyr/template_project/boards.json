@@ -98,5 +98,13 @@
         "fpu": true,
         "vid_hex": "0483",
         "pid_hex": "374b"
+    },
+    "stm32f429i_disc1": {
+        "board": "stm32f429i_disc1",
+        "model": "stm32f429xx",
+        "is_qemu": false,
+        "fpu": true,
+        "vid_hex": "0483",
+        "pid_hex": "374b"
     }
 }
