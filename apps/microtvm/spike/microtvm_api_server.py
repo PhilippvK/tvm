@@ -35,6 +35,71 @@ MODEL_LIBRARY_FORMAT_RELPATH = "model.tar"
 
 IS_TEMPLATE = not os.path.exists(os.path.join(PROJECT_DIR, MODEL_LIBRARY_FORMAT_RELPATH))
 
+# Environment paths
+SPIKE_EXE = "spike"
+SPIKE_PK = "pk"
+ARCH = "rv32gc"
+ABI = "ilp32d"
+TRIPLE = "riscv32-unknown-elf"
+
+PROJECT_OPTIONS = [
+    server.ProjectOption(
+        "verbose",
+        optional=["build"],
+        type="bool",
+        help="Run build with verbose output.",
+    ),
+    server.ProjectOption(
+        "spike_exe",
+        required=(["open_transport"] if not SPIKE_EXE else None),
+        optional=(["open_transport"] if SPIKE_EXE else []),
+        default=SPIKE_EXE,
+        type="str",
+        help="Path to the spike (riscv-isa-sim) executable.",
+    ),
+    server.ProjectOption(
+        "spike_pk",
+        required=(["open_transport"] if not SPIKE_PK else None),
+        optional=(["open_transport"] if SPIKE_PK else None),
+        default=SPIKE_EXE,
+        type="str",
+        help="Path to the proxy-kernel (pk).",
+    ),
+    server.ProjectOption(
+        "arch",
+        optional=["build", "open_transport"],
+        default=ARCH,
+        type="str",
+        help="Name used ARCH.",
+    ),
+    server.ProjectOption(
+        "abi",
+        optional=["build"],
+        default=ABI,
+        type="str",
+        help="Name used ABI.",
+    ),
+    server.ProjectOption(
+        "triple",
+        optional=["build"],
+        default=TRIPLE,
+        type="str",
+        help="Name used COMPILER.",
+    ),
+    server.ProjectOption(
+        "spike_extra_args",
+        optional=["open_transport"],
+        type="str",
+        help="Additional arguments added to the spike command line.",
+    ),
+    server.ProjectOption(
+        "pk_extra_args",
+        optional=["open_transport"],
+        type="str",
+        help="Additional arguments added to the pk command line.",
+    ),
+]
+
 
 class Handler(server.ProjectAPIHandler):
 
@@ -51,14 +116,7 @@ class Handler(server.ProjectAPIHandler):
             model_library_format_path=""
             if IS_TEMPLATE
             else PROJECT_DIR / MODEL_LIBRARY_FORMAT_RELPATH,
-            project_options=[
-                server.ProjectOption(
-                    "verbose",
-                    optional=["build"],
-                    type="bool",
-                    help="Run make with verbose output",
-                )
-            ],
+            project_options=PROJECT_OPTIONS,
         )
 
     # These files and directories will be recursively copied into generated projects from the CRT.
@@ -118,6 +176,18 @@ class Handler(server.ProjectAPIHandler):
         args = ["make"]
         if options.get("verbose"):
             args.append("VERBOSE=1")
+        arch = options.get("arch")
+        if arch is None:
+            arch = ARCH
+        args.append(f"ARCH={arch}")
+        abi = options.get("abi")
+        if abi is None:
+            abi = ABI
+        args.append(f"ABI={abi}")
+        triple = options.get("triple")
+        if triple is None:
+            triple = TRIPLE
+        args.append(f"TRIPLE={triple}")
 
         args.append(self.BUILD_TARGET)
 
@@ -135,7 +205,21 @@ class Handler(server.ProjectAPIHandler):
 
     def open_transport(self, options):
         # print("open_transport")
-        spike_args = ["/nas/ei/share/TUEIEDAscratch/ga87puy/work/mlonmcu/workspace/deps/install/spike/spike", "--isa=rv32gcv", "--varch=vlen:1024,elen:32", "/nas/ei/share/TUEIEDAscratch/ga87puy/work/mlonmcu/workspace/deps/install/spikepk/pk"]
+        isa = options.get("arch", ARCH)
+        if isa is None:
+            isa = ARCH
+        spike_extra = options.get("spike_extra_args")
+        if spike_extra in [None, ""]:
+            spike_extra = []
+        else:
+            spike_extra = [spike_extra]
+        pk_extra = options.get("pk_extra_args")
+        if pk_extra in [None, ""]:
+            pk_extra = []
+        else:
+            pk_extra = [pk_extra]
+        spike_args = [options.get("spike_exe"), f"--isa={isa}", *spike_extra, options.get("spike_pk"), *pk_extra]
+        print("ARGS", " ".join(spike_args + [self.BUILD_TARGET]))
         self._proc = subprocess.Popen(
             spike_args + [self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
         )
