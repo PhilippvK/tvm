@@ -111,8 +111,15 @@ def add_micro_tune_args(parser):
         "e.g. '192.168.0.100:9999'",
     )
 
+    parser.add_argument(
+        "--target",
+        help="compilation target as plain string, inline JSON or path to a JSON file",
+        required=False,
+        default="c",
+    )
     # generate_target_args(parser)
     _generate_target_kind_args(parser, "c")
+    _generate_target_kind_args(parser, "llvm")
     # for codegen_name in get_codegen_names():
     #     _generate_codegen_args(parser, codegen_name)
     # TODO: --target?
@@ -553,7 +560,7 @@ def tune_handler(args):
         # max_threads_per_block=None,
         # max_vthread_extent=None,
         # warp_size=None,
-        target="c",
+        target=args.target,
         # target_host="?",
         target_host=None,
         # target_host="llvm",
@@ -607,7 +614,7 @@ def tune_handler(args):
         repeat=args.repeat,
         number=args.number,
         # parallel=args.parallel,
-        parallel=5,
+        parallel=1,
         hardware_params=hardware_params,
         include_simple_tasks=False,
         log_estimated_latency=False,
@@ -615,6 +622,7 @@ def tune_handler(args):
         module_loader=module_loader,
         runtime=runtime,
         build_func=autotvm_build_func,
-        build_kwargs={"build_option": {"tir.disable_vectorize": True}},
+        # build_kwargs={"build_option": {"tir.disable_vectorize": True}},
+        build_option={"tir.disable_vectorize": True},
         si_prefix="M",  # Display MFLOPS instead of GFLOPS
     )
