@@ -393,7 +393,8 @@ class Handler(server.ProjectAPIHandler):
         compile_cmd = [
             self._get_arduino_cli_cmd(options),
             "compile",
-            "./project/",
+            # "./project/",
+            ".",
             "--fqbn",
             self._get_fqbn(options),
             "--build-path",
