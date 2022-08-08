@@ -137,49 +137,6 @@ def gemm_MxKxN_impl(M, K, N, uniq_id):
 #ifdef __cplusplus
 extern "C"
 #endif
-static inline __attribute__ ((always_inline)) int32_t gemm_{M}x{N}_body_rest_{uniq_id}(
-    int K,
-    int8_t *aa, int8_t *bb, int32_t *cc,
-    int A_stride, int B_stride, int C_stride) {{
-  int k_base = (K / 4) * 4;
-  switch ( K % 4 ) {{
-  case 1:
-    for (int i = 0; i < {M}; i++) {{
-      for (int j = 0; j < {N}; j++) {{
-        int8_t *a_ptr = &aa[i * A_stride + k_base];
-        int8_t *b_ptr = &bb[j * B_stride + k_base];
-        cc[i * C_stride + j] = (int32_t) a_ptr[0] * (int32_t) b_ptr[0];
-      }}
-    }}
-    break;
-  case 2:
-    for (int i = 0; i < {M}; i++) {{
-      for (int j = 0; j < {N}; j++) {{
-        int8_t *a_ptr = &aa[i * A_stride + k_base];
-        int8_t *b_ptr = &bb[j * B_stride + k_base];
-        cc[i * C_stride + j] =   (int32_t) a_ptr[0] * (int32_t) b_ptr[0]
-                               + (int32_t) a_ptr[1] * (int32_t) b_ptr[1];
-      }}
-    }}
-    break;
-  case 3:
-    for (int i = 0; i < {M}; i++) {{
-      for (int j = 0; j < {N}; j++) {{
-        int8_t *a_ptr = &aa[i * A_stride + k_base];
-        int8_t *b_ptr = &bb[j * B_stride + k_base];
-        cc[i * C_stride + j] =   (int32_t) a_ptr[0] * (int32_t) b_ptr[0]
-                               + (int32_t) a_ptr[1] * (int32_t) b_ptr[1]
-                               + (int32_t) a_ptr[2] * (int32_t) b_ptr[2];
-      }}
-    }}
-    break;
-  }}
-  return 0;
-}}
-
-#ifdef __cplusplus
-extern "C"
-#endif
 static inline __attribute__ ((always_inline)) int32_t gemm_{M}x{K}x{N}_body_loop_{uniq_id}(
     int8_t *aa, int8_t *bb, int32_t *cc,
     int A_stride, int B_stride, int C_stride) {{
@@ -215,70 +172,41 @@ static inline __attribute__ ((always_inline)) int32_t gemm_{M}x{K}x{N}_body_{uni
 
   for (int i = 0; i < {M}; i++) {{
     for (int j = 0; j < {N}; j++) {{
+      // int32_t *aa_ptr = (int32_t *) &aa[i*A_stride];
+      // int32_t *bb_ptr = (int32_t *) &bb[j*B_stride];
+
+      // int32_t sum = 0;
+      // for (int l = 0; l < {K} / 4; l++) {{
+      //   sum = __rv_smaqa(sum, *aa_ptr, *bb_ptr);
+      //   ++ aa_ptr; ++ bb_ptr;
+      // }}
+      size_t vl = vsetvl_e32m8({K});
+      vint32m8_t res = vmv_v_x_i32m8(0, vl);
       int32_t *aa_ptr = (int32_t *) &aa[i*A_stride];
       int32_t *bb_ptr = (int32_t *) &bb[j*B_stride];
-
-      int32_t sum = 0;
-      for (int l = 0; l < {K} / 4; l++) {{
-        sum = __rv_smaqa(sum, *aa_ptr, *bb_ptr);
-        ++ aa_ptr; ++ bb_ptr;
+      size_t remaining = {K};
+      while (remaining > 0) {{
+        vl = vsetvl_e32m8(remaining);
+        vint16m4_t r0 = vsext_vf2_i16m4(vle8_v_i8m2(aa_ptr, vl), vl);
+        vint16m4_t c0 = vsext_vf2_i16m4(vle8_v_i8m2(bb_ptr, vl), vl);
+        res = vwmacc_vv_i32m8(res, r0, c0, vl);
+        aa_ptr += vl;
+        bb_ptr += vl;
+        remaining -= vl;
       }}
-      // NOTE: this is the line where `*_body` differs from `*_update`. here
-      // we're *setting* the result, instead of accumulating, because we know
-      // the `i` and `j` itervars span their entire respective axes.
-      cc[i*C_stride + j] = sum;
+      vl = vsetvl_e32m1(1);
+      vint32m1_t red = vmv_v_x_i32m1(0, vl);
+      vl = vsetvl_e32m8({N});
+      red = vredsum_vs_i32m8_i32m1(red, res, red, vl);
+      int32_t acc = vmv_x_s_i32m1_i32(red);
+      cc[i*C_stride + j] = acc;
     }}
   }}
-
-  if ( {K} % 4 != 0 )
-    gemm_{M}x{N}_body_rest_{uniq_id}({K}, aa, bb, cc, A_stride, B_stride, C_stride);
 
 out:
   return retcode;
 }}
 
-#ifdef __cplusplus
-extern "C"
-#endif
-static inline __attribute__ ((always_inline)) int32_t gemm_{M}x{N}_update_rest_{uniq_id}(
-    int K,
-    int8_t *aa, int8_t *bb, int32_t *cc,
-    int A_stride, int B_stride, int C_stride) {{
-  int k_base = (K / 4) * 4;
-  switch ( K % 4 ) {{
-  case 1:
-    for (int i = 0; i < {M}; i++) {{
-      for (int j = 0; j < {N}; j++) {{
-        int8_t *a_ptr = &aa[i * A_stride + k_base];
-        int8_t *b_ptr = &bb[j * B_stride + k_base];
-        cc[i * C_stride + j] += (int32_t) a_ptr[0] * (int32_t) b_ptr[0];
-      }}
-    }}
-    break;
-  case 2:
-    for (int i = 0; i < {M}; i++) {{
-      for (int j = 0; j < {N}; j++) {{
-        int8_t *a_ptr = &aa[i * A_stride + k_base];
-        int8_t *b_ptr = &bb[j * B_stride + k_base];
-        cc[i * C_stride + j] +=   (int32_t) a_ptr[0] * (int32_t) b_ptr[0]
-                                + (int32_t) a_ptr[1] * (int32_t) b_ptr[1];
-      }}
-    }}
-    break;
-  case 3:
-    for (int i = 0; i < {M}; i++) {{
-      for (int j = 0; j < {N}; j++) {{
-        int8_t *a_ptr = &aa[i * A_stride + k_base];
-        int8_t *b_ptr = &bb[j * B_stride + k_base];
-        cc[i * C_stride + j] +=   (int32_t) a_ptr[0] * (int32_t) b_ptr[0]
-                                + (int32_t) a_ptr[1] * (int32_t) b_ptr[1]
-                                + (int32_t) a_ptr[2] * (int32_t) b_ptr[2];
-      }}
-    }}
-    break;
-  }}
-  return 0;
-}}
 
 #ifdef __cplusplus
 extern "C"
@@ -315,45 +243,33 @@ static inline __attribute__ ((always_inline)) int32_t gemm_{M}x{K}x{N}_update_{u
 
   for (int i = 0; i < {M}; i++) {{
     for (int j = 0; j < {N}; j++) {{
+      size_t vl = vsetvl_e32m8({K});
+      vint32m8_t res = vmv_v_x_i32m8(0, vl);
       int32_t *aa_ptr = (int32_t *) &aa[i*A_stride];
       int32_t *bb_ptr = (int32_t *) &bb[j*B_stride];
-
-      int32_t sum = 0;
-      for (int l = 0; l < {K} / 4; l++) {{
-        sum = __rv_smaqa(sum, *aa_ptr, *bb_ptr);
-        ++ aa_ptr; ++ bb_ptr;
+      size_t remaining = {K};
+      while (remaining > 0) {{
+        vl = vsetvl_e32m8(remaining);
+        vint16m4_t r0 = vsext_vf2_i16m4(vle8_v_i8m2(aa_ptr, vl), vl);
+        vint16m4_t c0 = vsext_vf2_i16m4(vle8_v_i8m2(bb_ptr, vl), vl);
+        res = vwmacc_vv_i32m8(res, r0, c0, vl);
+        aa_ptr += vl;
+        bb_ptr += vl;
+        remaining -= vl;
       }}
-      // NOTE: this is the line where `*_body` differs from `*_update`. here
-      // we're *setting* the result, instead of accumulating, because we know
-      // the `i` and `j` itervars span their entire respective axes.
-      cc[i*C_stride + j] += sum;
+      vl = vsetvl_e32m1(1);
+      vint32m1_t red = vmv_v_x_i32m1(0, vl);
+      vl = vsetvl_e32m8({N});
+      red = vredsum_vs_i32m8_i32m1(red, res, red, vl);
+      int32_t acc = vmv_x_s_i32m1_i32(red);
+      cc[i*C_stride + j] += acc;
     }}
   }}
-
-  if ( {K} % 4 != 0 )
-    gemm_{M}x{N}_update_rest_{uniq_id}({K}, aa, bb, cc, A_stride, B_stride, C_stride);
 
 out:
   return retcode;
 }}
 
-#ifdef __cplusplus
-extern "C"
-#endif
-static inline __attribute__ ((always_inline)) int32_t gemm16_{M}x{N}_body_rest_{uniq_id}(
-    int K,
-    int16_t *aa, int16_t *bb, int32_t *cc,
-    int A_stride, int B_stride, int C_stride) {{
-  int k_base = (K / 2) * 2;
-  for (int i = 0; i < {M}; i++) {{
-    for (int j = 0; j < {N}; j++) {{
-      int16_t *a_ptr = &aa[i * A_stride + k_base];
-      int16_t *b_ptr = &bb[j * B_stride + k_base];
-      cc[i * C_stride + j] = (int32_t) a_ptr[0] * (int32_t) b_ptr[0];
-    }}
-  }}
-  return 0;
-}}
 
 #ifdef __cplusplus
 extern "C"
@@ -397,45 +313,44 @@ static inline __attribute__ ((always_inline)) int32_t gemm16_{M}x{K}x{N}_body_{u
 
   for (int i = 0; i < {M}; i++) {{
     for (int j = 0; j < {N}; j++) {{
-      int32_t *aa_ptr = (int32_t *) &aa[i*A_stride];
-      int32_t *bb_ptr = (int32_t *) &bb[j*B_stride];
+      // int32_t *aa_ptr = (int32_t *) &aa[i*A_stride];
+      // int32_t *bb_ptr = (int32_t *) &bb[j*B_stride];
 
-      int32_t sum = 0;
-      for (int l = 0; l < {K} / 2; l++) {{
-        sum = __rv_smaqa(sum, *aa_ptr, *bb_ptr);
-        ++ aa_ptr; ++ bb_ptr;
+      // int32_t sum = 0;
+      // for (int l = 0; l < {K} / 2; l++) {{
+      //   sum = __rv_smaqa(sum, *aa_ptr, *bb_ptr);
+      //   ++ aa_ptr; ++ bb_ptr;
+      // }}
+      size_t vl = vsetvl_e32m8({N});
+      vint32m8_t res = vmv_v_x_i32m8(0, vl);
+      int16_t *aa_ptr = (int32_t *) &aa[i*A_stride];
+      int16_t *bb_ptr = (int32_t *) &bb[j*B_stride];
+      size_t remaining = {N};
+      while (remaining > 0) {{
+        vl = vsetvl_e32m8(remaining);
+        // vint32m8_t r0 = vsext_vf4_i32m8(vle8_v_i8m2(ip_r0, vl), vl);
+        // vint32m8_t c0 = vsext_vf4_i32m8(vle8_v_i8m2(ip_c0, vl), vl);
+        vint16m4_t r0 = vle16_v_i16m4(aa_ptr, vl);
+        vint16m4_t c0 = vle16_v_i16m4(bb_ptr, vl);
+        // vint32m8_t vwmacc_vv_i32m8 (vint32m8_t vd, vint16m4_t vs1, vint16m4_t vs2, size_t vl);
+        res = vwmacc_vv_i32m8(res, r0, c0, vl);
+        aa_ptr += vl;
+        bb_ptr += vl;
+        remaining -= vl;
       }}
-      // NOTE: this is the line where `*_body` differs from `*_update`. here
-      // we're *setting* the result, instead of accumulating, because we know
-      // the `i` and `j` itervars span their entire respective axes.
-      cc[i*C_stride + j] = sum;
+      vl = vsetvl_e32m1(1);
+      vint32m1_t red = vmv_v_x_i32m1(0, vl);
+      vl = vsetvl_e32m8({N});
+      red = vredsum_vs_i32m8_i32m1(red, res, red, vl);
+      int32_t acc = vmv_x_s_i32m1_i32(red);
+      cc[i*C_stride + j] = acc;
     }}
   }}
-
-  if ( {K} % 2 != 0 )
-    gemm16_{M}x{N}_body_rest_{uniq_id}({K}, aa, bb, cc, A_stride, B_stride, C_stride);
 
 out:
   return retcode;
 }}
 
-#ifdef __cplusplus
-extern "C"
-#endif
-static inline __attribute__ ((always_inline)) int32_t gemm16_{M}x{N}_update_rest_{uniq_id}(
-    int K,
-    int16_t *aa, int16_t *bb, int32_t *cc,
-    int A_stride, int B_stride, int C_stride) {{
-  int k_base = (K / 2) * 2;
-  for (int i = 0; i < {M}; i++) {{
-    for (int j = 0; j < {N}; j++) {{
-      int16_t *a_ptr = &aa[i * A_stride + k_base];
-      int16_t *b_ptr = &bb[j * B_stride + k_base];
-      cc[i * C_stride + j] += (int32_t) a_ptr[0] * (int32_t) b_ptr[0];
-    }}
-  }}
-  return 0;
-}}
 
 #ifdef __cplusplus
 extern "C"
@@ -472,20 +387,40 @@ static inline __attribute__ ((always_inline)) int32_t gemm16_{M}x{K}x{N}_update_
   for (int i = 0; i < {M}; i++) {{
     for (int j = 0; j < {N}; j++) {{
       // 4x unrolling this loop could lead to 50% less instructions
-      int32_t *aa_ptr = (int32_t *) &aa[i*A_stride];
-      int32_t *bb_ptr = (int32_t *) &bb[j*B_stride];
+      // int32_t *aa_ptr = (int32_t *) &aa[i*A_stride];
+      // int32_t *bb_ptr = (int32_t *) &bb[j*B_stride];
 
-      int32_t sum = 0;
-      for (int l = 0; l < {K} / 2; l++) {{
-        sum = __rv_smaqa(sum, *aa_ptr, *bb_ptr);
-        ++ aa_ptr; ++ bb_ptr;
+      // int32_t sum = 0;
+      // for (int l = 0; l < {K} / 2; l++) {{
+      //   sum = __rv_smaqa(sum, *aa_ptr, *bb_ptr);
+      //   ++ aa_ptr; ++ bb_ptr;
+      // }}
+      // cc[i*C_stride + j] += sum;
+      size_t vl = vsetvl_e32m8({N});
+      vint32m8_t res = vmv_v_x_i32m8(0, vl);
+      int16_t *aa_ptr = (int32_t *) &aa[i*A_stride];
+      int16_t *bb_ptr = (int32_t *) &bb[j*B_stride];
+      size_t remaining = {N};
+      while (remaining > 0) {{
+        vl = vsetvl_e32m8(remaining);
+        // vint32m8_t r0 = vsext_vf4_i32m8(vle8_v_i8m2(ip_r0, vl), vl);
+        // vint32m8_t c0 = vsext_vf4_i32m8(vle8_v_i8m2(ip_c0, vl), vl);
+        vint16m4_t r0 = vle16_v_i16m4(aa_ptr, vl);
+        vint16m4_t c0 = vle16_v_i16m4(bb_ptr, vl);
+        // vint32m8_t vwmacc_vv_i32m8 (vint32m8_t vd, vint16m4_t vs1, vint16m4_t vs2, size_t vl);
+        res = vwmacc_vv_i32m8(res, r0, c0, vl);
+        aa_ptr += vl;
+        bb_ptr += vl;
+        remaining -= vl;
       }}
-      cc[i*C_stride + j] += sum;
+      vl = vsetvl_e32m1(1);
+      vint32m1_t red = vmv_v_x_i32m1(0, vl);
+      vl = vsetvl_e32m8({N});
+      red = vredsum_vs_i32m8_i32m1(red, res, red, vl);
+      int32_t acc = vmv_x_s_i32m1_i32(red);
+      cc[i*C_stride + j] += acc;
     }}
   }}
-
-  if ( {K} % 2 != 0 )
-    gemm16_{M}x{N}_update_rest_{uniq_id}({K}, aa, bb, cc, A_stride, B_stride, C_stride);
 
 out:
   return retcode;
