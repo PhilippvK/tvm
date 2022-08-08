@@ -445,6 +445,7 @@ class Handler(server.ProjectAPIHandler):
             "qemu_riscv32",
             "qemu_cortex_r5",
             "qemu_riscv64",
+            "esp32c3_devkitm"
         ),
         "CONFIG_ENTROPY_GENERATOR=y": (
             "mps2_an521",
@@ -875,6 +876,9 @@ class ZephyrSerialTransport:
         if flash_runner == "stm32cubeprogrammer":
             return cls._find_stm32cubeprogrammer_serial_port(options)
 
+        if flash_runner == "esp32":
+            return cls._find_esptool_serial_port(options)
+
         raise RuntimeError(f"Don't know how to deduce serial port for flash runner {flash_runner}")
 
     def __init__(self, options):
@@ -882,8 +886,30 @@ class ZephyrSerialTransport:
         self._port = None
 
     def open(self):
-        port_path = self._find_serial_port(self._options)
-        self._port = serial.Serial(port_path, baudrate=self._lookup_baud_rate(self._options))
+        print("open!!!")
+        try:
+            port_path = self._find_serial_port(self._options)
+            print("port_path", port_path)
+            high = False
+            low = True
+            self._port = serial.Serial(port_path, baudrate=self._lookup_baud_rate(self._options))
+        except Exception as e:
+            print("EXE", e)
+        self._port.close()
+        self._port.dtr = False
+        self._port.rts = False
+        time.sleep(1)
+        self._port.dtr = low
+        self._port.rts = high
+        self._port.dtr = self._port.dtr
+        self._port.open()
+        self._port.dtr = high
+        self._port.rts = low
+        self._port.dtr = self._port.dtr
+        time.sleep(0.002)
+        self._port.rts = high
+        self._port.dtr = self._port.dtr
+        print("self._port", self._port)
         return server.TransportTimeouts(
             session_start_retry_timeout_sec=2.0,
             session_start_timeout_sec=5.0,
