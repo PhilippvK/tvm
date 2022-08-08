@@ -16,6 +16,14 @@
         "vid_hex": "303a",
         "pid_hex": "0002"
     },
+    "esp32": {
+        "package": "esp32",
+        "architecture": "esp32",
+        "board": "esp32-poe-iso",
+        "model": "esp32",
+        "vid_hex": "10c4",
+        "pid_hex": "ea60"
+    },
     "metrom4": {
         "package": "adafruit",
         "architecture": "samd",
