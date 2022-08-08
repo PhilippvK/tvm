@@ -516,7 +516,8 @@ def tune_model(
 
         # print("!!runtime!!", runtime)
         builder = autotvm.LocalBuilder(
-            n_parallel=5,
+            # n_parallel=5,
+            n_parallel=1,
             build_kwargs={"build_option": build_option},
             do_fork=True,
             # do_fork=False,
