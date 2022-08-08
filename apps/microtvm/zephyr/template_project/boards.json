@@ -107,11 +107,19 @@
         "vid_hex": "0483",
         "pid_hex": "374b"
     },
+    "stm32f769i_disco": {
+        "board": "stm32f769i_disco",
+        "model": "stm32f769xx",
+        "is_qemu": false,
+        "fpu": true,
+        "vid_hex": "0483",
+        "pid_hex": "374b"
+    },
     "esp32": {
         "board": "esp32",
         "model": "esp32",
         "is_qemu": false,
-        "fpu": true,
+        "fpu": false,
         "vid_hex": "10c4",
         "pid_hex": "ea60"
     },
@@ -119,7 +127,7 @@
         "board": "esp32c3_devkitm",
         "model": "esp32c3",
         "is_qemu": false,
-        "fpu": true,
+        "fpu": false,
         "vid_hex": "1a86",
         "pid_hex": "7523"
     }
