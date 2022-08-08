@@ -16,27 +16,31 @@
 # under the License.
 
 # TODO: get rid of errors
+TRIPLE ?= riscv32-unknown-elf
+ARCH ?= rv32gc
+ABI ?= ilp32d
+
 INCLUDES ?= -isystem crt/include -Icrt_config
-CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=stringop-overread -Wno-error=format-extra-args
-CXXFLAGS ?= -Werror -Wall -std=c++11 -DTVM_HOST_USE_GRAPH_EXECUTOR_MODULE
-LDFLAGS ?= -Werror -Wall
+CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=stringop-overread -Wno-error=format-extra-args -march=$(ARCH) -mabi=$(ABI)
+CXXFLAGS ?= -Werror -Wall -std=c++11 -DTVM_HOST_USE_GRAPH_EXECUTOR_MODULE -march=$(ARCH) -mabi=$(ABI)
+LDFLAGS ?= -Werror -Wall -march=$(ARCH) -mabi=$(ABI)
 
 # Codegen produces spurious lines like: int32_t arg2_code = ((int32_t*)arg_type_ids)[(2)];
 MODEL_CFLAGS ?= -Wno-error=unused-variable -Wno-error=missing-braces
 
-PREFIX=riscv32-unknown-elf-
+PREFIX ?= $(TRIPLE)-
 
 # AR ?= ${PREFIX}ar
-AR = riscv32-unknown-elf-ar
+AR = ${PREFIX}ar
 # CC ?= ${PREFIX}gcc
-CC = riscv32-unknown-elf-gcc
+CC = ${PREFIX}gcc
 # CXX ?= ${PREFIX}g++
-CXX = riscv32-unknown-elf-g++
+CXX = ${PREFIX}g++
 # RANLIB ?= ${PREFIX}ranlib
-RANLIB = riscv32-unknown-elf-ranlib
+RANLIB = ${PREFIX}ranlib
 
 ifeq (${VERBOSE}, 1)
-QUIET ?= 
+QUIET ?=
 else
 QUIET ?= @
 endif

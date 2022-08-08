@@ -41,8 +41,18 @@
 
 #include <tvm/runtime/crt/aot_executor_module.h>
 
+#define DBG
+
+#ifdef DBG
 FILE *fp;
+#define dbginit() fp = fopen("/tmp/test.txt", "w+");
 #define dbgprintf(...) fprintf(fp, __VA_ARGS__); fflush(fp);
+#define dbgend() fclose(fp);
+#else
+#define dbginit()
+#define dbgprintf(...)
+#define dbgend()
+#endif  // DBG
 
 // using namespace std::chrono;
 
@@ -89,6 +99,7 @@ int g_microtvm_timer_running = 0;
 static inline uint64_t rdcycle64()
 {
 #if defined(__riscv) || defined(__riscv__)
+#if __riscv_xlen == 32
     uint32_t cycles;
     uint32_t cyclesh1;
     uint32_t cyclesh2;
@@ -103,6 +114,11 @@ static inline uint64_t rdcycle64()
     } while (cyclesh1 != cyclesh2);
 
     return (((uint64_t)cyclesh1) << 32) | cycles;
+#else
+    uint64_t cycles;
+    __asm__ volatile("rdcycle %0" : "=r"(cycles));
+    return cycles;
+#endif
 #else
     return 0;
 #endif
@@ -176,7 +192,7 @@ static char** g_argv = NULL;
 // }
 
 int main(int argc, char** argv) {
-  fp = fopen("/tmp/test.txt", "w+");
+  dbginit();
   dbgprintf("main\n");
   srand(random_seed);
   // dbgprintf("a\n");
@@ -185,7 +201,7 @@ int main(int argc, char** argv) {
       PageMemoryManagerCreate(&memory_manager, memory, sizeof(memory), 8 /* page_size_log2 */);
   if (status != 0) {
     dbgprintf("error initiailizing memory manager\n");
-    fclose(fp);
+    dbgend();
     return 2;
   }
   dbgprintf("b\n");
@@ -223,12 +239,12 @@ int main(int argc, char** argv) {
     if (ret_code < 0) {
       // dbgprintf("h\n");
       dbgprintf("microTVM runtime: read failed");
-      fclose(fp);
+      dbgend();
       return 2;
     } else if (ret_code == 0) {
       // dbgprintf("i\n");
       dbgprintf("microTVM runtime: 0-length read, exiting!\n");
-      fclose(fp);
+      dbgend();
       return 2;
     }
     // dbgprintf("j\n");
@@ -247,7 +263,7 @@ int main(int argc, char** argv) {
       } else if (err != kTvmErrorNoError) {
         // dbgprintf("m\n");
         dbgprintf("microTVM runtime: MicroTVMRpcServerLoop error: %08x", err);
-        fclose(fp);
+        dbgend();
         return 2;
       }
       // dbgprintf("o\n");
@@ -255,6 +271,6 @@ int main(int argc, char** argv) {
     // dbgprintf("p\n");
   }
   // dbgprintf("q\n");
-  fclose(fp);
+  dbgend();
   return 0;
 }
