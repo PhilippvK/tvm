@@ -213,6 +213,11 @@ def add_tune_parser(subparsers, _, json_params):
         default="xgb",
         help="type of tuner to use when tuning with autotvm.",
     )
+    auto_scheduler_group.add_argument(
+        "--visualize",
+        help="whether the tuning progress should be visualized in a graph",
+        action="store_true",
+    )
     # TODO (@leandron) This is a path to a physical file, but
     #     can be improved in future to add integration with a modelzoo
     #     or URL, for example.
@@ -293,6 +298,7 @@ def drive_tune(args):
         include_simple_tasks=args.include_simple_tasks,
         log_estimated_latency=args.log_estimated_latency,
         additional_target_options=reconstruct_target_args(args),
+        visualize=args.visualize,
     )
 
 
@@ -324,6 +330,7 @@ def tune_model(
     runtime = None,  # TODO
     build_option : dict = None,
     si_prefix : str = "G",
+    visualize : bool = False,
 ):
     """Use tuning to automatically optimize the functions in a model.
 
@@ -392,6 +399,8 @@ def tune_model(
         TODO
     si_prefix : str
         SI prefix for FLOPS.
+    visualize : bool
+        Whether the tuning progress should be visualized with matplotlib
 
     Returns
     -------
@@ -694,6 +703,7 @@ def tune_tasks(
     early_stopping: Optional[int] = None,
     tuning_records: Optional[str] = None,
     si_prefix: str = "G",
+    visualize: bool = False,
 ):
     """Tune a list of tasks and output the history to a log file.
 
@@ -717,6 +727,8 @@ def tune_tasks(
         tuning.
     si_prefix : str
         SI prefix for FLOPS.
+    visualize : bool
+        Whether the tuning progress should be visualized with matplotlib.
     """
     if not tasks:
         logger.warning("there were no tasks found to be tuned")
@@ -749,13 +761,14 @@ def tune_tasks(
             tuner_obj.load_history(autotvm.record.load_from_file(tuning_records))
             logging.info("loaded history in %.2f sec(s)", time.time() - start_time)
 
+        callbacks = [autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix)]
+        if visualize:
+            callbacks.append(autotvm.callback.visualize_progress(i, title=f"AutoTVM Progress [Task {i+1}/{len(tasks)}]", si_prefix=si_prefix))
+            callbacks.append(autotvm.callback.visualize_progress(i, multi=True, si_prefix=si_prefix))
         tuner_obj.tune(
             n_trial=min(trials, len(tsk.config_space)),
             early_stopping=early_stopping,
             measure_option=measure_option,
-            callbacks=[
-                autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix),
-                autotvm.callback.log_to_file(log_file),
-            ],
+            callbacks=callbacks,
             si_prefix=si_prefix,
         )
