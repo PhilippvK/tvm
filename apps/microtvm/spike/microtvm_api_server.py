@@ -219,7 +219,6 @@ class Handler(server.ProjectAPIHandler):
         else:
             pk_extra = [pk_extra]
         spike_args = [options.get("spike_exe"), f"--isa={isa}", *spike_extra, options.get("spike_pk"), *pk_extra]
-        print("ARGS", " ".join(spike_args + [self.BUILD_TARGET]))
         self._proc = subprocess.Popen(
             spike_args + [self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
         )
