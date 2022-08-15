@@ -64,8 +64,7 @@ def add_tune_parser(subparsers, _, json_params):
         "--min-repeat-ms",
         default=None,
         type=int,
-        help="minimum time to run each trial, in milliseconds. "
-        "Defaults to 0 on x86 and 1000 on all other targets",
+        help="minimum time to run each trial, in milliseconds. " "Defaults to 0 on x86 and 1000 on all other targets",
     )
     parser.add_argument(
         "--model-format",
@@ -100,8 +99,7 @@ def add_tune_parser(subparsers, _, json_params):
     )
     parser.add_argument(
         "--rpc-key",
-        help="the RPC tracker key of the target device. "
-        "Required when --rpc-tracker is provided.",
+        help="the RPC tracker key of the target device. " "Required when --rpc-tracker is provided.",
     )
     parser.add_argument(
         "--rpc-tracker",
@@ -148,20 +146,17 @@ def add_tune_parser(subparsers, _, json_params):
     auto_scheduler_group.add_argument(
         "--cache-line-bytes",
         type=int,
-        help="the size of cache line in bytes. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the size of cache line in bytes. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--num-cores",
         type=int,
-        help="the number of device cores. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the number of device cores. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--vector-unit-bytes",
         type=int,
-        help="the width of vector units in bytes. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the width of vector units in bytes. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--max-shared-memory-per-block",
@@ -178,20 +173,17 @@ def add_tune_parser(subparsers, _, json_params):
     auto_scheduler_group.add_argument(
         "--max-threads-per-block",
         type=int,
-        help="the max number of threads per block. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the max number of threads per block. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--max-vthread-extent",
         type=int,
-        help="the max vthread extent. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the max vthread extent. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--warp-size",
         type=int,
-        help="the thread numbers of a warp. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the thread numbers of a warp. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--include-simple-tasks",
@@ -212,6 +204,11 @@ def add_tune_parser(subparsers, _, json_params):
         choices=["ga", "gridsearch", "random", "xgb", "xgb_knob", "xgb-rank"],
         default="xgb",
         help="type of tuner to use when tuning with autotvm.",
+    )
+    autotvm_group.add_argument(
+        "--visualize",
+        help="whether the tuning progress should be visualized in a graph",
+        action="store_true",
     )
     # TODO (@leandron) This is a path to a physical file, but
     #     can be improved in future to add integration with a modelzoo
@@ -237,9 +234,7 @@ def drive_tune(args):
         Arguments from command line parser.
     """
     if not os.path.isfile(args.FILE):
-        raise TVMCException(
-            f"Input file '{args.FILE}' doesn't exist, is a broken symbolic link, or a directory."
-        )
+        raise TVMCException(f"Input file '{args.FILE}' doesn't exist, is a broken symbolic link, or a directory.")
 
     tvmc_model = frontends.load_model(args.FILE, args.model_format, shape_dict=args.input_shapes)
 
@@ -293,6 +288,7 @@ def drive_tune(args):
         include_simple_tasks=args.include_simple_tasks,
         log_estimated_latency=args.log_estimated_latency,
         additional_target_options=reconstruct_target_args(args),
+        visualize=args.visualize,
     )
 
 
@@ -320,6 +316,7 @@ def tune_model(
     log_estimated_latency: bool = False,
     additional_target_options: Optional[Dict[str, Dict[str, Any]]] = None,
     si_prefix: str = "G",
+    visualize: bool = False,
 ):
     """Use tuning to automatically optimize the functions in a model.
 
@@ -380,6 +377,8 @@ def tune_model(
         Additional target options in a dictionary to combine with initial Target arguments
     si_prefix : str
         SI prefix for FLOPS.
+    visualize : bool
+        Whether the tuning progress should be visualized with matplotlib
 
     Returns
     -------
@@ -409,9 +408,7 @@ def tune_model(
 
     if rpc_key:
         if hostname is None or port is None:
-            raise TVMCException(
-                "You must provide a hostname and port to connect to a remote RPC device."
-            )
+            raise TVMCException("You must provide a hostname and port to connect to a remote RPC device.")
         if isinstance(port, str):
             port = int(port)
 
@@ -430,9 +427,7 @@ def tune_model(
         )
     else:
         logger.info("Starting localhost tuning.")
-        runner_ctor = (
-            auto_scheduler.LocalRPCMeasureContext if enable_autoscheduler else autotvm.LocalRunner
-        )
+        runner_ctor = auto_scheduler.LocalRPCMeasureContext if enable_autoscheduler else autotvm.LocalRunner
         local_server = runner_ctor(
             number=number,
             repeat=repeat,
@@ -486,14 +481,12 @@ def tune_model(
             "tuner": tuner,
             "trials": trials,
             "early_stopping": early_stopping,
-            "measure_option": autotvm.measure_option(
-                builder=autotvm.LocalBuilder(build_func="default"), runner=runner
-            ),
+            "measure_option": autotvm.measure_option(builder=autotvm.LocalBuilder(build_func="default"), runner=runner),
             "tuning_records": prior_records,
         }
         logger.info("Autotuning with configuration: %s", tuning_options)
 
-        tune_tasks(tasks, tuning_records, **tuning_options)
+        tune_tasks(tasks, tuning_records, **tuning_options, visualize=visualize)
 
     return tuning_records
 
@@ -625,9 +618,7 @@ def schedule_tasks(
         ]
 
     # Create the scheduler
-    tuner = auto_scheduler.TaskScheduler(
-        tasks, task_weights, load_log_file=prior_records, callbacks=callbacks
-    )
+    tuner = auto_scheduler.TaskScheduler(tasks, task_weights, load_log_file=prior_records, callbacks=callbacks)
 
     # Tune the tasks
     tuner.tune(tuning_options)
@@ -642,6 +633,7 @@ def tune_tasks(
     early_stopping: Optional[int] = None,
     tuning_records: Optional[str] = None,
     si_prefix: str = "G",
+    visualize: bool = False,
 ):
     """Tune a list of tasks and output the history to a log file.
 
@@ -665,6 +657,8 @@ def tune_tasks(
         tuning.
     si_prefix : str
         SI prefix for FLOPS.
+    visualize : bool
+        Whether the tuning progress should be visualized with matplotlib.
     """
     if not tasks:
         logger.warning("there were no tasks found to be tuned")
@@ -697,13 +691,17 @@ def tune_tasks(
             tuner_obj.load_history(autotvm.record.load_from_file(tuning_records))
             logging.info("loaded history in %.2f sec(s)", time.time() - start_time)
 
+        callbacks = [
+            autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix),
+            autotvm.callback.log_to_file(log_file),
+        ]
+        if visualize:
+            # callbacks.append(autotvm.callback.visualize_progress(i, title=f"AutoTVM Progress [Task {i+1}/{len(tasks)}]", si_prefix=si_prefix)
+            callbacks.append(autotvm.callback.visualize_progress(i, multi=True, si_prefix=si_prefix))
         tuner_obj.tune(
             n_trial=min(trials, len(tsk.config_space)),
             early_stopping=early_stopping,
             measure_option=measure_option,
-            callbacks=[
-                autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix),
-                autotvm.callback.log_to_file(log_file),
-            ],
+            callbacks=callbacks,
             si_prefix=si_prefix,
         )
