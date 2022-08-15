@@ -861,6 +861,10 @@ class ZephyrSerialTransport:
         return generic_find_serial_port()
 
     @classmethod
+    def _find_esptool_serial_port(cls, options):
+        return generic_find_serial_port()
+
+    @classmethod
     def _find_serial_port(cls, options):
         flash_runner = _get_flash_runner()
 
