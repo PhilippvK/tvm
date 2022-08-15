@@ -139,6 +139,11 @@ def add_tune_parser(subparsers, _, json_params):
         help="enable tuning the graph through the AutoScheduler tuner",
         action="store_true",
     )
+    parser.add_argument(
+        "--tasks",
+        default="all",
+        help="which tasks should be tuned, i.e. 0 0,2 3-5 all list",
+    )
 
     auto_scheduler_group = parser.add_argument_group(
         "AutoScheduler options",
@@ -299,7 +304,67 @@ def drive_tune(args):
         log_estimated_latency=args.log_estimated_latency,
         additional_target_options=reconstruct_target_args(args),
         visualize=args.visualize,
+        tasks_filter=args.tasks,
     )
+
+
+def filter_tasks(
+    tasks: List[auto_scheduler.SearchTask],
+    # OR? tasks: List[autotvm.task.Task],
+    expr: str
+    ):
+    assert isinstance(expr, str), "TODO"
+    assert len(expr) > 0, "TODO"
+
+    # groups of keywords are comma-separated
+    splitted =  expr.split(",")
+
+    do_list = False
+    do_filter = False
+    selected = []
+    for item in splitted:
+        if item in ["list", "help"]:
+            do_list = True
+        elif item in ["all"]:
+            selected = list(range(len(tasks)))
+        else:
+            do_filter = True
+            if "-" in item:
+                lhs, rhs = item.split("-")[:2]
+                if len(lhs) == 0:
+                    assert len(rhs) > 0
+                    assert isinstance(rhs, str)
+                    rhs_value = int(rhs)
+                    assert rhs_value < len(tasks) and rhs_value >= 0
+                    selected.extend(list(range(0, rhs_value+1)))
+                elif len(rhs) == 0:
+                    assert len(lhs) > 0
+                    assert isinstance(lhs, str)
+                    lhs_value = int(lhs)
+                    assert lhs_value < len(tasks) and lhs_value >= 0
+                    selected.extend(list(range(lhs_value, len(tasks))))
+                else:
+                    assert isinstance(lhs, str)
+                    assert isinstance(rhs, str)
+                    lhs_value = int(lhs)
+                    rhs_value = int(rhs)
+                    assert lhs_value < len(tasks) and lhs_value >= 0
+                    assert rhs_value < len(tasks) and rhs_value >= 0
+                    selected.extend(list(range(lhs_value, rhs_value+1)))
+            else:
+                assert isinstance(item, str)
+                idx = int(item)
+                assert idx < len(tasks) and idx >= 0
+                selected.append(idx)
+
+    # remove duplicates
+
+    if do_filter:
+        # remove duplicates
+        selected = list(set(selected))
+        tasks = [task for i, task in enumerate(tasks) if i in selected]
+
+    return tasks, do_list
 
 
 def tune_model(
@@ -331,6 +396,7 @@ def tune_model(
     build_option : dict = None,
     si_prefix : str = "G",
     visualize : bool = False,
+    tasks_filter: str = "all",
 ):
     """Use tuning to automatically optimize the functions in a model.
 
@@ -401,6 +467,9 @@ def tune_model(
         SI prefix for FLOPS.
     visualize : bool
         Whether the tuning progress should be visualized with matplotlib
+    tasks_filter : str, optional
+        Filter which tasks should be tuned or output a list of the extracted tasks.
+        Examples: 0 0,2 3-5 all list
 
     Returns
     -------
@@ -472,7 +541,6 @@ def tune_model(
             runner = local_server
 
     if enable_autoscheduler:
-
         tasks, weights = autoscheduler_get_tuning_tasks(
             mod=mod,
             params=params,
@@ -495,7 +563,28 @@ def tune_model(
             runtime=runtime,
             build_option=build_option,
         )
+    else:
+        tasks = autotvm_get_tuning_tasks(
+            mod=mod,
+            params=params,
+            target=target,
+            alter_layout=desired_layout,
+        )
 
+    # Filter extracted tasks by provided user expression
+    if tasks_filter:
+        tasks, do_list = filter_tasks(tasks, tasks_filter)
+        if do_list:
+            print("Available Tasks for tuning:")
+            print("\n".join(["  {}. {}".format(i, task if len(str(task)) < 100 else str(task)[:97] + "...") for i, task in enumerate(tasks)]))
+            return None
+    if len(tasks) == 0:
+        logger.info("No tasks have been selected for tuning.")
+        return None
+    else:
+        logger.info(f"Selected {len(tasks)} for tuning.")
+
+    if enable_autoscheduler:
         # Create the autoscheduler tuning options
         tuning_options = auto_scheduler.TuningOptions(
             num_measure_trials=trials,
@@ -517,6 +606,19 @@ def tune_model(
             target=target,
             alter_layout=desired_layout,
         )
+
+        # Filter extracted tasks by provided user expression
+        if tasks_filter:
+            tasks, do_list = filter_tasks(tasks, tasks_filter)
+            if do_list:
+                print("Available Tasks for tuning:")
+                print("\n".join(["  {}. {}".format(i, task if len(str(task)) < 100 else str(task)[:97] + "...") for i, task in enumerate(tasks)]))
+                return None
+        if len(tasks) == 0:
+            logger.info("No tasks have been selected for tuning.")
+            return None
+        else:
+            logger.info(f"Selected {len(tasks)} for tuning.")
 
         # In autotvm, trials is specified per task. We can convert the per-model input
         # provided to per-task trials by dividing by the number of tasks.
