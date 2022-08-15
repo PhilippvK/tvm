@@ -418,6 +418,7 @@ def tune_model(
     mixed_precision_ops: Optional[List[str]] = None,
     mixed_precision_calculation_type: Optional[str] = None,
     mixed_precision_acc_type: Optional[str] = None,
+    si_prefix: str = "G",
 ):
     """Use tuning to automatically optimize the functions in a model.
 
@@ -489,6 +490,8 @@ def tune_model(
         The calculation dtype to be used while mixed precision.
     mixed_precision_acc_type: str
         The accumulation data type to be used while mixed precision.
+    si_prefix : str
+        SI prefix for FLOPS.
 
     Returns
     -------
@@ -762,6 +765,7 @@ def tune_tasks(
     trials: int,
     early_stopping: Optional[int] = None,
     tuning_records: Optional[str] = None,
+    si_prefix: str = "G",
 ):
     """Tune a list of tasks and output the history to a log file.
 
@@ -783,6 +787,8 @@ def tune_tasks(
     tuning_records: str, optional
         Path to the file produced by the tuning, to be used during
         tuning.
+    si_prefix : str
+        SI prefix for FLOPS.
     """
     if not tasks:
         logger.warning("there were no tasks found to be tuned")
@@ -820,7 +826,8 @@ def tune_tasks(
             early_stopping=early_stopping,
             measure_option=measure_option,
             callbacks=[
-                autotvm.callback.progress_bar(min(trials, len(tsk.config_space)), prefix=prefix),
+                autotvm.callback.progress_bar(min(trials, len(tsk.config_space)), prefix=prefix, si_prefix=si_prefix),
                 autotvm.callback.log_to_file(log_file),
             ],
+            si_prefix=si_prefix,
         )
