@@ -255,7 +255,7 @@ def generic_find_serial_port(serial_number=None):
         for port in serial_ports:
             ports_lst += f"Serial port: {port.device}, serial number: {port.serial_number}\n"
 
-        raise Exception("Expected 1 serial port, found multiple ports:\n {ports_lst}")
+        raise Exception(f"Expected 1 serial port, found multiple ports:\n {ports_lst}")
 
     return serial_ports[0].device
 
