@@ -41,7 +41,7 @@
 
 #include <tvm/runtime/crt/aot_executor_module.h>
 
-#define DBG
+// #define DBG
 
 #ifdef DBG
 FILE *fp;
@@ -138,6 +138,7 @@ tvm_crt_error_t TVMPlatformTimerStart() {
   g_microtvm_start_time = rdcycle64();
   // dbgprintf("g_microtvm_start_time=%f\n", g_microtvm_start_time);
   dbgprintf("g_microtvm_start_time=%llu\n", g_microtvm_start_time);
+  // TVMLogf("g_microtvm_start_time=%llu\n", g_microtvm_start_time);
   g_microtvm_timer_running = 1;
   return kTvmErrorNoError;
 }
@@ -158,7 +159,6 @@ tvm_crt_error_t TVMPlatformTimerStop(double* elapsed_time_seconds) {
   // std::chrono::microseconds time_span = std::chrono::duration_cast<std::chrono::microseconds>(
   //     microtvm_stop_time - g_microtvm_start_time);
   // *elapsed_time_seconds = static_cast<double>(time_span.count()) / 1e6;
-  *elapsed_time_seconds = (microtvm_stop_time - g_microtvm_start_time) / 100000000.0;  // 100MHz
   dbgprintf("elapsed_time_seconds=%f\n", *elapsed_time_seconds);
   g_microtvm_timer_running = 0;
   return kTvmErrorNoError;
