@@ -88,6 +88,16 @@ ENV ZEPHYR_BASE=/opt/zephyrproject/zephyr
 COPY install/ubuntu_download_csinn2_compute_lib.sh /install/ubuntu_download_csinn2_compute_lib.sh
 RUN bash /install/ubuntu_download_csinn2_compute_lib.sh
 
+# Download RISC-V multilib GCC toolchain (baremetal)
+COPY install/ubuntu_download_riscv_gcc.sh /install/ubuntu_download_riscv_gcc.sh
+RUN bash /install/ubuntu_download_riscv_gcc.sh /opt/riscv/riscv64-unknown-elf/
+
+# Build spike (riscv-isa-sim) and proxy pernel (pk)
+COPY install/ubuntu_install_spike_sim.sh /install/ubuntu_install_spike_sim.sh
+RUN bash /install/ubuntu_install_spike_sim.sh /opt/riscv/riscv64-unknown-elf/
+
 # Update PATH
 ENV PATH /opt/csi-nn2/tools/gcc-toolchain/bin:$PATH
 ENV PATH /opt/csi-nn2/tools/qemu/bin:$PATH
+ENV PATH /opt/riscv/riscv64-unknown-elf/bin:$PATH
+ENV PATH /opt/riscv/spike/bin:$PATH
