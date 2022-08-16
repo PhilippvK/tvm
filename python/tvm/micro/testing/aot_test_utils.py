@@ -65,6 +65,16 @@ AOT_USMP_CORSTONE300_RUNNER = AOTTestRunner(
     },
 )
 
+AOT_SPIKE_RUNNER = AOTTestRunner(
+    makefile="spike",
+    parameters={
+        "TRIPLE": "riscv64-unknown-elf",
+        "ARCH": "rv32gc",
+        "ABI": "ilp32d",
+        "SPIKE": "spike",
+        "PK": "pk",
+    },
+)
 
 def parametrize_aot_options(test):
     """Parametrize over valid option combinations"""
