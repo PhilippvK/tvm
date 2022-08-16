@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import tarfile
 import time
+import multiprocessing
 from tvm.micro.project_api import server
 
 
@@ -173,7 +174,8 @@ class Handler(server.ProjectAPIHandler):
         )
 
     def build(self, options):
-        args = ["make"]
+        num_threads = multiprocessing.cpu_count()
+        args = ["make", f"-j{num_threads}"]
         if options.get("verbose"):
             args.append("VERBOSE=1")
         arch = options.get("arch")
