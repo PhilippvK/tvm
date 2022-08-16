@@ -70,3 +70,7 @@ target_link_libraries(app PRIVATE tvm_model)
 file(GLOB_RECURSE app_srcs src/**.c)
 target_sources(app PRIVATE ${app_srcs} ${cmsis_lib_srcs})
 target_include_directories(app PRIVATE crt_config ${CMAKE_SOURCE_DIR}/include crt/include ${cmsis_includes})
+
+if(HEAP_SIZE_BYTES)
+    target_compile_definitions(app PRIVATE HEAP_SIZE_BYTES=${HEAP_SIZE_BYTES})
+endif()

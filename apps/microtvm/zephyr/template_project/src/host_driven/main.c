@@ -60,6 +60,10 @@ static const struct device* tvm_uart;
 static const struct device* led0_pin;
 #endif  // CONFIG_LED
 
+#ifndef HEAP_SIZE_BYTES
+#define HEAP_SIZE_BYTES (216 * 1024)
+#endif  // HEAP_SIZE_BYTES
+
 static size_t g_num_bytes_requested = 0;
 static size_t g_num_bytes_written = 0;
 static size_t g_num_bytes_in_rx_buffer = 0;
@@ -131,7 +135,7 @@ tvm_crt_error_t TVMPlatformGenerateRandom(uint8_t* buffer, size_t num_bytes) {
 }
 
 // Heap for use by TVMPlatformMemoryAllocate.
-K_HEAP_DEFINE(tvm_heap, 216 * 1024);
+K_HEAP_DEFINE(tvm_heap, HEAP_SIZE_BYTES);
 
 // Called by TVM to allocate memory.
 tvm_crt_error_t TVMPlatformMemoryAllocate(size_t num_bytes, DLDevice dev, void** out_ptr) {
