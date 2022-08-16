@@ -47,6 +47,12 @@ def pytest_addoption(parser):
         default=False,
         help="Run Corstone-300 FVP tests",
     )
+    parser.addoption(
+        "--enable-spike-tests",
+        action="store_true",
+        default=False,
+        help="Run spike (riscv-isa-sim) tests",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -57,4 +63,10 @@ def pytest_collection_modifyitems(config, items):
                     pytest.mark.skip(
                         reason="Need --enable-corstone300-tests option to run this test"
                     )
+                )
+    if not config.getoption("--enable-spike-tests"):
+        for item in items:
+            if "spike" in item.keywords:
+                item.add_marker(
+                    pytest.mark.skip(reason="Need --enable-spike-tests option to run this test")
                 )

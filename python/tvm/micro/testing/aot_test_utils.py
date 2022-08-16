@@ -76,6 +76,7 @@ AOT_SPIKE_RUNNER = AOTTestRunner(
     },
 )
 
+
 def parametrize_aot_options(test):
     """Parametrize over valid option combinations"""
 
@@ -85,7 +86,7 @@ def parametrize_aot_options(test):
 
     interface_api = ["packed", "c"]
     use_unpacked_api = [True, False]
-    test_runner = [AOT_DEFAULT_RUNNER, AOT_CORSTONE300_RUNNER]
+    test_runner = [AOT_DEFAULT_RUNNER, AOT_CORSTONE300_RUNNER, AOT_SPIKE_RUNNER]
 
     all_combinations = itertools.product(interface_api, use_unpacked_api, test_runner)
 
