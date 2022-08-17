@@ -17,6 +17,9 @@
 # pylint: disable=invalid-name,unused-variable,unused-argument,no-member
 """Conv2D int8 schedule on ARM"""
 
+import random
+import string
+
 import tvm
 from tvm import te
 from tvm.ir import register_intrin_lowering
@@ -959,6 +962,98 @@ def gemm_acc_nx16_int8_int8_int32(dtype, rows):
 
 
 def smlal_int16_int32():
+    """
+    """
+    UNIQ_ID_LEN = 8
+    uniq_id = "".join(random.choices(string.ascii_uppercase, k=UNIQ_ID_LEN))
+    int16_lanes = 8
+    A = te.placeholder((int16_lanes,), dtype="int16", name="A")
+    B = te.placeholder((int16_lanes, 1), dtype="int16", name="B")
+    C = te.compute(
+        (int16_lanes,),
+        lambda i: A[i].astype("int32") * B[i, 0].astype("int32"),
+        name="C",
+    )
+
+    a_buffer = tvm.tir.decl_buffer(
+        A.shape, dtype="int16", name="a_buffer", offset_factor=1, strides=[1]
+    )
+    b_buffer = tvm.tir.decl_buffer(
+        B.shape,
+        dtype="int16",
+        name="b_buffer",
+        offset_factor=1,
+        strides=[te.var("sb"), 1],
+    )
+    c_buffer = tvm.tir.decl_buffer(
+        C.shape,
+        dtype="int32",
+        name="c_buffer",
+        offset_factor=1,
+        strides=[1],
+    )
+
+    in_dtype = "int16"
+    N = int16_lanes
+    def _intrin_func(ins, outs):
+        aa, bb = ins
+        cc = outs[0]
+        gemv_func_prefix = "gemv" if in_dtype == "int8" else "gemv16"
+
+        def _reduce_update():
+            ib = tvm.tir.ir_builder.create()
+            ib.emit(
+                tvm.tir.call_extern(
+                    "int32",
+                    f"{gemv_func_prefix}_{N}_update_{uniq_id}",
+                    aa.access_ptr("r"),
+                    bb.access_ptr("r"),
+                    cc.access_ptr("w"),
+                    aa.strides[0],
+                    bb.strides[0],
+                    cc.strides[0],
+                )
+            )
+            return ib.get()
+
+        def _reduce_reset():
+            ib = tvm.tir.ir_builder.create()
+            ib.emit(
+                tvm.tir.call_extern(
+                    "int32", f"gemv_{N}_reset_{uniq_id}", cc.access_ptr("w"), cc.strides[0]
+                )
+            )
+            return ib.get()
+
+        def _body():
+            ib = tvm.tir.ir_builder.create()
+            ib.emit(
+                tvm.tir.call_extern(
+                    "int32",
+                    f"{gemv_func_prefix}_{N}_body_{uniq_id}",
+                    aa.access_ptr("r"),
+                    bb.access_ptr("r"),
+                    cc.access_ptr("w"),
+                    aa.strides[0],
+                    bb.strides[0],
+                    cc.strides[0],
+                )
+            )
+            return ib.get()
+
+        return _body(), _reduce_reset(), _reduce_update()
+
+    intrin_decl = te.decl_tensor_intrin(C.op, _intrin_func, binds={A: a_buffer, B: b_buffer, C: c_buffer})
+
+    buffer_params = {"offset_factor": 1}
+    return te.decl_tensor_intrin(
+        C.op,
+        _intrin_func,
+        binds={A: a_buffer, B: b_buffer, C: c_buffer},
+        default_buffer_params=buffer_params,
+    ), uniq_id
+
+def smlal_int16_int32_old():
     """
     Intrinsic to be used in order to load two int16x8 vectors and multiply
     them together through a pair of smlal/smlal2 instructions. The pseudo-code

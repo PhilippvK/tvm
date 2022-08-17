@@ -304,11 +304,14 @@ def schedule_depthwise_conv2d_nhwc(cfg, outs):
 
     # fallback support
     if cfg.is_fallback:
-        cfg["tile_c"] = SplitEntity([-1, 8])
+        # cfg["tile_c"] = SplitEntity([-1, 8])
+        cfg["tile_c"] = SplitEntity([-1, 4])
         cfg["tile_h"] = SplitEntity([-1, 2])
         cfg["tile_w"] = SplitEntity([-1, 2])
-        cfg["locate_output"] = OtherOptionEntity(1)
-        cfg["unroll_tile"] = OtherOptionEntity(True)
+        # cfg["locate_output"] = OtherOptionEntity(1)
+        cfg["locate_output"] = OtherOptionEntity(0)
+        # cfg["unroll_tile"] = OtherOptionEntity(True)
+        cfg["unroll_tile"] = OtherOptionEntity(False)
     ##### space definition end #####
 
     def schedule_conv(conv):
@@ -326,12 +329,16 @@ def schedule_depthwise_conv2d_nhwc(cfg, outs):
 
         split_val = cfg["tile_c"].size[-1]
         use_tensorization = (
-            (in_type == "int16")
-            and (split_val == 8)
+            # (in_type == "int16")
+            (in_type == "int8")
+            # and (split_val == 8)
+            and (split_val == 4)
             and (IC % split_val == 0)
             and (channel_multiplier == 1)
-            and is_aarch64_arm()
+            # and is_aarch64_arm()
+            and True
         )
+        print("use_tensorization", use_tensorization)
 
         data_pad_value = -1
         if conv_data.name == "data_pad":
@@ -358,7 +365,7 @@ def schedule_depthwise_conv2d_nhwc(cfg, outs):
             data_pad_value = cfg["data_pad_strategy"].val
 
         if use_tensorization and data_pad_value != 3:
-            smlal = smlal_int16_int32()
+            smlal, uniq_id = smlal_int16_int32()
             s[conv].tensorize(ci, smlal)
         else:
             s[conv].vectorize(ci)
@@ -396,6 +403,8 @@ def schedule_depthwise_conv2d_nhwc(cfg, outs):
     def _callback(op):
         if op.name == "depthwise_conv2d_nhwc_output":
             conv = op.output(0)
+            print("cfg[locate_output]", cfg["locate_output"])
+            print("cfg[unroll_tile]", cfg["unroll_tile"])
             if conv != out:
                 hi, wi, p_axis = schedule_conv_out(out)
                 schedule_conv(conv)
@@ -406,7 +415,7 @@ def schedule_depthwise_conv2d_nhwc(cfg, outs):
             else:
                 p_axis = schedule_conv(out)
 
-            s[out].parallel(p_axis)
+            # s[out].parallel(p_axis)
 
     traverse_inline(s, outs[0].op, _callback)
     return s
