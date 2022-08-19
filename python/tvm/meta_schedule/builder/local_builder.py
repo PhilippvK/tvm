@@ -228,7 +228,9 @@ def _worker_func(
         default_export,
     )
     # Step 1. Build the IRModule
+    print("mod", mod)
     rt_mod: Module = f_build(mod, target, _deserialize_params(params))
+    print("rt_mod", rt_mod)
     # Step 2. Export the Module
     artifact_path: str = f_export(rt_mod)
     return artifact_path
@@ -236,6 +238,7 @@ def _worker_func(
 
 @register_func("meta_schedule.builder.default_build")
 def default_build(mod: IRModule, target: Target, _params: Optional[Dict[str, NDArray]]) -> Module:
+    print("default_build")
     """Default build function.
 
     Parameters
@@ -263,6 +266,7 @@ def default_build(mod: IRModule, target: Target, _params: Optional[Dict[str, NDA
 
 @register_func("meta_schedule.builder.default_export")
 def default_export(mod: Module) -> str:
+    print("default_export")
     """Default export function.
 
     Parameters

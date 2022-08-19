@@ -127,9 +127,10 @@ def schedule_conv2d_nhwc(outs):
 
 
 def conv2d_nchw(data, kernel, strides, padding, dilation, out_dtype):
-    layout = "NCHW"
-    packed_out = conv2d_NCHWc(data, kernel, strides, padding, dilation, layout, layout, out_dtype)
-    return unpack_NCHWc_to_nchw(packed_out, out_dtype)
+    # layout = "NCHW"
+    # packed_out = conv2d_NCHWc(data, kernel, strides, padding, dilation, layout, layout, out_dtype)
+    # return unpack_NCHWc_to_nchw(packed_out, out_dtype)
+    return nn.conv2d_nchw(data, kernel, strides, padding, dilation, out_dtype)
 
 
 def schedule_conv2d_nchw(outs):
@@ -306,3 +307,97 @@ def schedule_conv2d_nhwc_dnnl(_, outs):
 #     # specialize for INT8 1X1 conv on X86
 #     return conv2d_avx_1x1._declaration_conv_nhwc_pack(cfg, data, kernel, strides,
 #                                                       padding, dilation, out_dtype)
+from tvm import autotvm
+from tvm.autotvm.task import deserialize_args
+# from tvm import te
+from tvm.topi.utils import simplify
+from tvm.topi.nn.pad import pad
+# from tvm.topi.nn.utils import get_pad_tuple
+from tvm.tir.expr import Mul
+
+def conv2d_nhwc_hwoi(*args, **kwargs):
+    assert not kwargs, "Do not support kwargs in template function call"
+    args = deserialize_args(args)
+    data, kernel = args[:2]
+    layout = args[-2]
+    cfg = autotvm.get_config()
+    args = [cfg] + args
+    assert layout == "NHWC"
+    conv = conv2d_nhwc_hwoi_compute(*args)
+    sched = conv2d_nhwc_hwoi_schedule(cfg, [data, kernel, conv])
+    return sched, [data, kernel, conv]
+
+
+conv2d_nhwc_hwoi.template_key = "dsp"
+conv2d_nhwc_hwoi.default_data_layout = "NHWC"
+conv2d_nhwc_hwoi.default_kernel_layout = "HWOI"
+
+
+def conv2d_nhwc_hwoi_compute(cfg, data, kernel, strides, padding, dilation, out_dtype):
+    assert isinstance(strides, int) or len(strides) == 2
+    assert isinstance(dilation, int) or len(dilation) == 2
+
+    if isinstance(strides, int):
+        stride_h = stride_w = strides
+    else:
+        stride_h, stride_w = strides
+
+    if isinstance(dilation, int):
+        dilation_h = dilation_w = dilation
+    else:
+        dilation_h, dilation_w = dilation
+
+    batch_size, in_height, in_width, in_channels = data.shape
+    kernel_h, kernel_w, out_channels, _ = kernel.shape
+
+    # compute the output shape
+    dilated_kernel_h = (kernel_h - 1) * dilation_h + 1
+    dilated_kernel_w = (kernel_w - 1) * dilation_w + 1
+    pad_top, pad_left, pad_down, pad_right = get_pad_tuple(
+        padding, (dilated_kernel_h, dilated_kernel_w)
+    )
+    out_height = simplify((in_height - dilated_kernel_h + pad_top + pad_down) // stride_h + 1)
+    out_width = simplify((in_width - dilated_kernel_w + pad_left + pad_right) // stride_w + 1)
+
+    pad_before = [0, pad_top, pad_left, 0]
+    pad_after = [0, pad_down, pad_right, 0]
+    padded_data = pad(data, pad_before, pad_after, name="padded_data")
+
+    rc = te.reduce_axis((0, in_channels), name="rc")
+    ry = te.reduce_axis((0, kernel_h), name="ry")
+    rx = te.reduce_axis((0, kernel_w), name="rx")
+
+    conv = te.compute(
+        (batch_size, out_height, out_width, out_channels),
+        lambda nn, yy, xx, ff: te.sum(
+            padded_data[
+                nn, yy * stride_h + ry * dilation_h, xx * stride_w + rx * dilation_w, rc
+            ].astype(out_dtype)
+            * kernel[ry, rx, ff, rc].astype(out_dtype),
+            axis=[ry, rx, rc],
+        ),
+        name="conv2d",
+        tag="conv2d_nhwc_hwoi",
+    )
+
+    return conv
+
+
+def conv2d_nhwc_hwoi_schedule(cfg, outs):
+    sched = te.create_schedule([x.op for x in outs])
+
+    def _callback(op):
+        if "conv2d_nhwc_hwoi" not in op.tag:
+            return
+
+    traverse_inline(sched, outs[-1].op, _callback)
+    return sched
+
+@autotvm.register_topi_compute("conv2d_nhwc_hwoi.x86")
+def conv2d_nhwc_hwoi(cfg, data, kernel, strides, padding, dilation, out_dtype):
+    return conv2d_nhwc_hwoi_compute(cfg, data, kernel, strides, padding, dilation, out_dtype)
+
+
+@autotvm.register_topi_schedule("conv2d_nhwc_hwoi.x86")
+def schedule_conv2d_nhwc_hwoi(cfg, outs):
+    return conv2d_nhwc_hwoi_schedule(cfg, outs)

@@ -102,6 +102,7 @@ def log_softmax_strategy_cpu(attrs, inputs, out_type, target):
 
 @conv2d_strategy.register("cpu")
 def conv2d_strategy_cpu(attrs, inputs, out_type, target):
+    print("conv2d_strategy_cpu")
     """conv2d x86 strategy"""
     strategy = _op.OpStrategy()
     data, kernel = inputs
@@ -110,6 +111,7 @@ def conv2d_strategy_cpu(attrs, inputs, out_type, target):
     groups = attrs.groups
     layout = attrs.data_layout
     kernel_layout = attrs.kernel_layout
+    print("layout", layout, kernel_layout)
     if dilation_h < 1 or dilation_w < 1:
         raise ValueError("dilation should be positive value")
 
@@ -141,25 +143,31 @@ def conv2d_strategy_cpu(attrs, inputs, out_type, target):
             assert _OIHWio_matcher.match(kernel_layout)  # check if kernel is OIHWio
             return conv2d_NCHWc_strategy_cpu(attrs, inputs, out_type, target)
         elif layout == "NHWC":
-            assert kernel_layout == "HWIO"
-            if (not need_auto_scheduler_layout) and (not need_meta_schedule_layout):
-                logger.warning("conv2d NHWC layout is not optimized for x86 with autotvm.")
-            if "dnnl" in target.libs:
-                strategy.add_implementation(
-                    wrap_compute_conv2d(topi.x86.conv2d_nhwc_dnnl),
-                    wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc_dnnl),
-                    name="conv2d_nhwc_dnnl.x86",
-                )
-            else:
-                strategy.add_implementation(
-                    wrap_compute_conv2d(
-                        topi.nn.conv2d_nhwc,
-                        need_auto_scheduler_layout=need_auto_scheduler_layout,
-                        need_meta_schedule_layout=need_meta_schedule_layout,
-                    ),
-                    wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc),
-                    name="conv2d_nhwc.x86",
-                )
+            assert kernel_layout == "HWOI"
+            strategy.add_implementation(
+                wrap_compute_conv2d(topi.x86.conv2d_nhwc_hwoi),
+                wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc_hwoi),
+                name="conv2d_nhwc_hwoi.x86",
+            )
+            # assert kernel_layout == "HWIO"
+            # if (not need_auto_scheduler_layout) and (not need_meta_schedule_layout):
+            #     logger.warning("conv2d NHWC layout is not optimized for x86 with autotvm.")
+            # if "dnnl" in target.libs:
+            #     strategy.add_implementation(
+            #         wrap_compute_conv2d(topi.x86.conv2d_nhwc_dnnl),
+            #         wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc_dnnl),
+            #         name="conv2d_nhwc_dnnl.x86",
+            #     )
+            # else:
+            #     strategy.add_implementation(
+            #         wrap_compute_conv2d(
+            #             topi.nn.conv2d_nhwc,
+            #             need_auto_scheduler_layout=need_auto_scheduler_layout,
+            #             need_meta_schedule_layout=need_meta_schedule_layout,
+            #         ),
+            #         wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc),
+            #         name="conv2d_nhwc.x86",
+            #     )
 
             judge_winograd_auto_scheduler = False
             if len(kernel.shape) == 4:
