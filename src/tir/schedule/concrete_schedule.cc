@@ -218,10 +218,9 @@ Schedule ConcreteScheduleNode::Copy() {
     } else if ((level) == ScheduleErrorRenderLevel::kFast) {                                  \
       throw tvm::runtime::Error(error.FastErrorString());                                     \
     } else if ((level) == ScheduleErrorRenderLevel::kNone) {                                  \
-      throw tvm::runtime::Error(error.RenderReport(primitive) + "\n" + runtime::Backtrace()); \
+      throw tvm::runtime::Error("ScheduleError: (not rendered)");                             \
     }                                                                                         \
   }
-      // throw tvm::runtime::Error("ScheduleError: (not rendered)");                             \
 
 /******** Schedule: Schedule: Sampling ********/
 
