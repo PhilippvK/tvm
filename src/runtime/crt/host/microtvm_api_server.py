@@ -109,9 +109,9 @@ class Handler(server.ProjectAPIHandler):
         # Populate src/
         src_dir = os.path.join(project_dir, "src")
         os.mkdir(src_dir)
-        shutil.copy2(
-            os.path.join(os.path.dirname(__file__), "main.cc"), os.path.join(src_dir, "main.cc")
-        )
+        files_to_copy = ["main.cc", "riscv_util.h"]
+        for filename in files_to_copy:
+            shutil.copy2(os.path.join(os.path.dirname(__file__), filename), os.path.join(src_dir, filename))
 
     def build(self, options):
         args = ["make"]
