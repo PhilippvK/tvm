@@ -27,7 +27,7 @@ import time
 from tvm.micro.project_api import server
 
 
-PROJECT_DIR = pathlib.Path(os.path.dirname(__file__) or os.path.getcwd())
+PROJECT_DIR = pathlib.Path(os.path.dirname(__file__) or os.getcwd())
 
 
 MODEL_LIBRARY_FORMAT_RELPATH = "model.tar"
