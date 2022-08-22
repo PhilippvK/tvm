@@ -20,14 +20,6 @@ TRIPLE ?= riscv32-unknown-elf
 ARCH ?= rv32gc
 ABI ?= ilp32d
 
-INCLUDES ?= -isystem crt/include -Icrt_config
-CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=stringop-overread -Wno-error=format-extra-args -march=$(ARCH) -mabi=$(ABI) -O3
-CXXFLAGS ?= -Werror -Wall -std=c++11 -DTVM_HOST_USE_GRAPH_EXECUTOR_MODULE -march=$(ARCH) -mabi=$(ABI) -O3
-LDFLAGS ?= -Werror -Wall -march=$(ARCH) -mabi=$(ABI)
-
-# Codegen produces spurious lines like: int32_t arg2_code = ((int32_t*)arg_type_ids)[(2)];
-MODEL_CFLAGS ?= -Wno-error=unused-variable -Wno-error=missing-braces
-
 PREFIX ?= $(TRIPLE)-
 
 # AR ?= ${PREFIX}ar
@@ -44,6 +36,18 @@ QUIET ?=
 else
 QUIET ?= @
 endif
+
+ifneq (${SPIKE_CPU_FREQ_HZ},)
+CFLAGS_EXTRA = -D$(SPIKE_CPU_FREQ_HZ)
+endif
+
+INCLUDES ?= -isystem crt/include -Icrt_config
+CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=stringop-overread -Wno-error=format-extra-args -march=$(ARCH) -mabi=$(ABI) -O3 $(CFLAGS_EXTRA)
+CXXFLAGS ?= -Werror -Wall -std=c++11 -DTVM_HOST_USE_GRAPH_EXECUTOR_MODULE -march=$(ARCH) -mabi=$(ABI) -O3
+LDFLAGS ?= -Werror -Wall -march=$(ARCH) -mabi=$(ABI)
+
+# Codegen produces spurious lines like: int32_t arg2_code = ((int32_t*)arg_type_ids)[(2)];
+MODEL_CFLAGS ?= -Wno-error=unused-variable -Wno-error=missing-braces
 
 PWD = $(shell pwd)
 BUILD_DIR = build

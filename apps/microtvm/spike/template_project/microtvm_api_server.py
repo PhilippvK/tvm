@@ -99,6 +99,13 @@ PROJECT_OPTIONS = [
         type="str",
         help="Additional arguments added to the pk command line.",
     ),
+    server.ProjectOption(
+        "cpu_freq_hz",
+        optional=["build"],
+        default=None,
+        type="int",
+        help="Overwrite CPU freqquency reference used for timing.",
+    ),
 ]
 
 
@@ -190,6 +197,9 @@ class Handler(server.ProjectAPIHandler):
         if triple is None:
             triple = TRIPLE
         args.append(f"TRIPLE={triple}")
+        freq = options.get("cpu_freq_hz")
+        if freq is not None:
+            args.append(f"SPIKE_CPU_FREQ_HZ={freq}")
 
         args.append(self.BUILD_TARGET)
 
