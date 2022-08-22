@@ -30,6 +30,7 @@ from tvm.meta_schedule.relay_integration import extract_task_from_relay
 from tvm.meta_schedule.testing.tlcbench import load_quantized_bert_base
 from tvm.meta_schedule.tune import tune_extracted_tasks
 from tvm.tir.tensor_intrin.arm_cpu import DP4A_INTRIN
+from tvm.tir.tensor_intrin.arm_cpu import DP4A2_INTRIN
 from tvm.tir.tensor_intrin.rocm import AMDGPU_SDOT4_INTRIN
 from tvm.tir.tensor_intrin.x86 import VNNI_DOT_16x4_INTRIN as VNNI_INTRIN
 
@@ -79,8 +80,10 @@ SCH_RULES_FOR_VNNI = [
         ),
     ),
     schedule_rule.ParallelizeVectorizeUnroll(
-        max_jobs_per_core=16,
-        max_vectorize_extent=64,
+        # max_jobs_per_core=16,
+        max_jobs_per_core=-1,
+        # max_vectorize_extent=64,
+        max_vectorize_extent=-1,
         unroll_max_steps=[0, 16, 64, 512],
         unroll_explicit=True,
     ),
@@ -97,6 +100,7 @@ def get_sch_rules_for_dp4a(intrin):
             # tile_binds=["blockIdx.x", "vthread.x", "threadIdx.x"],
             max_innermost_factor=64,
             vector_load_lens=[1, 2, 3, 4],
+            # reuse_read=None,
             reuse_read=schedule_rule.ReuseType(
                 req="must",
                 levels=[4],
@@ -120,15 +124,15 @@ def get_sch_rules_for_dp4a(intrin):
         #         scope="global",
         #     ),
         # ),
-        # schedule_rule.AutoInline(
-        #     into_producer=True,
-        #     into_consumer=True,
-        #     inline_const_tensor=True,
-        #     disallow_if_then_else=False,
-        #     require_injective=False,
-        #     require_ordered=False,
-        #     disallow_op=None,
-        # ),
+        schedule_rule.AutoInline(
+            into_producer=True,
+            into_consumer=True,
+            inline_const_tensor=True,
+            disallow_if_then_else=False,
+            require_injective=False,
+            require_ordered=False,
+            disallow_op=None,
+        ),
         # schedule_rule.AutoInline(
         #     into_producer=False,
         #     into_consumer=True,
@@ -152,11 +156,12 @@ def get_sch_rules_for_dp4a(intrin):
         #     unroll_explicit=True,
         # ),
         # schedule_rule.AddRFactor(max_jobs_per_core=16, max_innermost_factor=64),
-        # schedule_rule.RandomComputeLocation(),
+        schedule_rule.RandomComputeLocation(),
     ]
 
 
 SCH_RULES_FOR_DP4A = get_sch_rules_for_dp4a(DP4A_INTRIN)
+SCH_RULES_FOR_DP4A2 = get_sch_rules_for_dp4a(DP4A2_INTRIN)
 SCH_RULES_FOR_SDOT4 = get_sch_rules_for_dp4a(AMDGPU_SDOT4_INTRIN)
 
 POSTPROCS_FOR_VNNI = [
@@ -174,8 +179,9 @@ POSTPROCS_FOR_DP4A = [
     postproc.RewriteReductionBlock(),
     postproc.RewriteTensorize(),
     # postproc.VerifyGPUCode(),
-    postproc.RewriteLayout(),
+    # postproc.RewriteLayout(),
 ]
+POSTPROCS_FOR_DP4A2 = POSTPROCS_FOR_DP4A
 
 
 def tune_and_test(relay_mod, data_np, weight_np, op_name, target, sch_rules, postprocs):
@@ -251,33 +257,46 @@ def _test_dense(data_dtype, sch_rules, postprocs, target):
     tune_and_test(relay_mod, data_np, weight_np, "dense", target, sch_rules, postprocs)
 
 
-def _test_conv2d(data_dtype, sch_rules, postprocs, target):
-    # d_shape = (1, 64, 56, 56)
-    d_shape = (1, 56, 56, 64)
-    # w_shape = (64, 64, 3, 3)
-    w_shape = (3, 3, 64, 64)
+def _test_conv2d(data_dtype, sch_rules, postprocs, target, data_layout, kernel_layout):
+    data_shape = (56, 56)
+    kernel_shape = (3, 3)
+    channels_in = 64
+    channels_out = 64
+    batch_size = 1
+    if data_layout == "NCHW":
+        d_shape = (batch_size, channels_in, *data_shape)
+    elif data_layout == "NHWC":
+        d_shape = (batch_size, *data_shape, channels_in)
+    else:
+        raise RuntimeError("Unsupported Data Layout")
+
+    if kernel_layout == "OIHW":
+        w_shape = (channels_out, channels_in, *kernel_shape)
+    elif kernel_layout == "IOHW":
+        w_shape = (channels_in, channels_out, *kernel_shape)
+    elif kernel_layout == "HWIO":
+        w_shape = (*kernel_shape, channels_in, channels_out)
+    elif kernel_layout == "HWOI":
+        w_shape = (*kernel_shape, channels_out, channels_in)
+    else:
+        raise RuntimeError("Unsupported Kernel Layout")
 
     weight_dtype = "int8"
     out_dtype = "int32"
 
     data = relay.var("data", shape=d_shape, dtype=data_dtype)
     weight = relay.var("weight", shape=w_shape, dtype=weight_dtype)
-    # out_channel = w_shape[0]
-    # out_channel = w_shape[-1]
-    out_channel = w_shape[-2]
     conv2d = relay.nn.conv2d(
         data=data,
         weight=weight,
-        # kernel_size=w_shape[2:],
-        kernel_size=w_shape[:2],
-        channels=out_channel,
+        kernel_size=kernel_shape,
+        channels=channels_out,
         padding=(1, 1),
         strides=(1, 1),
         out_dtype=out_dtype,
         #
-        data_layout="NHWC",
-        # kernel_layout="HWIO",
-        kernel_layout="HWOI",
+        data_layout=data_layout,
+        kernel_layout=kernel_layout,
     )
 
     relay_mod = tvm.IRModule.from_expr(conv2d)
@@ -330,10 +349,11 @@ def _test_bert_int8(target, sch_rules, postprocs):
     print(runtime.benchmark(dev, number=1, repeat=50).mean)
 
 
-@pytest.mark.skip("Requires cascadelake")
+# @pytest.mark.skip("Requires cascadelake")
 def test_vnni_dense():
     _test_dense(
-        "uint8", SCH_RULES_FOR_VNNI, POSTPROCS_FOR_VNNI, "llvm -mcpu=cascadelake -num-cores 4"
+        # "uint8", SCH_RULES_FOR_VNNI, POSTPROCS_FOR_VNNI, "llvm -mcpu=cascadelake -num-cores 4"
+        "uint8", SCH_RULES_FOR_VNNI, POSTPROCS_FOR_VNNI, "llvm -num-cores 4"
     )
 
 
@@ -342,7 +362,8 @@ def test_vnni_dense():
 # def test_dp4a_dense():
 #     _test_dense("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "nvidia/geforce-rtx-3070")
 def test_dp4a_dense():
-    _test_dense("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "llvm -num-cores 4")
+    # _test_dense("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "llvm -num-cores 4")
+    _test_dense("int8", SCH_RULES_FOR_DP4A2, POSTPROCS_FOR_DP4A2, "llvm -num-cores 4")
 
     # Uncomment to test on vulkan or rocm target
     # _test_dense(
@@ -353,18 +374,21 @@ def test_dp4a_dense():
     # )
 
 
-@pytest.mark.skip("Requires cascadelake")
+# @pytest.mark.skip("Requires cascadelake")
 def test_vnni_conv2d():
     _test_conv2d(
-        "uint8", SCH_RULES_FOR_VNNI, POSTPROCS_FOR_VNNI, "llvm -mcpu=cascadelake -num-cores 4"
+        # "uint8", SCH_RULES_FOR_VNNI, POSTPROCS_FOR_VNNI, "llvm -mcpu=cascadelake -num-cores 4"
+        # "uint8", SCH_RULES_FOR_VNNI, POSTPROCS_FOR_VNNI, "llvm -num-cores 4"
+        "uint8", SCH_RULES_FOR_VNNI, POSTPROCS_FOR_VNNI, "llvm -num-cores 4", "NCHW", "OIHW"
+        # "uint8", SCH_RULES_FOR_VNNI, POSTPROCS_FOR_VNNI, "llvm -num-cores 4", "NHWC", "HWOI"
     )
 
 
-# @pytest.mark.skip("Only tested locally on sm_86 (for cuda) which is not supported by CI")
+@pytest.mark.skip("Only tested locally on sm_86 (for cuda) which is not supported by CI")
 # @tvm.testing.requires_gpu
-def test_dp4a_conv2d():
+def test_dp4a_conv2d_nchw():
     # _test_conv2d("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "nvidia/geforce-rtx-3070")
-    _test_conv2d("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "llvm -num-cores 4")
+    _test_conv2d("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "llvm -num-cores 4", "NCHW", "OIHW")
 
     # Uncomment to test on vulkan or rocm target
     # _test_conv2d(
@@ -375,9 +399,15 @@ def test_dp4a_conv2d():
     # )
 
 
-@pytest.mark.skip("Requires cascadelake")
-def test_vnni_bert_int8():
-    _test_bert_int8("llvm -mcpu=cascadelake -num-cores 4", SCH_RULES_FOR_VNNI, POSTPROCS_FOR_VNNI)
+@pytest.mark.skip("Only tested locally on sm_86 (for cuda) which is not supported by CI")
+def test_dp4a_conv2d_nhwc():
+    # _test_conv2d("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "nvidia/geforce-rtx-3070")
+    _test_conv2d("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "llvm -num-cores 4", "NHWC", "HWOI")
+
+# @pytest.mark.skip("Requires cascadelake")
+# def test_vnni_bert_int8():
+#     # _test_bert_int8("llvm -mcpu=cascadelake -num-cores 4", SCH_RULES_FOR_VNNI, POSTPROCS_FOR_VNNI)
+#     _test_bert_int8("llvm -num-cores 4", SCH_RULES_FOR_VNNI, POSTPROCS_FOR_VNNI)
 
 
 @tvm.testing.requires_gpu

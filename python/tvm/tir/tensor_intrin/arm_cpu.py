@@ -19,6 +19,8 @@
 from tvm.script import tir as T
 from .. import TensorIntrin
 from .dot_product_common import DP4A_INTRIN  # pylint: disable=unused-import
+from .dot_product_common import DP4A2_INTRIN  # pylint: disable=unused-import
+from .dot_product_common import DP4A3_INTRIN  # pylint: disable=unused-import
 
 
 # TODO(masahi): Parametrize the TVMScript description of dot product by

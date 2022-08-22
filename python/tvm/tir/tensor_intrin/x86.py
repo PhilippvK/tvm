@@ -56,8 +56,10 @@ def dot_product_16x4_u8i8i32_vnni(
         B_i8x64 = B.vload([0, 0], dtype="int8x64")
         B_i32x16 = T.reinterpret(B_i8x64, dtype="int32x16")
 
-        C[T.ramp(T.int32(0), 1, 16)] += T.call_llvm_pure_intrin(  # Note: this is an update +=
-            T.llvm_lookup_intrinsic_id("llvm.x86.avx512.vpdpbusd.512"),
+        # C[T.ramp(T.int32(0), 1, 16)] += T.call_llvm_pure_intrin(  # Note: this is an update +=
+        C[T.ramp(T.int32(0), 1, 16)] += T.call_pure_extern(  # Note: this is an update +=
+            # T.llvm_lookup_intrinsic_id("llvm.x86.avx512.vpdpbusd.512"),
+            "exp",
             T.uint32(0),
             T.int32x16(0),
             T.broadcast(A_i32, 16),
