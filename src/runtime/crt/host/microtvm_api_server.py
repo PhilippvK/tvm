@@ -132,9 +132,7 @@ class Handler(server.ProjectAPIHandler):
         assert (new_flag & os.O_NONBLOCK) != 0, "Cannot set file descriptor {fd} to non-blocking"
 
     def open_transport(self, options):
-        self._proc = subprocess.Popen(
-            [self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
-        )
+        self._proc = subprocess.Popen([self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)
         self._set_nonblock(self._proc.stdin.fileno())
         self._set_nonblock(self._proc.stdout.fileno())
         return server.TransportTimeouts(
