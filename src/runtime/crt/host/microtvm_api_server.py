@@ -48,9 +48,7 @@ class Handler(server.ProjectAPIHandler):
         return server.ServerInfo(
             platform_name="host",
             is_template=IS_TEMPLATE,
-            model_library_format_path=""
-            if IS_TEMPLATE
-            else PROJECT_DIR / MODEL_LIBRARY_FORMAT_RELPATH,
+            model_library_format_path="" if IS_TEMPLATE else PROJECT_DIR / MODEL_LIBRARY_FORMAT_RELPATH,
             project_options=[
                 server.ProjectOption(
                     "verbose",
