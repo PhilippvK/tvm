@@ -560,6 +560,7 @@ if(USE_MICRO)
   add_dependencies(tvm_runtime host_standalone_crt)
   add_dependencies(tvm_runtime zephyr)
   add_dependencies(tvm_runtime arduino)
+  add_dependencies(tvm_runtime spike)
 endif()
 
 if(USE_CPP_RPC)
