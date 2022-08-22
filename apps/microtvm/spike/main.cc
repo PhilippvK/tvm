@@ -41,6 +41,11 @@
 
 #include <tvm/runtime/crt/aot_executor_module.h>
 
+#ifndef SPIKE_CPU_FREQ_HZ
+// Default: 100MHz
+#define SPIKE_CPU_FREQ_HZ (100000000)
+#endif  // SPIKE_CPU_FREQ_HZ
+
 // Comment in the following line to write debug messages to the host filesystem:
 // #define DBG
 
@@ -138,6 +143,7 @@ tvm_crt_error_t TVMPlatformTimerStop(double* elapsed_time_seconds) {
     return kTvmErrorPlatformTimerBadState;
   }
   uint64_t microtvm_stop_time = rdcycle64();
+  *elapsed_time_seconds = (microtvm_stop_time - g_microtvm_start_time) / (float)(SPIKE_CPU_FREQ_HZ);
   g_microtvm_timer_running = 0;
   return kTvmErrorNoError;
 }
