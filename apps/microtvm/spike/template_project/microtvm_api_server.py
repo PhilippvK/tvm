@@ -25,10 +25,12 @@ import subprocess
 import tarfile
 import time
 import multiprocessing
+import logging
 from tvm.micro.project_api import server
 
+_LOG = logging.getLogger(__name__)
 
-PROJECT_DIR = pathlib.Path(os.path.dirname(__file__) or os.path.getcwd())
+PROJECT_DIR = pathlib.Path(os.path.dirname(__file__) or os.getcwd())
 
 
 MODEL_LIBRARY_FORMAT_RELPATH = "model.tar"
@@ -36,12 +38,12 @@ MODEL_LIBRARY_FORMAT_RELPATH = "model.tar"
 
 IS_TEMPLATE = not os.path.exists(os.path.join(PROJECT_DIR, MODEL_LIBRARY_FORMAT_RELPATH))
 
-# Environment paths
-SPIKE_EXE = "spike"
-SPIKE_PK = "pk"
-ARCH = "rv32gc"
-ABI = "ilp32d"
-TRIPLE = "riscv32-unknown-elf"
+# Defaults
+SPIKE_EXE = os.environ.get("SPIKE_EXE", "spike")
+SPIKE_PK = os.environ.get("SPIKE_PK", "pk")
+ARCH = os.environ.get("SPIKE_ARCH", "rv32gc")
+ABI = os.environ.get("SPIKE_ABI", "ilp32d")
+TRIPLE = os.environ.get("SPIKE_TRIPLE", "riscv64-unknown-elf")
 
 PROJECT_OPTIONS = [
     server.ProjectOption(
@@ -216,7 +218,6 @@ class Handler(server.ProjectAPIHandler):
         assert (new_flag & os.O_NONBLOCK) != 0, "Cannot set file descriptor {fd} to non-blocking"
 
     def open_transport(self, options):
-        # print("open_transport")
         isa = options.get("arch", ARCH)
         if isa is None:
             isa = ARCH
@@ -230,10 +231,17 @@ class Handler(server.ProjectAPIHandler):
             pk_extra = []
         else:
             pk_extra = [pk_extra]
-        spike_args = [options.get("spike_exe"), f"--isa={isa}", *spike_extra, options.get("spike_pk"), *pk_extra]
+        spike_exe = options.get("spike_exe", SPIKE_EXE)
+        spike_pk = options.get("spike_pk", None)
+
+        if spike_pk == "pk" and "64" in isa:
+            _LOG.warning("Using 64-bit isa requires a copmpatible proxy kernel (i.e. pk64)")
+
+        spike_args = [spike_exe, f"--isa={isa}", *spike_extra, spike_pk, *pk_extra]
         self._proc = subprocess.Popen(
             spike_args + [self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
         )
+
         self._set_nonblock(self._proc.stdin.fileno())
         self._set_nonblock(self._proc.stdout.fileno())
         return server.TransportTimeouts(
@@ -243,7 +251,6 @@ class Handler(server.ProjectAPIHandler):
         )
 
     def close_transport(self):
-        # print("close_transport")
         if self._proc is not None:
             proc = self._proc
             self._proc = None
@@ -262,7 +269,6 @@ class Handler(server.ProjectAPIHandler):
         return True
 
     def read_transport(self, n, timeout_sec):
-        # print("read_transport", n, timeout_sec)
         if self._proc is None:
             raise server.TransportClosedError()
 
@@ -282,7 +288,6 @@ class Handler(server.ProjectAPIHandler):
         return to_return
 
     def write_transport(self, data, timeout_sec):
-        # print("write_transport", data, timeout_sec)
         if self._proc is None:
             raise server.TransportClosedError()
 
