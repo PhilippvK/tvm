@@ -42,6 +42,11 @@
 
 #include <tvm/runtime/crt/aot_executor_module.h>
 
+#ifndef SPIKE_CPU_FREQ_HZ
+// Default: 100MHz
+#define SPIKE_CPU_FREQ_HZ (100000000)
+#endif  // SPIKE_CPU_FREQ_HZ
+
 // #define DBG
 
 #ifdef DBG
@@ -150,17 +155,8 @@ tvm_crt_error_t TVMPlatformTimerStop(double* elapsed_time_seconds) {
     dbgprintf("timer not running\n");
     return kTvmErrorPlatformTimerBadState;
   }
-  // auto microtvm_stop_time = std::chrono::steady_clock::now();
-  // struct timeval tv;
-  // gettimeofday(&tv, NULL);
-  // float microtvm_stop_time = tv.tv_sec + 1e-6f * tv.tv_usec;
   uint64_t microtvm_stop_time = rdcycle64();
-  // dbgprintf("microtvm_stop_time=%f\n", microtvm_stop_time);
-  dbgprintf("microtvm_stop_time=%llu\n", microtvm_stop_time);
-  // std::chrono::microseconds time_span = std::chrono::duration_cast<std::chrono::microseconds>(
-  //     microtvm_stop_time - g_microtvm_start_time);
-  // *elapsed_time_seconds = static_cast<double>(time_span.count()) / 1e6;
-  dbgprintf("elapsed_time_seconds=%f\n", *elapsed_time_seconds);
+  *elapsed_time_seconds = (microtvm_stop_time - g_microtvm_start_time) / (float)(SPIKE_CPU_FREQ_HZ);
   g_microtvm_timer_running = 0;
   return kTvmErrorNoError;
 }
