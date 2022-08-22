@@ -171,9 +171,7 @@ class Handler(server.ProjectAPIHandler):
         # Populate crt-config.h
         crt_config_dir = project_dir / "crt_config"
         crt_config_dir.mkdir()
-        shutil.copy2(
-            PROJECT_DIR / "crt_config" / "crt_config.h", crt_config_dir / "crt_config.h"
-        )
+        shutil.copy2(PROJECT_DIR / "crt_config" / "crt_config.h", crt_config_dir / "crt_config.h")
 
         # Populate src/
         src_dir = os.path.join(project_dir, "src")
@@ -239,7 +237,10 @@ class Handler(server.ProjectAPIHandler):
 
         spike_args = [spike_exe, f"--isa={isa}", *spike_extra, spike_pk, *pk_extra]
         self._proc = subprocess.Popen(
-            spike_args + [self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
+            spike_args + [self.BUILD_TARGET],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            bufsize=0,
         )
 
         self._set_nonblock(self._proc.stdin.fileno())
