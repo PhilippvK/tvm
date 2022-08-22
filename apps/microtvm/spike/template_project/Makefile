@@ -16,7 +16,7 @@
 # under the License.
 
 # TODO: get rid of errors
-TRIPLE ?= riscv32-unknown-elf
+TRIPLE ?= riscv64-unknown-elf
 ARCH ?= rv32gc
 ABI ?= ilp32d
 
@@ -38,12 +38,12 @@ QUIET ?= @
 endif
 
 ifneq (${SPIKE_CPU_FREQ_HZ},)
-CFLAGS_EXTRA = -D$(SPIKE_CPU_FREQ_HZ)
+FLAGS_EXTRA = -D$(SPIKE_CPU_FREQ_HZ)
 endif
 
 INCLUDES ?= -isystem crt/include -Icrt_config
-CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=stringop-overread -Wno-error=format-extra-args -march=$(ARCH) -mabi=$(ABI) -O3 $(CFLAGS_EXTRA)
-CXXFLAGS ?= -Werror -Wall -std=c++11 -DTVM_HOST_USE_GRAPH_EXECUTOR_MODULE -march=$(ARCH) -mabi=$(ABI) -O3
+CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=stringop-overread -Wno-error=format-extra-args -march=$(ARCH) -mabi=$(ABI) -O3 $(FLAGS_EXTRA)
+CXXFLAGS ?= -Werror -Wall -std=c++11 -DTVM_HOST_USE_GRAPH_EXECUTOR_MODULE -march=$(ARCH) -mabi=$(ABI) -O3 $(FLAGS_EXTRA)
 LDFLAGS ?= -Werror -Wall -march=$(ARCH) -mabi=$(ABI)
 
 # Codegen produces spurious lines like: int32_t arg2_code = ((int32_t*)arg_type_ids)[(2)];
