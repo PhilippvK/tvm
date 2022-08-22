@@ -34,6 +34,7 @@
 #include <iostream>
 
 #include "crt_config.h"
+#include "riscv_util.h"
 
 #ifdef TVM_HOST_USE_GRAPH_EXECUTOR_MODULE
 #include <tvm/runtime/crt/graph_executor_module.h>
