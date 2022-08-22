@@ -23,8 +23,10 @@ from unittest import mock
 from os import path
 from pathlib import Path
 
+import tvm.testing
 from tvm import autotvm
 from tvm.driver import tvmc
+from tvm.driver.tvmc.autotuner import filter_tasks
 
 
 def _get_tasks(model):
@@ -191,3 +193,27 @@ def test_tune_rpc_tracker_parsing(mock_load_model, mock_tune_model, mock_auto_sc
     assert "10.0.0.1" == kwargs["hostname"]
     assert "port" in kwargs
     assert 9999 == kwargs["port"]
+
+
+def test_filter_tasks_valid():
+    filter_tasks(list(range(10)), "list") == ([], True)
+    filter_tasks(list(range(10)), "help") == ([], True)
+    filter_tasks(list(range(10)), "all") == ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], False)
+    filter_tasks(list(range(10)), "5") == ([5], False)
+    filter_tasks(list(range(10)), "1-5") == ([1, 2, 3, 4, 5], False)
+    filter_tasks(list(range(10)), "-5") == ([0, 1, 2, 3, 4, 5], False)
+    filter_tasks(list(range(10)), "6-") == ([6, 7, 8, 9], False)
+    filter_tasks(list(range(10)), "0,1-3,all") == ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], False)
+    filter_tasks(list(range(10)), "0,4-5,9,list") == ([0, 4, 5, 9], True)
+
+
+@pytest.mark.xfail
+def test_filter_tasks_invalid():
+    filter_tasks(list(range(10)), "10")
+    filter_tasks(list(range(10)), "5,10")
+    filter_tasks(list(range(10)), "1-10")
+    filter_tasks(list(range(10)), "-10")
+
+
+if __name__ == "__main__":
+    tvm.testing.main()
