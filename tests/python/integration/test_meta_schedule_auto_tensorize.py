@@ -35,9 +35,7 @@ from tvm.tir.tensor_intrin.x86 import VNNI_DOT_16x4_INTRIN as VNNI_INTRIN
 CONFIG = ms.TuneConfig(
     strategy="evolutionary",
     num_trials_per_iter=32,
-    # num_trials_per_iter=1,
     max_trials_per_task=32,
-    # max_trials_per_task=1,
     max_trials_global=20000,
 )
 
@@ -91,9 +89,8 @@ def get_sch_rules_for_dp4a(intrin):
     return [
         schedule_rule.MultiLevelTilingWithIntrin(
             intrin,
-            # structure="SSSRRSRS",
-            structure="SSRSRS",
-            # tile_binds=["blockIdx.x", "vthread.x", "threadIdx.x"],
+            structure="SSSRRSRS",
+            tile_binds=["blockIdx.x", "vthread.x", "threadIdx.x"],
             max_innermost_factor=64,
             vector_load_lens=[1, 2, 3, 4],
             reuse_read=schedule_rule.ReuseType(
@@ -107,51 +104,22 @@ def get_sch_rules_for_dp4a(intrin):
                 scope="local",
             ),
         ),
-        # schedule_rule.MultiLevelTiling(
-        #     structure="SSRSRS",
-        #     tile_binds=None,
-        #     max_innermost_factor=64,
-        #     vector_load_lens=None,
-        #     reuse_read=None,
-        #     reuse_write=schedule_rule.ReuseType(
-        #         req="may",
-        #         levels=[1, 2],
-        #         scope="global",
-        #     ),
-        # ),
-        # schedule_rule.AutoInline(
-        #     into_producer=True,
-        #     into_consumer=True,
-        #     inline_const_tensor=True,
-        #     disallow_if_then_else=False,
-        #     require_injective=False,
-        #     require_ordered=False,
-        #     disallow_op=None,
-        # ),
-        # schedule_rule.AutoInline(
-        #     into_producer=False,
-        #     into_consumer=True,
-        #     inline_const_tensor=True,
-        #     disallow_if_then_else=True,
-        #     require_injective=True,
-        #     require_ordered=True,
-        #     disallow_op=["tir.exp"],
-        # ),
-        # schedule_rule.CrossThreadReduction(thread_extents=[4, 8, 16, 32, 64, 128, 256, 512]),
-        # schedule_rule.ParallelizeVectorizeUnroll(
-        #     max_jobs_per_core=-1,  # disable parallelize
-        #     max_vectorize_extent=-1,  # disable vectorize
-        #     unroll_max_steps=[0, 16, 64, 512, 1024],
-        #     unroll_explicit=True,
-        # ),
-        # schedule_rule.ParallelizeVectorizeUnroll(
-        #     max_jobs_per_core=16,
-        #     max_vectorize_extent=64,
-        #     unroll_max_steps=[0, 16, 64, 512],
-        #     unroll_explicit=True,
-        # ),
-        # schedule_rule.AddRFactor(max_jobs_per_core=16, max_innermost_factor=64),
-        # schedule_rule.RandomComputeLocation(),
+        schedule_rule.AutoInline(
+            into_producer=True,
+            into_consumer=True,
+            inline_const_tensor=True,
+            disallow_if_then_else=False,
+            require_injective=False,
+            require_ordered=False,
+            disallow_op=None,
+        ),
+        schedule_rule.CrossThreadReduction(thread_extents=[4, 8, 16, 32, 64, 128, 256, 512]),
+        schedule_rule.ParallelizeVectorizeUnroll(
+            max_jobs_per_core=-1,  # disable parallelize
+            max_vectorize_extent=-1,  # disable vectorize
+            unroll_max_steps=[0, 16, 64, 512, 1024],
+            unroll_explicit=True,
+        ),
     ]
 
 
@@ -167,13 +135,12 @@ POSTPROCS_FOR_VNNI = [
 
 POSTPROCS_FOR_DP4A = [
     postproc.DisallowDynamicLoop(),
-    # postproc.RewriteCooperativeFetch(),
-    # postproc.RewriteUnboundBlock(),
+    postproc.RewriteCooperativeFetch(),
+    postproc.RewriteUnboundBlock(),
     postproc.RewriteParallelVectorizeUnroll(),
     postproc.RewriteReductionBlock(),
     postproc.RewriteTensorize(),
-    # postproc.VerifyGPUCode(),
-    postproc.RewriteLayout(),
+    postproc.VerifyGPUCode(),
 ]
 
 
@@ -213,7 +180,6 @@ def tune_and_test(relay_mod, data_np, weight_np, op_name, target, sch_rules, pos
         config={"relay.backend.use_meta_schedule": True},
     ):
         lib = relay.build(relay_mod, target=target, params=params)
-        print("lib", lib, type(lib), dir(lib))
 
     if "cascadelake" in target:
         asm = lib.lib.get_source("asm")
@@ -226,7 +192,7 @@ def tune_and_test(relay_mod, data_np, weight_np, op_name, target, sch_rules, pos
 
     out = runtime.get_output(0).numpy()
 
-    # np.testing.assert_equal(out, ref)
+    np.testing.assert_equal(out, ref)
 
 
 def _test_dense(data_dtype, sch_rules, postprocs, target):
@@ -250,32 +216,23 @@ def _test_dense(data_dtype, sch_rules, postprocs, target):
 
 
 def _test_conv2d(data_dtype, sch_rules, postprocs, target):
-    # d_shape = (1, 64, 56, 56)
-    d_shape = (1, 56, 56, 64)
-    # w_shape = (64, 64, 3, 3)
-    w_shape = (3, 3, 64, 64)
+    d_shape = (1, 64, 56, 56)
+    w_shape = (64, 64, 3, 3)
 
     weight_dtype = "int8"
     out_dtype = "int32"
 
     data = relay.var("data", shape=d_shape, dtype=data_dtype)
     weight = relay.var("weight", shape=w_shape, dtype=weight_dtype)
-    # out_channel = w_shape[0]
-    # out_channel = w_shape[-1]
-    out_channel = w_shape[-2]
+    out_channel = w_shape[0]
     conv2d = relay.nn.conv2d(
         data=data,
         weight=weight,
-        # kernel_size=w_shape[2:],
-        kernel_size=w_shape[:2],
+        kernel_size=w_shape[2:],
         channels=out_channel,
         padding=(1, 1),
         strides=(1, 1),
         out_dtype=out_dtype,
-        #
-        data_layout="NHWC",
-        # kernel_layout="HWIO",
-        kernel_layout="HWOI",
     )
 
     relay_mod = tvm.IRModule.from_expr(conv2d)
@@ -335,11 +292,9 @@ def test_vnni_dense():
 
 
 @pytest.mark.skip("Only tested locally on sm_86 (for cuda) which is not supported by CI")
-# @tvm.testing.requires_gpu
-# def test_dp4a_dense():
-#     _test_dense("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "nvidia/geforce-rtx-3070")
+@tvm.testing.requires_gpu
 def test_dp4a_dense():
-    _test_dense("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "llvm -num-cores 4")
+    _test_dense("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "nvidia/geforce-rtx-3070")
 
     # Uncomment to test on vulkan or rocm target
     # _test_dense(
@@ -357,11 +312,10 @@ def test_vnni_conv2d():
     )
 
 
-# @pytest.mark.skip("Only tested locally on sm_86 (for cuda) which is not supported by CI")
-# @tvm.testing.requires_gpu
+@pytest.mark.skip("Only tested locally on sm_86 (for cuda) which is not supported by CI")
+@tvm.testing.requires_gpu
 def test_dp4a_conv2d():
-    # _test_conv2d("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "nvidia/geforce-rtx-3070")
-    _test_conv2d("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "llvm -num-cores 4")
+    _test_conv2d("int8", SCH_RULES_FOR_DP4A, POSTPROCS_FOR_DP4A, "nvidia/geforce-rtx-3070")
 
     # Uncomment to test on vulkan or rocm target
     # _test_conv2d(
