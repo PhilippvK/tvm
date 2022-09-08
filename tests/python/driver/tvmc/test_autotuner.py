@@ -182,3 +182,18 @@ def test_tune_rpc_tracker_parsing(mock_load_model, mock_tune_model, mock_auto_sc
     assert "10.0.0.1" == kwargs["hostname"]
     assert "port" in kwargs
     assert 9999 == kwargs["port"]
+
+
+def test_parse_visualize_arg_valid():
+    tvmc.autotuner.parse_visualize_arg("live") == "live", None
+    tvmc.autotuner.parse_visualize_arg("plot.png") == "file", Path("plot.png")
+    tvmc.autotuner.parse_visualize_arg("live2") == "file", Path("live2")
+    tvmc.autotuner.parse_visualize_arg("live,plot.png") == "both", Path("plot.png")
+    tvmc.autotuner.parse_visualize_arg("plot.png,live") == "both", Path("plot.png")
+
+
+def test_parse_visualize_arg_invalid():
+    invalid = ["foo,bar,baz", "plot.png,plot2.png", "plot.png,", "live,", ","]
+    for arg in invalid:
+        with pytest.raises(AssertionError):
+            tvmc.autotuner.parse_visualize_arg(arg)
