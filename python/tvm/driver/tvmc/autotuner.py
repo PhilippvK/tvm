@@ -309,15 +309,14 @@ def drive_tune(args):
 
 
 def filter_tasks(
-    tasks: List[auto_scheduler.SearchTask],
-    # OR? tasks: List[autotvm.task.Task],
-    expr: str
-    ):
-    assert isinstance(expr, str), "TODO"
-    assert len(expr) > 0, "TODO"
+    tasks: Optional[Union[auto_scheduler.SearchTask, autotvm.task.Task]],
+    expr: str,
+):
+    assert isinstance(expr, str), "Expected filter expression of string type"
+    assert len(expr) > 0, "Got empty filter expression"
 
     # groups of keywords are comma-separated
-    splitted =  expr.split(",")
+    splitted = expr.split(",")
 
     do_list = False
     do_filter = False
@@ -331,33 +330,16 @@ def filter_tasks(
             do_filter = True
             if "-" in item:
                 lhs, rhs = item.split("-")[:2]
-                if len(lhs) == 0:
-                    assert len(rhs) > 0
-                    assert isinstance(rhs, str)
-                    rhs_value = int(rhs)
-                    assert rhs_value < len(tasks) and rhs_value >= 0
-                    selected.extend(list(range(0, rhs_value+1)))
-                elif len(rhs) == 0:
-                    assert len(lhs) > 0
-                    assert isinstance(lhs, str)
-                    lhs_value = int(lhs)
-                    assert lhs_value < len(tasks) and lhs_value >= 0
-                    selected.extend(list(range(lhs_value, len(tasks))))
-                else:
-                    assert isinstance(lhs, str)
-                    assert isinstance(rhs, str)
-                    lhs_value = int(lhs)
-                    rhs_value = int(rhs)
-                    assert lhs_value < len(tasks) and lhs_value >= 0
-                    assert rhs_value < len(tasks) and rhs_value >= 0
-                    selected.extend(list(range(lhs_value, rhs_value+1)))
+                lhs = int(lhs) if lhs else 0
+                rhs = int(rhs) if rhs else len(tasks) - 1
+                assert 0 <= lhs < len(tasks), "Left-hand side expression out of range"
+                assert 0 <= rhs < len(tasks), "Right-hand side expression out of range"
+                selected.extend(list(range(lhs, rhs + 1)))
             else:
                 assert isinstance(item, str)
                 idx = int(item)
                 assert idx < len(tasks) and idx >= 0
                 selected.append(idx)
-
-    # remove duplicates
 
     if do_filter:
         # remove duplicates
@@ -365,6 +347,25 @@ def filter_tasks(
         tasks = [task for i, task in enumerate(tasks) if i in selected]
 
     return tasks, do_list
+
+
+def print_task_list(tasks, enable_autoscheduler):
+    print("Available Tasks for tuning:")
+    print(
+        "\n".join(
+            [
+                "  {}. {}".format(
+                    i,
+                    task.desc
+                    if enable_autoscheduler
+                    else task
+                    if len(str(task.desc if enable_autoscheduler else task)) < 100
+                    else str(task.desc if enable_autoscheduler else task)[:97] + "...",
+                )
+                for i, task in enumerate(tasks)
+            ]
+        )
+    )
 
 
 def tune_model(
@@ -550,19 +551,6 @@ def tune_model(
             include_simple_tasks=include_simple_tasks,
             extra_config=build_option,
         )
-
-        if build_option is None:
-            build_option = {}
-        builder = auto_scheduler.LocalBuilder(
-            # timeout = 1000
-            # n_parallel=1,
-            # build_kwargs=build_kwargs or {},
-            # do_fork=True,
-            # do_fork=False,
-            build_func=build_func,
-            runtime=runtime,
-            build_option=build_option,
-        )
     else:
         tasks = autotvm_get_tuning_tasks(
             mod=mod,
@@ -575,8 +563,7 @@ def tune_model(
     if tasks_filter:
         tasks, do_list = filter_tasks(tasks, tasks_filter)
         if do_list:
-            print("Available Tasks for tuning:")
-            print("\n".join(["  {}. {}".format(i, task if len(str(task)) < 100 else str(task)[:97] + "...") for i, task in enumerate(tasks)]))
+            print_task_list(tasks, enable_autoscheduler)
             return None
     if len(tasks) == 0:
         logger.info("No tasks have been selected for tuning.")
@@ -586,6 +573,18 @@ def tune_model(
 
     if enable_autoscheduler:
         # Create the autoscheduler tuning options
+        if build_option is None:
+            build_option = {}
+        builder = auto_scheduler.LocalBuilder(
+            # timeout = 1000
+            # n_parallel=1,
+            # build_kwargs=build_kwargs or {},
+            # do_fork=True,
+            # do_fork=False,
+            build_func=build_func,
+            runtime=runtime,
+            build_option=build_option,
+        )
         tuning_options = auto_scheduler.TuningOptions(
             num_measure_trials=trials,
             measure_callbacks=[auto_scheduler.RecordToFile(tuning_records)],
@@ -600,26 +599,6 @@ def tune_model(
         # Schedule the tasks (i.e., produce a schedule for each task)
         schedule_tasks(tasks, weights, tuning_options, prior_records, log_estimated_latency)
     else:
-        tasks = autotvm_get_tuning_tasks(
-            mod=mod,
-            params=params,
-            target=target,
-            alter_layout=desired_layout,
-        )
-
-        # Filter extracted tasks by provided user expression
-        if tasks_filter:
-            tasks, do_list = filter_tasks(tasks, tasks_filter)
-            if do_list:
-                print("Available Tasks for tuning:")
-                print("\n".join(["  {}. {}".format(i, task if len(str(task)) < 100 else str(task)[:97] + "...") for i, task in enumerate(tasks)]))
-                return None
-        if len(tasks) == 0:
-            logger.info("No tasks have been selected for tuning.")
-            return None
-        else:
-            logger.info(f"Selected {len(tasks)} for tuning.")
-
         # In autotvm, trials is specified per task. We can convert the per-model input
         # provided to per-task trials by dividing by the number of tasks.
         trials = int(trials / max(len(tasks), 1))
