@@ -20,6 +20,7 @@ Provides support to auto-tuning networks using AutoTVM.
 import os.path
 import logging
 import time
+import pathlib
 from copy import deepcopy
 from typing import Any, Optional, Dict, List, Union
 
@@ -64,8 +65,7 @@ def add_tune_parser(subparsers, _, json_params):
         "--min-repeat-ms",
         default=None,
         type=int,
-        help="minimum time to run each trial, in milliseconds. "
-        "Defaults to 0 on x86 and 1000 on all other targets",
+        help="minimum time to run each trial, in milliseconds. " "Defaults to 0 on x86 and 1000 on all other targets",
     )
     parser.add_argument(
         "--model-format",
@@ -100,8 +100,7 @@ def add_tune_parser(subparsers, _, json_params):
     )
     parser.add_argument(
         "--rpc-key",
-        help="the RPC tracker key of the target device. "
-        "Required when --rpc-tracker is provided.",
+        help="the RPC tracker key of the target device. " "Required when --rpc-tracker is provided.",
     )
     parser.add_argument(
         "--rpc-tracker",
@@ -144,6 +143,11 @@ def add_tune_parser(subparsers, _, json_params):
         default="all",
         help="which tasks should be tuned, i.e. 0 0,2 3-5 all list",
     )
+    parser.add_argument(
+        "--visualize",
+        type=str,
+        help="visualize the tuning progress in a live graph or file",
+    )
 
     auto_scheduler_group = parser.add_argument_group(
         "AutoScheduler options",
@@ -153,20 +157,17 @@ def add_tune_parser(subparsers, _, json_params):
     auto_scheduler_group.add_argument(
         "--cache-line-bytes",
         type=int,
-        help="the size of cache line in bytes. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the size of cache line in bytes. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--num-cores",
         type=int,
-        help="the number of device cores. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the number of device cores. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--vector-unit-bytes",
         type=int,
-        help="the width of vector units in bytes. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the width of vector units in bytes. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--max-shared-memory-per-block",
@@ -183,20 +184,17 @@ def add_tune_parser(subparsers, _, json_params):
     auto_scheduler_group.add_argument(
         "--max-threads-per-block",
         type=int,
-        help="the max number of threads per block. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the max number of threads per block. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--max-vthread-extent",
         type=int,
-        help="the max vthread extent. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the max vthread extent. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--warp-size",
         type=int,
-        help="the thread numbers of a warp. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the thread numbers of a warp. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--include-simple-tasks",
@@ -238,6 +236,30 @@ def add_tune_parser(subparsers, _, json_params):
         parser.set_defaults(**one_entry)
 
 
+def parse_visualize_arg(value):
+    live = False
+    file = None
+    if not value:
+        return "none", None
+    splitted = value.split(",")
+    assert len(splitted) <= 2, "The --visualize argument does not accept more than two arguments"
+    for item in splitted:
+        assert len(item) > 0, "The arguments of --visualize can not be an empty string"
+        if item == "live":
+            live = True
+        else:
+            assert file is None, "Only a single path can be passed to the --visualize argument"
+            file = pathlib.Path(item)
+    mode = "none"
+    if live and file:
+        mode = "both"
+    elif live:
+        mode = "live"
+    elif file:
+        mode = "file"
+    return (mode, file)
+
+
 def drive_tune(args):
     """Invoke auto-tuning with command line arguments
 
@@ -247,9 +269,7 @@ def drive_tune(args):
         Arguments from command line parser.
     """
     if not os.path.isfile(args.FILE):
-        raise TVMCException(
-            f"Input file '{args.FILE}' doesn't exist, is a broken symbolic link, or a directory."
-        )
+        raise TVMCException(f"Input file '{args.FILE}' doesn't exist, is a broken symbolic link, or a directory.")
 
     tvmc_model = frontends.load_model(args.FILE, args.model_format, shape_dict=args.input_shapes)
 
@@ -280,6 +300,7 @@ def drive_tune(args):
         rpc_hostname = None
         rpc_port = None
 
+    visualize_mode, visualize_path = parse_visualize_arg(args.visualize)
     tune_model(
         tvmc_model,
         args.target,
@@ -303,8 +324,9 @@ def drive_tune(args):
         include_simple_tasks=args.include_simple_tasks,
         log_estimated_latency=args.log_estimated_latency,
         additional_target_options=reconstruct_target_args(args),
-        visualize=args.visualize,
         tasks_filter=args.tasks,
+        visualize_mode=visualize_mode,
+        visualize_path=visualize_path,
     )
 
 
@@ -395,9 +417,10 @@ def tune_model(
     build_func = "default",  # TODO
     runtime = None,  # TODO
     build_option : dict = None,
-    si_prefix : str = "G",
-    visualize : bool = False,
     tasks_filter: str = "all",
+    si_prefix: str = "G",
+    visualize_mode: str = "none",
+    visualize_path: Optional[str] = None,
 ):
     """Use tuning to automatically optimize the functions in a model.
 
@@ -464,13 +487,17 @@ def tune_model(
         TODO
     build_option : dict, optional
         TODO
-    si_prefix : str
-        SI prefix for FLOPS.
     visualize : bool
         Whether the tuning progress should be visualized with matplotlib
     tasks_filter : str, optional
         Filter which tasks should be tuned or output a list of the extracted tasks.
         Examples: 0 0,2 3-5 all list
+    si_prefix : str
+        SI prefix for FLOPS.
+    visualize_mode : str
+        whether the tuning progress should be visualize `live`, in a `file` or `both`.
+    visualize_path : str
+        filepath where the visualization artifact should be written if mode is `file` or `both`.
 
     Returns
     -------
@@ -501,9 +528,7 @@ def tune_model(
 
     if rpc_key:
         if hostname is None or port is None:
-            raise TVMCException(
-                "You must provide a hostname and port to connect to a remote RPC device."
-            )
+            raise TVMCException("You must provide a hostname and port to connect to a remote RPC device.")
         if isinstance(port, str):
             port = int(port)
 
@@ -524,9 +549,7 @@ def tune_model(
         )
     else:
         logger.info("Starting localhost tuning.")
-        runner_ctor = (
-            auto_scheduler.LocalRPCMeasureContext if enable_autoscheduler else autotvm.LocalRunner
-        )
+        runner_ctor = auto_scheduler.LocalRPCMeasureContext if enable_autoscheduler else autotvm.LocalRunner
         local_server = runner_ctor(
             number=number,
             repeat=repeat,
@@ -597,7 +620,15 @@ def tune_model(
         logger.info("Autoscheduling with configuration: %s", tuning_options)
 
         # Schedule the tasks (i.e., produce a schedule for each task)
-        schedule_tasks(tasks, weights, tuning_options, prior_records, log_estimated_latency)
+        schedule_tasks(
+            tasks,
+            weights,
+            tuning_options,
+            prior_records,
+            log_estimated_latency,
+            visualize_mode=visualize_mode,
+            visualize_path=visualize_path,
+        )
     else:
         # In autotvm, trials is specified per task. We can convert the per-model input
         # provided to per-task trials by dividing by the number of tasks.
@@ -627,7 +658,13 @@ def tune_model(
         }
         logger.info("Autotuning with configuration: %s", tuning_options)
 
-        tune_tasks(tasks, tuning_records, **tuning_options)
+        tune_tasks(
+            tasks,
+            tuning_records,
+            **tuning_options,
+            visualize_mode=visualize_mode,
+            visualize_path=visualize_path,
+        )
 
     return tuning_records
 
@@ -739,6 +776,8 @@ def schedule_tasks(
     tuning_options: auto_scheduler.TuningOptions,
     prior_records: Optional[str] = None,
     log_estimated_latency: bool = False,
+    visualize_mode: str = "none",
+    visualize_path: Optional[str] = None,
 ):
     """Generate the schedules for the different tasks (i.e., subgraphs) contained in the module.
     Store the schedules in a json file that will be used later by the compiler.
@@ -755,19 +794,24 @@ def schedule_tasks(
         The json file used to preload the autoscheduler
     log_estimated_latency : bool, optional
         If true, writes the estimated runtime of the model during each step of tuning to file.
+    visualize_mode : str
+        whether the tuning progress should be visualize `live`, in a `file` or `both`.
+    visualize_path : str
+        filepath where the visualization artifact should be written if mode is `file` or `both`.
     """
-    if not log_estimated_latency:
-        callbacks = [auto_scheduler.task_scheduler.PrintTableInfo()]
-    else:
-        callbacks = [
-            auto_scheduler.task_scheduler.PrintTableInfo(),
-            auto_scheduler.task_scheduler.LogEstimatedLatency(("total_latency.tsv")),
-        ]
+    callbacks = [auto_scheduler.task_scheduler.PrintTableInfo()]
+    if log_estimated_latency:
+        callbacks.append(auto_scheduler.task_scheduler.LogEstimatedLatency(("total_latency.tsv")))
+    if visualize_mode != "none":
+        assert visualize_mode in ["both", "live", "file"]
+        live = visualize_mode in ["live", "both"]
+        out = visualize_path
+        callbacks.append(
+            auto_scheduler.task_scheduler.VisualizeProgress(keep_open=live, live=live, out_path=out)
+        )
 
     # Create the scheduler
-    tuner = auto_scheduler.TaskScheduler(
-        tasks, task_weights, load_log_file=prior_records, callbacks=callbacks
-    )
+    tuner = auto_scheduler.TaskScheduler(tasks, task_weights, load_log_file=prior_records, callbacks=callbacks)
 
     # Tune the tasks
     tuner.tune(tuning_options,
@@ -784,7 +828,8 @@ def tune_tasks(
     early_stopping: Optional[int] = None,
     tuning_records: Optional[str] = None,
     si_prefix: str = "G",
-    visualize: bool = False,
+    visualize_mode: str = "none",
+    visualize_path: Optional[str] = None,
 ):
     """Tune a list of tasks and output the history to a log file.
 
@@ -808,8 +853,10 @@ def tune_tasks(
         tuning.
     si_prefix : str
         SI prefix for FLOPS.
-    visualize : bool
-        Whether the tuning progress should be visualized with matplotlib.
+    visualize_mode : str
+        whether the tuning progress should be visualize `live`, in a `file` or `both`.
+    visualize_path : str
+        filepath where the visualization artifact should be written if mode is `file` or `both`.
     """
     if not tasks:
         logger.warning("there were no tasks found to be tuned")
@@ -842,10 +889,21 @@ def tune_tasks(
             tuner_obj.load_history(autotvm.record.load_from_file(tuning_records))
             logging.info("loaded history in %.2f sec(s)", time.time() - start_time)
 
-        callbacks = [autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix)]
-        if visualize:
-            callbacks.append(autotvm.callback.visualize_progress(i, title=f"AutoTVM Progress [Task {i+1}/{len(tasks)}]", si_prefix=si_prefix))
-            callbacks.append(autotvm.callback.visualize_progress(i, multi=True, si_prefix=si_prefix))
+        callbacks = [
+            autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix),
+            autotvm.callback.log_to_file(log_file),
+        ]
+
+        if visualize_mode != "none":
+            assert visualize_mode in ["both", "live", "none"]
+            live = visualize_mode in ["live", "both"]
+            out = visualize_path
+            keep_open = live and (i == len(tasks) - 1)
+            callbacks.append(
+                autotvm.callback.visualize_progress(
+                    i, si_prefix=si_prefix, keep_open=keep_open, live=live, out_path=out
+                )
+            )
         tuner_obj.tune(
             n_trial=min(trials, len(tsk.config_space)),
             early_stopping=early_stopping,

@@ -422,6 +422,9 @@ testing.utils.install_request_hook(depth=3)
 # the tasks used for tuning, e.g. `--task 20,22` or `--task 16-`. All available tasks can be printed
 # using `--task list`.
 #
+# The `--visualize ARG` flag allows showing the tuning progress in a graph which can be
+# written to a file (ARG: `filename.png`), displayed as a live plot window (ARG: `live`)
+# or both (ARG: `live,filename.png`).
 
 ################################################################################
 # Compiling an Optimized Model with Tuning Data

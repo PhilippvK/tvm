@@ -215,5 +215,20 @@ def test_filter_tasks_invalid():
     filter_tasks(list(range(10)), "-10")
 
 
+def test_parse_visualize_arg_valid():
+    tvmc.autotuner.parse_visualize_arg("live") == "live", None
+    tvmc.autotuner.parse_visualize_arg("plot.png") == "file", Path("plot.png")
+    tvmc.autotuner.parse_visualize_arg("live2") == "file", Path("live2")
+    tvmc.autotuner.parse_visualize_arg("live,plot.png") == "both", Path("plot.png")
+    tvmc.autotuner.parse_visualize_arg("plot.png,live") == "both", Path("plot.png")
+
+
+def test_parse_visualize_arg_invalid():
+    invalid = ["foo,bar,baz", "plot.png,plot2.png", "plot.png,", "live,", ","]
+    for arg in invalid:
+        with pytest.raises(AssertionError):
+            tvmc.autotuner.parse_visualize_arg(arg)
+
+
 if __name__ == "__main__":
     tvm.testing.main()
