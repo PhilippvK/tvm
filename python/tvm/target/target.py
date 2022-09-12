@@ -274,10 +274,10 @@ class Target(Object):
             assert target_host is None, "Target host is not empty when target is empty."
             return target, target_host
         if target.host is None and target_host is not None:
-            warnings.warn(
-                "target_host parameter is going to be deprecated. "
-                "Please pass in tvm.target.Target(target, host=target_host) instead."
-            )
+            # warnings.warn(
+            #     "target_host parameter is going to be deprecated. "
+            #     "Please pass in tvm.target.Target(target, host=target_host) instead."
+            # )
             target_host = Target.canon_target(target_host)
             target = target.with_host(target_host)
         if target is not None:
