@@ -84,7 +84,7 @@ def schedule_pool_riscv_cpu(attrs, outs, target):
 
 
 @conv2d_strategy.register("riscv_cpu")
-def conv2d_strategy_rsicv_cpu(attrs, inputs, out_type, target):
+def conv2d_strategy_riscv_cpu(attrs, inputs, out_type, target):
     """conv2d riscv cpu strategy"""
     strategy = _op.OpStrategy()
     data, kernel = inputs
