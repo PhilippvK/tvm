@@ -169,9 +169,11 @@ class Handler(server.ProjectAPIHandler):
         # Populate src/
         src_dir = os.path.join(project_dir, "src")
         os.mkdir(src_dir)
-        shutil.copy2(
-            os.path.join(os.path.dirname(__file__), "main.cc"), os.path.join(src_dir, "main.cc")
-        )
+        filenames = ["main.cc", "riscv_util.h"]
+        for filename in filenames:
+            shutil.copy2(
+                os.path.join(os.path.dirname(__file__), filename), os.path.join(src_dir, filename)
+            )
 
     def build(self, options):
         num_threads = multiprocessing.cpu_count()
@@ -194,7 +196,7 @@ class Handler(server.ProjectAPIHandler):
         args.append(self.BUILD_TARGET)
 
         # subprocess.check_call(args, cwd=PROJECT_DIR)
-        subprocess.check_call(args, cwd=PROJECT_DIR, stderr=subprocess.DEVNULL)
+        subprocess.check_call(args, cwd=PROJECT_DIR, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
 
     def flash(self, options):
         pass  # Flashing does nothing on host.

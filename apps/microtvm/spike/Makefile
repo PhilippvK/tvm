@@ -20,8 +20,9 @@ TRIPLE ?= riscv32-unknown-elf
 ARCH ?= rv32gc
 ABI ?= ilp32d
 
-INCLUDES ?= -isystem crt/include -Icrt_config
-CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=stringop-overread -Wno-error=format-extra-args -march=$(ARCH) -mabi=$(ABI) -O3
+INCLUDES ?= -isystem crt/include -Icrt_config -I./src/
+# CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=stringop-overread -Wno-error=format-extra-args -march=$(ARCH) -mabi=$(ABI) -O3
+CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -march=$(ARCH) -mabi=$(ABI) -O3
 CXXFLAGS ?= -Werror -Wall -std=c++11 -DTVM_HOST_USE_GRAPH_EXECUTOR_MODULE -march=$(ARCH) -mabi=$(ABI) -O3
 LDFLAGS ?= -Werror -Wall -march=$(ARCH) -mabi=$(ABI)
 
