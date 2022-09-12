@@ -381,7 +381,6 @@ def add_micro_parser(subparsers, main_parser, json_params):
 
     # Augment parser with project options.
 
-    print("known_args", known_args)
     if platform == "template":
         # adhoc template
         template_dir = str(Path(known_args.template_dir).resolve())
