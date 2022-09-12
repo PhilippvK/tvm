@@ -88,12 +88,12 @@ def add_micro_tune_args(parser):
         required=True,
         help="output file to store the tuning records for the tuning process",
     )
-    # parser.add_argument(
-    #     "--parallel",
-    #     default=4,
-    #     type=int,
-    #     help="the maximum number of parallel devices to use when tuning",
-    # )
+    parser.add_argument(
+        "--parallel",
+        default=1,
+        type=int,
+        help="the maximum number of parallel devices to use when tuning",
+    )
     parser.add_argument(
         "--repeat",
         type=int,
@@ -612,8 +612,7 @@ def tune_handler(args):
         timeout=args.timeout,
         repeat=args.repeat,
         number=args.number,
-        # parallel=args.parallel,
-        parallel=1,
+        parallel=args.parallel,
         hardware_params=hardware_params,
         include_simple_tasks=False,
         log_estimated_latency=False,
