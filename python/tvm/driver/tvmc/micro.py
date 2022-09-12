@@ -143,7 +143,7 @@ def add_micro_tune_args(parser):
     )
     parser.add_argument(
         "--desired-layout",
-        choices=["NCHW", "NHWC"],
+        # choices=["NCHW", "NHWC"],
         default=None,
         help="change the data layout of the whole graph",
     )
