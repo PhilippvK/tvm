@@ -863,7 +863,7 @@ def tune_tasks(
             tuner_obj.load_history(autotvm.record.load_from_file(tuning_records))
             logging.info("loaded history in %.2f sec(s)", time.time() - start_time)
 
-        callbacks = [autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix)]
+        callbacks = [autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix), autotvm.callback.log_to_file(log_file),]
         if visualize:
             callbacks.append(autotvm.callback.visualize_progress(i, title=f"AutoTVM Progress [Task {i+1}/{len(tasks)}]", si_prefix=si_prefix))
             callbacks.append(autotvm.callback.visualize_progress(i, multi=True, si_prefix=si_prefix))
