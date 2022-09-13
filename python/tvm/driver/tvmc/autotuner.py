@@ -600,26 +600,6 @@ def tune_model(
         # Schedule the tasks (i.e., produce a schedule for each task)
         schedule_tasks(tasks, weights, tuning_options, prior_records, log_estimated_latency)
     else:
-        tasks = autotvm_get_tuning_tasks(
-            mod=mod,
-            params=params,
-            target=target,
-            alter_layout=desired_layout,
-        )
-
-        # Filter extracted tasks by provided user expression
-        if tasks_filter:
-            tasks, do_list = filter_tasks(tasks, tasks_filter)
-            if do_list:
-                print("Available Tasks for tuning:")
-                print("\n".join(["  {}. {}".format(i, task if len(str(task)) < 100 else str(task)[:97] + "...") for i, task in enumerate(tasks)]))
-                return None
-        if len(tasks) == 0:
-            logger.info("No tasks have been selected for tuning.")
-            return None
-        else:
-            logger.info(f"Selected {len(tasks)} for tuning.")
-
         # In autotvm, trials is specified per task. We can convert the per-model input
         # provided to per-task trials by dividing by the number of tasks.
         trials = int(trials / max(len(tasks), 1))
