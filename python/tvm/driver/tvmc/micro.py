@@ -117,6 +117,11 @@ def add_micro_tune_args(parser):
         required=False,
         default="c",
     )
+    parser.add_argument(
+        "--tasks",
+        default="all",
+        help="which tasks should be tuned, i.e. 0 0,2 3-5 all list",
+    )
     # generate_target_args(parser)
     _generate_target_kind_args(parser, "c")
     _generate_target_kind_args(parser, "llvm")
@@ -623,4 +628,5 @@ def tune_handler(args):
         # build_kwargs={"build_option": {"tir.disable_vectorize": True}},
         build_option={"tir.disable_vectorize": True},
         si_prefix="M",  # Display MFLOPS instead of GFLOPS
+        tasks_filter=args.tasks,
     )
