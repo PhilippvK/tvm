@@ -19,7 +19,7 @@
 
 from tvm import autotvm
 from .extensions.pext.dense import dense_pext_schedule, dense_pext_compute
-from .extensions.vext.dense import dense_vext_schedule
+from .extensions.vext.dense import dense_vext_schedule, dense_vext_compute
 
 
 @autotvm.register_topi_compute("dense_pext.riscv_cpu")
@@ -34,6 +34,13 @@ def schedule_dense_pext(cfg, outs):
     return dense_pext_schedule(cfg, outs)
 
 
-def schedule_dense_vext(outs):
+@autotvm.register_topi_compute("dense_vext.riscv_cpu")
+def dense_vext(cfg, data, weight, bias, out_dtype):
+    "Compute conv2d_nhwc with V extension instructions."
+    return dense_vext_compute(cfg, data, weight, bias=bias, out_dtype=out_dtype)
+
+
+@autotvm.register_topi_schedule("dense_vext.riscv_cpu")
+def schedule_dense_vext(cfg, outs):
     """Create schedule for dense_vext"""
-    return dense_vext_schedule(outs)
+    return dense_vext_schedule(cfg, outs)

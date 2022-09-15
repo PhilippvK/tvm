@@ -373,9 +373,9 @@ def schedule_dense_riscv_cpu(attrs, inputs, out_type, target):
     isa = riscv_isa.IsaAnalyzer(target)
     if isa.has_vext:
         strategy.add_implementation(
-            wrap_compute_dense(topi.nn.dense),
+            wrap_compute_dense(topi.riscv_cpu.dense_vext),
             wrap_topi_schedule(topi.riscv_cpu.schedule_dense_vext),
-            name="dense_vext",
+            name="dense_vext.riscv_cpu",
         )
     elif isa.has_pext:
         strategy.add_implementation(
