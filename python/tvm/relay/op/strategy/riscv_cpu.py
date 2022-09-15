@@ -379,9 +379,9 @@ def schedule_dense_riscv_cpu(attrs, inputs, out_type, target):
         )
     elif isa.has_pext:
         strategy.add_implementation(
-            wrap_compute_dense(topi.nn.dense),
+            wrap_compute_dense(topi.riscv_cpu.dense_pext),
             wrap_topi_schedule(topi.riscv_cpu.schedule_dense_pext),
-            name="dense_pext",
+            name="dense_pext.riscv_cpu",
         )
     else:
         logger.warning("dense is not optimized for riscv cpu.")

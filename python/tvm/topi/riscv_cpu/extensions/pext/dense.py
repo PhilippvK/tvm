@@ -18,107 +18,95 @@
 """Direct implementation of dense."""
 
 from tvm import te
-from tvm import autotvm
-from tvm.topi.utils import traverse_inline
-from ....utils import traverse_inline, get_const_tuple
+from tvm.topi.utils import traverse_inline, get_const_tuple
+from tvm.autotvm.task.space import OtherOptionEntity
 
 from .micro_kernel.gemm import (
     intrin_gemm_MxKxN,
     gemm_MxKxN_impl,
 )
-
-# Warning: broken, untested
-from .micro_kernel.gemv import (
-    intrin_gemv_MxN,
-    gemv_MxN_impl,
-)
+#
+# # Warning: broken, untested
+# from .micro_kernel.gemv import (
+#     intrin_gemv_MxN,
+#     gemv_MxN_impl,
+# )
 
 from .micro_kernel.dotp import (
     intrin_dotp_N,
     dotp_N_impl,
 )
+from .... import tag
 
 
-def dense_pext_schedule(outs):
+def dense_pext_compute(cfg, data, weight, bias=None, out_dtype=None):
+    """Defines the P extension instructions of dense."""
+
+    batch, in_dim = get_const_tuple(data.shape)
+    out_dim, _ = get_const_tuple(weight.shape)
+
+    cfg.define_split("tile_y", out_dim, policy="factors", num_outputs=2)  # TODO: 2 outputs?
+    cfg.define_split("tile_x", batch, policy="factors", num_outputs=2)  # TODO: 2 coutputs
+    cfg.define_split("tile_k", in_dim, policy="factors", num_outputs=2)
+    cfg.define_knob("intrin_type", ["dotp", "gemm"])
+
+    k = te.reduce_axis((0, in_dim), "k")
+    C = te.compute(
+        (batch, out_dim),
+        lambda x, y: te.sum(
+            data[x, k].astype(out_dtype) * weight[y, k].astype(out_dtype),
+            axis=k,
+        ),
+        name="dense",
+        tag="dense_pext",
+    )
+    if cfg.is_fallback:
+        cfg.fallback_split("tile_y", [-1, batch])
+        cfg.fallback_split("tile_x", [-1, out_dim])
+        cfg.fallback_split("tile_k", [-1, 4])
+        cfg["intrin_type"] = OtherOptionEntity("gemm")
+
+    if bias is not None:
+        C = te.compute((batch, out_dim), lambda i, j: C[i, j] + bias[j].astype(out_dtype), tag=tag.BROADCAST)
+    return C
+
+
+def dense_pext_schedule(cfg, outs):
     """Schedule function for RISC-V P-Extension instructions of dense."""
     sched = te.create_schedule([x.op for x in outs])
-    cfg = autotvm.get_config()
 
     def _callback(op):
         if "dense" not in op.tag:
             return
 
         output = op.output(0)
-        s = sched
-        data, weight = s[output].op.input_tensors
-        batch, in_dim = get_const_tuple(data.shape)
-        out_dim, _ = get_const_tuple(weight.shape)
-        in_dim_factor = 4
-        assert in_dim % in_dim_factor == 0, "Input dimension must divide {}".format(in_dim_factor)
-        if in_dim % 16 == 0:
-            in_dim_factor = 16
+        dense = op
+        data = dense.input_tensors[0]
 
-        # create tuning space
-        cfg.define_split("tile_y", batch, num_outputs=4)
-        cfg.define_split("tile_x", out_dim, num_outputs=4)
-        cfg.define_split("tile_k", in_dim // in_dim_factor, num_outputs=2)
-        cfg.define_knob("auto_unroll_max_step", [0, 512, 1500])
-       
-        # handle bias
-        # if output.op not in s.outputs:
-        #     s[output].compute_inline()
-        #     output = s.outputs[0].output(0)
+        M = cfg["tile_x"].size[-1]
+        N = cfg["tile_y"].size[-1]
+        K = cfg["tile_k"].size[-1]
 
-        n, x = s[output].op.axis
-        kernel_scope, n = s[output].split(n, nparts=1)
+        x, y = sched[dense].op.axis
+        k = sched[dense].op.reduce_axis[0]
 
-        AA = data
-        WW = weight
-        CC = output
-        ko = CC.op.reduce_axis[0]
-        ko, ki = s[CC].split(ko, factor=4)
-        # ko, kt = cfg["tile_k"].apply(s, CC, ko)
+        x_o, x_i = cfg["tile_x"].apply(sched, dense, x)
+        y_o, y_i = cfg["tile_y"].apply(sched, dense, y)
+        k_o, k_i = cfg["tile_k"].apply(sched, dense, k)
 
-        dotp, uniq_id = intrin_dotp_N(4, data.dtype, output.dtype)
-        sched[output].tensorize(ki, dotp)
-        sched[output].pragma(ko, "import_c", dotp_N_impl(4, uniq_id))
-        # =====
-        # extract tensors
-        # output = op.output(0)
-        # dense = op
-        # data_vec = dense.input_tensors[0]
-        # M, K = data_vec.shape
-        # N, N_ = dense.input_tensors[1].shape
+        sched[dense].reorder(x_o, y_o, k_o, x_i, y_i, k_i)
 
-        # # n, _ = sched[dense].op.axis
-        # n, m = sched[dense].op.axis
-        # # no, ni = sched[dense].split(n, nparts=1)
-        # # mo, mi = sched[dense].split(m, nparts=1)
-        # # sched[dense].reorder(n, m)
-        # sched[dense].reorder(m, n)
-
-        # print("M,K,N", M, K, N)
-        # # mode = "gemm"
-        # # mode = "gemv"
-        # mode = "dotp"
-        # # mode = "none"
-        # if mode == "gemm":
-        #     gemm, uniq_id = intrin_gemm_MxKxN(M, K, N, data_vec.dtype, output.dtype)
-        #     sched[output].tensorize(ni, gemm)
-        #     ## sched[output].pragma(no, "import_c", gemm_MxKxN_impl(M, K, N, uniq_id))
-        # elif mode == "gemv":
-        #     assert M == 1  # ???
-        #     gemv, uniq_id = intrin_gemv_MxN(N, K, data_vec.dtype, output.dtype)
-        #     sched[output].tensorize(m, gemv)
-        #     # sched[output].pragma(no, "import_c", gemv_MxN_impl(N, K, uniq_id))
-        # elif mode == "dotp":
-        #     dotp, uniq_id = intrin_dotp_N(K, data_vec.dtype, output.dtype)
-        #     sched[output].tensorize(m, dotp)
-        #     # sched[output].pragma(no, "import_c", dotp_N_impl(K, uniq_id))
-        # elif mode == "none":
-        #     pass
-        # else:
-        #     raise RuntimeError(f"Invalid mode: {mode}")
+        if cfg["intrin_type"].val == "gemm":
+            gemm, uniq_id = intrin_gemm_MxKxN(M, K, N, data.dtype, output.dtype, stride_w=1)
+            sched[output].tensorize(x_i, gemm)
+            sched[output].pragma(x_o, "import_c", gemm_MxKxN_impl(M, K, N, uniq_id))
+        elif cfg["intrin_type"].val == "dotp":
+            dotp, uniq_id = intrin_dotp_N(K, data.dtype, output.dtype)
+            sched[output].tensorize(k_i, dotp)
+            sched[output].pragma(x_o, "import_c", dotp_N_impl(K, uniq_id))
+        else:
+            # Invalid
+            pass
 
     traverse_inline(sched, outs[-1].op, _callback)
     return sched
