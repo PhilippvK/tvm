@@ -216,11 +216,6 @@ def add_tune_parser(subparsers, _, json_params):
         default="xgb",
         help="type of tuner to use when tuning with autotvm.",
     )
-    auto_scheduler_group.add_argument(
-        "--visualize",
-        help="whether the tuning progress should be visualized in a graph",
-        action="store_true",
-    )
     # TODO (@leandron) This is a path to a physical file, but
     #     can be improved in future to add integration with a modelzoo
     #     or URL, for example.
