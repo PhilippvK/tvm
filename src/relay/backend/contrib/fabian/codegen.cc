@@ -433,9 +433,9 @@ runtime::Module CLMLCompiler(const ObjectRef& ref) {
   serializer.serialize();
   std::string graph_json = serializer.GetJSON();
   auto param_names = serializer.GetParams();
-  std::cout << "===================================" << std::endl;
-  std::cout << graph_json << std::endl;
-  std::cout << "===================================" << std::endl;
+  // std::cout << "===================================" << std::endl;
+  // std::cout << graph_json << std::endl;
+  // std::cout << "===================================" << std::endl;
   const auto* pf = runtime::Registry::Get("runtime.fabian_runtime_create");
   ICHECK(pf != nullptr) << "Cannot find CLML runtime module to create";
   runtime::Module lib = (*pf)(func_name, graph_json, param_names);
