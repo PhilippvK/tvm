@@ -274,6 +274,11 @@ set(USE_CLML OFF)
 # USE_CLML_GRAPH_EXECUTOR - CLML SDK PATH or ON or OFF
 set(USE_CLML_GRAPH_EXECUTOR OFF)
 
+#Whether to use Fabian codegen
+set(USE_FABIAN OFF)
+# USE_FABIAN_GRAPH_EXECUTOR - Fabian SDK PATH or ON or OFF
+# set(USE_FABIAN_GRAPH_EXECUTOR OFF)
+
 # Build ANTLR parser for Relay text format
 # Possible values:
 # - ON: enable ANTLR by searching default locations (cmake find_program for antlr4 and /usr/local for jar)
