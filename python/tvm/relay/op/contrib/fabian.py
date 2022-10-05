@@ -61,58 +61,6 @@ def partition_for_fabian(mod, params=None):
     result_mod = seq(mod)
     return result_mod
 
-
-# @register_func("relay.ext.fabian.optimize")
-# def preprocess_module(mod):
-#     """
-#     Pre-process a module containing functions ready for Fabian codegen. For now we enforce OIHW
-#     kernel layout and fold the transforms away.
-#
-#     Parameters
-#     ----------
-#     mod : Module
-#         The module to run passes on.
-#
-#     Returns
-#     -------
-#     preprocessed_mod : The processed module.
-#     """
-#
-#     def convert_layout_conv2d(conv2d_function):
-#         def convert_conv(attrs, inputs, tinfos, desired_layouts):
-#             new_attrs = dict(attrs)
-#             data_info = tinfos[0]
-#             weight_info = tinfos[1]
-#             desired_data_layout, desired_kernel_layout = map(str, desired_layouts)
-#             new_attrs["data_layout"] = desired_data_layout
-#             new_attrs["kernel_layout"] = desired_kernel_layout
-#
-#             if is_depthwise_conv2d(
-#                 data_info.shape,
-#                 attrs["data_layout"],
-#                 weight_info.shape,
-#                 attrs["kernel_layout"],
-#                 attrs["groups"],
-#             ):
-#                 dkl = desired_kernel_layout
-#                 new_attrs["kernel_layout"] = dkl[1] + dkl[0] + dkl[2] + dkl[3]
-#             return conv2d_function(*inputs, **new_attrs)
-#
-#         return convert_conv
-#
-#     with OpAttrContext(
-#         "nn.conv2d", "FTVMConvertOpLayout", convert_layout_conv2d(tvm.relay.nn.conv2d)
-#     ):
-#         seq = tvm.transform.Sequential(
-#             [
-#                 transform.ConvertLayout({"nn.conv2d": ["NCHW", "OIHW"]}),
-#                 transform.FoldConstant(),
-#             ]
-#         )
-#         preprocessed_mod = seq(mod)
-#     return preprocessed_mod
-
-
 @register_pattern_table("fabian")
 def fabian_pattern_table():
     """Get the Fabian pattern table."""
@@ -122,11 +70,6 @@ def fabian_pattern_table():
         pattern = is_op("nn.conv2d")(wildcard(), is_constant())
         pattern = pattern.optional(lambda x: is_op("nn.bias_add")(x, is_constant()))
         pattern = pattern.optional(lambda x: is_op("add")(x, is_constant()))
-        # pattern = pattern.optional(
-        #     lambda x: is_op("nn.batch_norm")(
-        #         x, is_constant(), is_constant(), is_constant(), is_constant()
-        #     )
-        # )
         pattern = pattern.optional(is_tuple_get_item)
         pattern = pattern.optional(is_op("nn.relu"))
         pattern = pattern.optional(is_op("clip"))
@@ -135,47 +78,12 @@ def fabian_pattern_table():
         pattern = pattern.optional(lambda x: is_op("nn.avg_pool2d")(x))
         return pattern
 
-    def max_pool2d_pattern():
-        """TODO"""
-        pattern = is_op("nn.max_pool2d")(wildcard())
-        pattern = pattern.optional(lambda x: is_op("nn.bias_add")(x, is_constant()))
-        pattern = pattern.optional(lambda x: is_op("add")(x, is_constant()))
-        pattern = pattern.optional(is_op("nn.relu"))
-        pattern = pattern.optional(is_op("clip"))
-        return pattern
-
-    # def batch_norm_pattern():
-    #     """Create a batch norm pattern."""
-    #     pattern = is_op("nn.batch_norm")(
-    #         wildcard(), is_constant(), is_constant(), is_constant(), is_constant()
-    #     )
-    #     pattern = is_tuple_get_item(pattern)
-    #     return pattern
-
-    # def concat_pattern():
-    #     """Create a concat pattern.
-
-    #     Returns
-    #     -------
-    #     pattern : dataflow_pattern.AltPattern
-    #         Denotes the concat pattern.
-    #     """
-    #     pattern = is_tuple(None)
-    #     pattern = is_op("concatenate")(pattern)
-
-    #     return pattern
-
     def dense_pattern():
         """Create a dense pattern."""
         pattern = is_op("nn.dense")(wildcard(), is_constant())
         pattern = pattern.optional(lambda x: is_op("add")(x, is_constant()))
         pattern = pattern.optional(lambda x: is_op("nn.bias_add")(x, is_constant()))
         return pattern
-
-    # def pad_pattern():
-    #     """Create a pad pattern."""
-    #     pattern = is_op("nn.pad")(wildcard(), wildcard())
-    #     return pattern
 
     def check_conv(extract):
         """Check conv pattern is supported by Fabian."""
@@ -214,10 +122,6 @@ def fabian_pattern_table():
     return [
         ("fabian.conv2d", conv_pattern(), check_conv),
         ("fabian.dense", dense_pattern()),
-        # ("fabian.max_pool2d", max_pool2d_pattern())
-        # ("fabian.pad", pad_pattern()),
-        # ("fabian.concat", concat_pattern()),
-        # ("fabian.batch_norm", batch_norm_pattern()),
     ]
 
 
@@ -243,36 +147,3 @@ _register_external_op_helper("nn.softmax")
 # _register_external_op_helper("minimum")
 # _register_external_op_helper("maximum")
 _register_external_op_helper("nn.adaptive_avg_pool2d")
-
-
-# class OpAttrContext(object):
-#     """Temporarily changes the attr of an op."""
-#
-#     def __init__(self, op_name, attr_key, attr_value):
-#         """Saves the required info for RAII pattern usage.
-#
-#         Parameters
-#         ----------
-#         op_name : str
-#             The op name.
-#
-#         attr_key : str
-#             The attribute name.
-#
-#         attr_value : object
-#             The attribute value.
-#         """
-#         self.op = relay.op.get(op_name)
-#         self.attr_key = attr_key
-#         self.attr_value = attr_value
-#
-#     def __enter__(self):
-#         self.older_attr = self.op.get_attr(self.attr_key)
-#         self.op.reset_attr(self.attr_key)
-#         self.op.set_attr(self.attr_key, self.attr_value)
-#         return self
-#
-#     def __exit__(self, ptype, value, trace):
-#         self.op.reset_attr(self.attr_key)
-#         if self.older_attr:
-#             self.op.set_attr(self.attr_key, self.older_attr)
