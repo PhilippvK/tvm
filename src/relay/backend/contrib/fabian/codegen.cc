@@ -85,14 +85,8 @@ class CLMLJSONSerializer : public backend::contrib::JSONSerializer {
     std::shared_ptr<JSONGraphNode> json_node;
     if (name == "fabian.conv2d") {
       json_node = CreateCompositeConvJSONNode(cn);
-    } else if (name == "fabian.batch_norm") {
-      json_node = CreateBatchNormJSONNode(cn);
     } else if (name == "fabian.dense") {
       json_node = CreateDenseJSONNode(cn);
-    } else if (name == "fabian.pad") {
-      json_node = CreatePadJSONNode(cn);
-    } else if (name == "fabian.concat") {
-      json_node = CreateConcatJSONNode(cn);
     } else {
       LOG(FATAL) << "Unrecognized CLML  pattern: " << name;
     }
@@ -177,10 +171,6 @@ class CLMLJSONSerializer : public backend::contrib::JSONSerializer {
         current_call = current_call->args[0].as<CallNode>();
       }
     }
-    if (backend::IsOp(current_call, "nn.batch_norm")) {
-      nodes.bn = current_call;
-      current_call = current_call->args[0].as<CallNode>();
-    }
     if (backend::IsOp(current_call, "add")) {
       std::cout << "BIAS" << std::endl;
       nodes.bias = current_call;
@@ -236,26 +226,9 @@ class CLMLJSONSerializer : public backend::contrib::JSONSerializer {
     if (nodes.bias) {
       inputs.push_back(VisitExpr(nodes.bias->args[1])[0]);
     }
-    // Deal with Batchnorm Fusing here
-    if (nodes.bn) {
-      inputs.push_back(VisitExpr(nodes.bn->args[1])[0]);
-      inputs.push_back(VisitExpr(nodes.bn->args[2])[0]);
-      inputs.push_back(VisitExpr(nodes.bn->args[3])[0]);
-      inputs.push_back(VisitExpr(nodes.bn->args[4])[0]);
-    }
 
     auto json_node = std::make_shared<JSONGraphNode>(name_prefix + "." + name, "kernel", inputs, 1);
     SetCallNodeAttribute(json_node, nodes.conv);
-
-    if (nodes.bn) {
-      const auto* bn_attr = nodes.bn->attrs.as<BatchNormAttrs>();
-      std::vector<dmlc::any> bn_any_attr;
-      std::vector<std::string> bn_args = {
-          std::to_string(bn_attr->axis), std::to_string(bn_attr->epsilon),
-          std::to_string(bn_attr->center), std::to_string(bn_attr->scale)};
-      bn_any_attr.emplace_back(bn_args);
-      json_node->SetAttr("batchnorm", bn_any_attr);
-    }
 
     // Override attributes
     if (nodes.pad) {
@@ -279,60 +252,6 @@ class CLMLJSONSerializer : public backend::contrib::JSONSerializer {
       act_attr.emplace_back(activation_type);
       json_node->SetAttr("activation_type", act_attr);
     }
-    return json_node;
-  }
-
-  /*!
-   * \brief Create a JSON representation of a Batchnorm operator.
-   *
-   * \param cn The call to be represented.
-   * \return A JSON representation of a specific operator.
-   */
-  std::shared_ptr<JSONGraphNode> CreateBatchNormJSONNode(const CallNode* cn) {
-    const auto* fn = cn->op.as<FunctionNode>();
-    ICHECK(fn);
-    const auto* tuple_item = fn->body.as<TupleGetItemNode>();
-    ICHECK(tuple_item);
-    const auto* bn = tuple_item->tuple.as<CallNode>();
-    ICHECK(bn);
-    const auto* bn_op = bn->op.as<OpNode>();
-    ICHECK(bn_op);
-    const std::string name = bn_op->name;
-
-    std::vector<JSONGraphNodeEntry> inputs;
-    inputs.push_back(VisitExpr(cn->args[0])[0]);
-    inputs.push_back(VisitExpr(bn->args[1])[0]);
-    inputs.push_back(VisitExpr(bn->args[2])[0]);
-    inputs.push_back(VisitExpr(bn->args[3])[0]);
-    inputs.push_back(VisitExpr(bn->args[4])[0]);
-    auto json_node = std::make_shared<JSONGraphNode>(name, "kernel", inputs, 1);
-    SetCallNodeAttribute(json_node, bn);
-    return json_node;
-  }
-
-  /*!
-   * \brief Create a JSON representation of a Concat operator.
-   *
-   * \param cn The call to be represented.
-   * \return A JSON representation of a specific operator.
-   */
-  std::shared_ptr<JSONGraphNode> CreateConcatJSONNode(const CallNode* cn) {
-    const auto* fn = cn->op.as<FunctionNode>();
-    ICHECK(fn);
-    const auto* concat = fn->body.as<CallNode>();
-
-    ICHECK(backend::IsOp(concat, "concatenate"));
-    const auto* concat_op = concat->op.as<OpNode>();
-    ICHECK(concat_op);
-    const std::string name = concat_op->name;
-
-    std::vector<JSONGraphNodeEntry> inputs;
-    for (auto arg : cn->args) {
-      inputs.push_back(VisitExpr(arg)[0]);
-    }
-
-    auto json_node = std::make_shared<JSONGraphNode>(name, "kernel", inputs, 1);
-    SetCallNodeAttribute(json_node, concat);
     return json_node;
   }
 
@@ -368,47 +287,8 @@ class CLMLJSONSerializer : public backend::contrib::JSONSerializer {
     SetCallNodeAttribute(json_node, dense);
     return json_node;
   }
-
-  /*!
-   * \brief Create a JSON representation of a Pad operator.
-   *
-   * \param cn The call to be represented.
-   * \return A JSON representation of a specific operator.
-   */
-  std::shared_ptr<JSONGraphNode> CreatePadJSONNode(const CallNode* cn) {
-    const auto* fn = cn->op.as<FunctionNode>();
-    ICHECK(fn);
-    const auto* pad = fn->body.as<CallNode>();
-    const auto* pad_op = pad->op.as<OpNode>();
-    ICHECK(pad_op);
-    const std::string name = pad_op->name;
-
-    std::vector<JSONGraphNodeEntry> inputs;
-    inputs.push_back(VisitExpr(cn->args[0])[0]);
-
-    auto json_node = std::make_shared<JSONGraphNode>(name, "kernel", inputs, 1);
-
-    const auto* pad_attr = pad->attrs.as<PadAttrs>();
-    ICHECK(pad_attr);
-    auto p = pad_attr->pad_width;
-    // TVM padding format: Dimension wise pair of pre and post padding.
-    // CLML padding format: Dimension wise pre padding followed by dimension wise post padding.
-    std::vector<std::string> padding = {std::to_string(p[2][0].as<IntImmNode>()->value),
-                                        std::to_string(p[2][1].as<IntImmNode>()->value),
-                                        std::to_string(p[3][0].as<IntImmNode>()->value),
-                                        std::to_string(p[3][1].as<IntImmNode>()->value)};
-    std::vector<dmlc::any> padding_attr;
-    padding_attr.emplace_back(padding);
-    json_node->SetAttr("pad_width", padding_attr);
-
-    std::vector<std::string> pad_mode = {pad_attr->pad_mode};
-    std::vector<dmlc::any> pad_mode_attr;
-    pad_mode_attr.emplace_back(pad_mode);
-    json_node->SetAttr("pad_mode", pad_mode_attr);
-
-    return json_node;
-  }
 };
+
 
 /*!
  * \brief Create a runtime module for CLML.
