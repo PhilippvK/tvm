@@ -30,7 +30,8 @@ from . import common
 ##########################
 
 # NOTE this is transposed matmul (A * B^T)
-def intrin_gemm_MxKxN(M, K, N, in_dtype, out_dtype, stride_w=1):
+# def intrin_gemm_MxKxN(M, K, N, in_dtype, out_dtype, stride_w=1):
+def intrin_gemm_MxKxN(M, K, N, in_dtype, out_dtype):
     """Defines a v7e-m DSP-accelerated transposed matmul."""
     # we generate a unique ID for every intrinsic definition, to prevent name
     # collisions in the generated source (e.g., if there are multiple operators
@@ -51,13 +52,13 @@ def intrin_gemm_MxKxN(M, K, N, in_dtype, out_dtype, stride_w=1):
     # TODO(weberlo, areusch): support more dtypes?
     assert in_dtype in ("int8", "int16")
     assert out_dtype == "int32"
-    A = te.placeholder((M * stride_w - (stride_w - 1), K), name="a", dtype=in_dtype)
-    B = te.placeholder((N, K), name="b", dtype=in_dtype)
+    A = te.placeholder((tvm.te.var("m"), K), name="a", dtype=in_dtype)
+    B = te.placeholder((tvm.te.var("n"), K), name="b", dtype=in_dtype)
     k = te.reduce_axis((0, K), name="k")
     C = te.compute(
-        (M, N),
+        (tvm.te.var("m"), tvm.te.var("n")),
         lambda i, j: te.sum(
-            A[i * stride_w, k].astype(out_dtype) * B[j, k].astype(out_dtype), axis=k
+            A[i, k].astype(out_dtype) * B[j, k].astype(out_dtype), axis=k
         ),
         name="c",
     )
@@ -78,43 +79,37 @@ def intrin_gemm_MxKxN(M, K, N, in_dtype, out_dtype, stride_w=1):
 
         def _reduce_update():
             ib = tvm.tir.ir_builder.create()
-            ib.emit(
-                tvm.tir.call_extern(
-                    "int32",
-                    f"{gemm_func_prefix}_{M}x{K}x{N}_update_{uniq_id}",
-                    aa.access_ptr("r"),
-                    bb.access_ptr("r"),
-                    cc.access_ptr("w"),
-                    aa.strides[0] * stride_w,
-                    bb.strides[0],
-                    cc.strides[0],
-                )
-            )
+            bb_pad_size = N * K if K >= 4 else 0
+            if bb_pad_size:
+                bb_pad = ib.allocate("int16", bb_pad_size, name="bb_pad", scope="local")
+                with ib.for_range(0, N, name="jj") as jj:
+                    with ib.for_range(0, K // 4, name="kk2") as kk2:
+                            ib.emit(tvm.tir.call_extern("int8", "read_and_pad", A_buf[jj, kk2 * 4].buffer.access_ptr("r"), bb_pad[jj * K + kk2 * 4].buffer.access_ptr("w"), bb_pad[jj * K + kk2 * 4 + 2].buffer.access_ptr("w")))
+            c_ptr = ib.buffer_ptr(C_buf)
+            with ib.for_range(0, M, name="ii") as ii:
+                if K >= 4:
+                    aa_pad_line = ib.allocate("int16", K, name="aa_pad_line", scope="local")
+                    with ib.for_range(0, K // 4, name="kk2") as kk2:
+                        ib.emit(tvm.tir.call_extern("int8", "read_and_pad", A_buf[ii, kk2 * 4].buffer.access_ptr("r"), aa_pad_line[kk2 * 4].buffer.access_ptr("w"), aa_pad_line[kk2 * 4 + 2].buffer.access_ptr("w")))
+                        pass
+                with ib.for_range(0, N, name="jj") as jj:
+                    c_ptr[ii, jj] = 0;
+                    for kk in range(0, K // 4):
+                        a_ptr = A_buf.vload([ii, kk * 4], "int8x4")
+                        b_ptr = B_buf.vload([jj, kk * 4], "int8x4")
+                        c_ptr[ii, jj] = tvm.tir.call_extern("int32", "__SMLAD8", tvm.tir.call_intrin("int32", "tir.reinterpret", aa_pad_line[0].buffer.vload([0], "int16x2")), tvm.tir.call_intrin("int32", "tir.reinterpret", bb_pad[jj*K].buffer.vload([0], "int16x2")), c_ptr[ii, jj])
+                    for kk in range(0, K % 4):
+                        a_ptr = A_buf.vload([ii, K - (K // 4) * 4 + kk], "int8")
+                        b_ptr = B_buf.vload([ii, K - (K // 4) * 4 + kk], "int8")
+                        c_ptr[ii, jj] = tvm.tir.call_extern("int32", "__MAC8", a_ptr, b_ptr, c_ptr[ii, jj])
             return ib.get()
 
         def _reduce_reset():
             ib = tvm.tir.ir_builder.create()
-            ib.emit(
-                tvm.tir.call_extern(
-                    "int32", f"gemm_{M}x{K}x{N}_reset_{uniq_id}", cc.access_ptr("w"), cc.strides[0]
-                )
-            )
             return ib.get()
 
         def _body():
             ib = tvm.tir.ir_builder.create()
-            ib.emit(
-                tvm.tir.call_extern(
-                    "int32",
-                    f"{gemm_func_prefix}_{M}x{K}x{N}_body_{uniq_id}",
-                    aa.access_ptr("r"),
-                    bb.access_ptr("r"),
-                    cc.access_ptr("w"),
-                    aa.strides[0] * stride_w,
-                    bb.strides[0],
-                    cc.strides[0],
-                )
-            )
             return ib.get()
 
         return _body(), _reduce_reset(), _reduce_update()

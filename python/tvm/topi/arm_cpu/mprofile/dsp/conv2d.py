@@ -179,9 +179,12 @@ def conv2d_nhwc_dsp_schedule(cfg, outs):
 
         cfg["reorder_0_simd"].apply(sched, conv, [n, oh, owo, owi, coo, coi, kh, kw, cio, cii])
 
-        gemm, uniq_id = intrin_gemm_MxKxN(M, K, N, data_vec.dtype, output.dtype, stride_w)
-        sched[output].tensorize(owi, gemm)
-        sched[output].pragma(n, "import_c", gemm_MxKxN_impl(M, K, N, uniq_id))
+        if stride_w == 1:
+            # gemm, uniq_id = intrin_gemm_MxKxN(M, K, N, data_vec.dtype, output.dtype, stride_w)
+            gemm, uniq_id = intrin_gemm_MxKxN(M, K, N, data_vec.dtype, output.dtype)
+            sched[output].tensorize(owi, gemm)
+        # sched[output].pragma(n, "import_c", gemm_MxKxN_impl(M, K, N, uniq_id))
+        sched[output].pragma(n, "import_c", "#include <rvp_intrinsic.h>\n")
 
         # this is the scope to attach global config inside this kernel
         kernel_scope = n
