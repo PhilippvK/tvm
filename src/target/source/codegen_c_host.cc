@@ -165,9 +165,14 @@ void CodeGenCHost::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
         fail = true;
         break;
     }
-    if (!fail && lanes == 1) return;
-    if (!fail && (lanes >= 2 && lanes <= 16)) {
-      os << lanes;
+    if (lanes >= 2 && lanes <= 16) {
+      os << "x" << lanes;
+    } else if (lanes != 1) {
+      fail = true;
+    }
+
+    if (!fail) {
+      os << "_t";
       return;
     }
   }
