@@ -33,6 +33,7 @@
 #include <tvm/tir/op_attr_types.h>
 #include <tvm/tir/stmt.h>
 #include <tvm/tir/stmt_functor.h>
+#include <tvm/arith/analyzer.h>
 
 #include <string>
 #include <unordered_map>
@@ -282,6 +283,8 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
   ExprDeepEqual deep_equal_;
   // binding of let variables. Enables duplicate var defs that map to same value
   std::unordered_map<Var, const LetNode*, ObjectPtrHash, ObjectPtrEqual> let_binding_;
+  // The analyzer information
+  std::unique_ptr<arith::Analyzer> analyzer_;
 };
 
 }  // namespace codegen

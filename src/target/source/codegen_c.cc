@@ -41,6 +41,7 @@ void CodeGenC::InitFuncState(const PrimFunc& f) {
   alloc_storage_scope_.clear();
   handle_data_type_.clear();
   CodeGenSourceBase::ClearFuncState();
+  analyzer_.reset(new arith::Analyzer());
 }
 
 void CodeGenC::ReserveKeywordsAsUnique() {
@@ -686,7 +687,7 @@ void CodeGenC::VisitExpr_(const BufferLoadNode* op, std::ostream& os) {  // NOLI
     if (arith::ramp(base, 1, op->dtype.lanes()).Match(index)) {
       const RampNode* ramp = index.as<RampNode>();
       ICHECK(ramp);
-      arith::ModularSet me = arith::Analyzer().modular_set(ramp->base);
+      arith::ModularSet me = analyzer_->modular_set(ramp->base);
       // The condition: {k * coeff + base} divisible by the alignment for any k
       if (me->coeff % op->dtype.lanes() == 0 && me->base % op->dtype.lanes() == 0) {
         can_vector_load = true;
@@ -795,6 +796,7 @@ void CodeGenC::VisitExpr_(const LetNode* op, std::ostream& os) {  // NOLINT(*)
   }
   std::string value = PrintExpr(op->value);
   var_idmap_[op->var.get()] = value;
+  analyzer_->Bind(op->var, op->value);
   os << PrintExpr(op->body);
 }
 
@@ -833,6 +835,7 @@ void CodeGenC::VisitStmt_(const LetStmtNode* op) {
   if (print_ssa_form_) {
     ICHECK(!var_idmap_.count(op->var.get()));
     var_idmap_[op->var.get()] = value;
+    analyzer_->Bind(op->var, op->value);
   } else {
     PrintIndent();
     if (op->var.dtype() == DataType::Handle() && handle_data_type_.count(op->var.get())) {
@@ -844,6 +847,7 @@ void CodeGenC::VisitStmt_(const LetStmtNode* op) {
       PrintType(op->var.dtype(), this->stream);
       this->stream << ' ' << AllocVarID(op->var.get()) << " = " << value << ";\n";
     }
+    analyzer_->Bind(op->var, op->value);
   }
   PrintStmt(op->body);
 }
@@ -873,6 +877,7 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
     if (iv->thread_tag.length() != 0) {
       if (!var_idmap_.count(iv->var.get())) {
         BindThreadIndex(iv);
+        analyzer_->Bind(iv->var, Range::FromMinExtent(0, op->value));
       }
     }
   } else if (op->attr_key == tir::attr::volatile_scope) {
@@ -889,6 +894,7 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
 
 void CodeGenC::VisitStmt_(const AssertStmtNode* op) {
   std::string cond = PrintExpr(op->condition);
+  With<arith::ConstraintContext> cctx(analyzer_.get(), op->condition);
   PrintIndent();
   if (const auto* str = op->message.as<StringImmNode>()) {
     // GLOG style check
@@ -904,6 +910,7 @@ void CodeGenC::VisitStmt_(const ForNode* op) {
   PrintIndent();
   std::string vid = AllocVarID(op->loop_var.get());
   ICHECK(is_zero(op->min));
+  analyzer_->Bind(op->loop_var, Range::FromMinExtent(op->min, op->extent));
   stream << "for (";
   PrintType(op->loop_var.dtype(), stream);
   stream << ' ' << vid << " = 0; " << vid << " < " << extent << "; ++" << vid << ") {\n";
