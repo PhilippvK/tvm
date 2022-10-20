@@ -49,12 +49,7 @@ from .transform import convert_graph_layout
 logger = logging.getLogger("TVMC")
 
 
-@register_parser
-def add_tune_parser(subparsers, _, json_params):
-    """Include parser for 'tune' subcommand"""
-
-    parser = subparsers.add_parser("tune", help="auto-tune a model")
-    parser.set_defaults(func=drive_tune)
+def add_tune_args(parser, micro=False):
     parser.add_argument(
         "--early-stopping",
         type=int,
@@ -77,7 +72,7 @@ def add_tune_parser(subparsers, _, json_params):
     )
     parser.add_argument(
         "--number",
-        default=10,
+        default=1 if micro else 10,
         type=int,
         help="number of runs a single repeat is made of. "
         "The final number of tuning executions is: "
@@ -91,7 +86,7 @@ def add_tune_parser(subparsers, _, json_params):
     )
     parser.add_argument(
         "--parallel",
-        default=4,
+        default=1 if micro else 4 ,
         type=int,
         help="the maximum number of parallel devices to use when tuning",
     )
@@ -101,24 +96,26 @@ def add_tune_parser(subparsers, _, json_params):
         default=1,
         help="how many times to repeat each measurement",
     )
-    parser.add_argument(
-        "--rpc-key",
-        help="the RPC tracker key of the target device. "
-        "Required when --rpc-tracker is provided.",
-    )
-    parser.add_argument(
-        "--rpc-tracker",
-        help="hostname (required) and port (optional, defaults to 9090) of the RPC tracker, "
-        "e.g. '192.168.0.100:9999'",
-    )
+    if not micro:
+        parser.add_argument(
+            "--rpc-key",
+            help="the RPC tracker key of the target device. " "Required when --rpc-tracker is provided.",
+        )
+        parser.add_argument(
+            "--rpc-tracker",
+            help="hostname (required) and port (optional, defaults to 9090) of the RPC tracker, "
+            "e.g. '192.168.0.100:9999'",
+        )
 
-    generate_target_args(parser)
-    parser.add_argument(
-        "--target-host",
-        help="the host compilation target.",
-    )
+    generate_target_args(parser, micro=micro)
 
-    parser.add_argument("--timeout", type=int, default=10, help="compilation timeout, in seconds")
+    if not micro:
+        parser.add_argument(
+            "--target-host",
+            help="the host compilation target.",
+        )
+
+    parser.add_argument("--timeout", type=int, default=10, help="compilation timeout, in seconds")  # TODO: check if increase for micro is required
     parser.add_argument(
         "--trials",
         type=int,
@@ -136,462 +133,464 @@ def add_tune_parser(subparsers, _, json_params):
         default=None,
         help="change the data layout of the whole graph",
     )
-    parser.add_argument(
-        "--enable-autoscheduler",
-        help="enable tuning the graph through the AutoScheduler tuner",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--enable-metascheduler",
-        help="enable tuning the graph through the MetaScheduler tuner",
-        action="store_true",
-    )
+    if not micro:
+        parser.add_argument(
+            "--enable-autoscheduler",
+            help="enable tuning the graph through the AutoScheduler tuner",
+            action="store_true",
+        )
+        parser.add_argument(
+            "--enable-metascheduler",
+            help="enable tuning the graph through the MetaScheduler tuner",
+            action="store_true",
+        )
 
-    auto_scheduler_group = parser.add_argument_group(
-        "AutoScheduler options",
-        "AutoScheduler options, used when --enable-autoscheduler is provided",
-    )
+    if not micro:
+        auto_scheduler_group = parser.add_argument_group(
+            "AutoScheduler options",
+            "AutoScheduler options, used when --enable-autoscheduler is provided",
+        )
 
-    auto_scheduler_group.add_argument(
-        "--cache-line-bytes",
-        type=int,
-        help="the size of cache line in bytes. " "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--num-cores",
-        type=int,
-        help="the number of device cores. " "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--vector-unit-bytes",
-        type=int,
-        help="the width of vector units in bytes. " "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--max-shared-memory-per-block",
-        type=int,
-        help="the max shared memory per block in bytes. "
-        "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--max-local-memory-per-block",
-        type=int,
-        help="the max local memory per block in bytes. "
-        "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--max-threads-per-block",
-        type=int,
-        help="the max number of threads per block. " "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--max-vthread-extent",
-        type=int,
-        help="the max vthread extent. " "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--warp-size",
-        type=int,
-        help="the thread numbers of a warp. " "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--include-simple-tasks",
-        help="whether to extract simple tasks that do not include complicated ops",
-        action="store_true",
-    )
-    auto_scheduler_group.add_argument(
-        "--log-estimated-latency",
-        help="whether to log the estimated latency to the file after tuning a task",
-        action="store_true",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-verbose",
-        default=1,
-        type=int,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-strategy",
-        choices=["gradient", "round-robin"],
-        default="gradient",
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-strategy-gradient-alpha",
-        default=0.2,
-        type=float,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-strategy-gradient-beta",
-        default=2.0,
-        type=float,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-strategy-gradient-gamma",
-        default=0.5,
-        type=float,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-strategy-gradient-backward-window-size",
-        default=3,
-        type=int,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy",
-        choices=["sketch"],
-        default="sketch",
-        type=str,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-eps-greedy",
-        default=0.05,
-        type=float,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-retry-search-one-round-on-empty",
-        default=1,
-        type=int,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-sample-init-min-population",
-        default=50,
-        type=int,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-sample-init-use-measured-ratio",
-        default=0.2,
-        type=float,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-evolutionary-search-population",
-        default=2048,
-        type=int,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-evolutionary-search-num-iters",
-        default=4,
-        type=int,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-evolutionary-search-mutation-prob",
-        default=0.85,
-        type=float,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-cpu-multi-level-tiling-structure",
-        default="SSRSRS",
-        type=str,
-        help="",
-    )
-    # Notice: the default thread bind policy of GPU assumes the tiling structure to have at
-    # least 3 spatial tiling levels in outermost
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-gpu-multi-level-tiling-structure",
-        default="SSSRRSRS",
-        type=str,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-max-innermost-split-factor",
-        default=64,
-        type=int,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-max-vectorize-size",
-        default=16,
-        type=int,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-policy-sketch-disable-change-compute-location",
-        help="",
-        action="store_true",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-model",
-        choices=["xgb", "mlp", "random"],
-        default="xgb",
-        type=str,
-        help="",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-model-xgb-adaptive-training",
-        help="",
-        action="store_true",
-    )
-    auto_scheduler_group.add_argument(
-        "--autoscheduler-num-measures-per-round",
-        default=64,
-        type=int,
-        help="",
-    )
-    meta_scheduler_group = parser.add_argument_group(
-        "MetaScheduler options",
-        "MetaScheduler options, used when --enable-metascheduler is provided",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-space",
-        choices=["post-order-apply"],  # union is not really useful here
-        default="post-order-apply",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-rules",
-        default="from-target",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-postprocs",
-        default="from-target",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-mutator-probs",
-        default="from-target",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model",
-        choices=["xgb", "mlp", "random"],
-        default="xgb",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-max-depth",
-        default=10,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-gamma",
-        default=0.001,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-min-child-weight",
-        default=0,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-eta",
-        default=0.2,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-seed",
-        default=43,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-nthread",
-        default=None,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-num-warmup_samples",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-verbose-equal",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-average-peak-n",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-adaptive-training",
-        help="",
-    )
-    # meta_scheduler_group.add_argument(
-    #     "--metascheduler-model-mlp-",
-    #     help="",
-    # )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-random-max-range",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy",
-        choices=["evolutionaly_search", "replay_trace", "replay_func"],
-        default="evolutionaly_search",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-population-size",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-init-measured-ratio",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-init-min-unmeasured",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-genetic-num-iters",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-genetic-mutate-prob",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-genetic-max-fail-count",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-eps-greedy",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-replay-trace-max-fail-count",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-space-post-order-apply-",
-        help="",
-    )
-    meta_scheduler_group = parser.add_argument_group(
-        "MetaScheduler options",
-        "MetaScheduler options, used when --enable-metascheduler is provided",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-space",
-        choices=["post-order-apply"],  # union is not really useful here
-        default="post-order-apply",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-rules",
-        default="from-target",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-postprocs",
-        default="from-target",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-mutator-probs",
-        default="from-target",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model",
-        choices=["xgb", "mlp", "random"],
-        default="xgb",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-max-depth",
-        default=10,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-gamma",
-        default=0.001,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-min-child-weight",
-        default=0,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-eta",
-        default=0.2,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-seed",
-        default=43,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-nthread",
-        default=None,
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-num-warmup_samples",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-verbose-equal",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-average-peak-n",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-xgb-adaptive-training",
-        help="",
-    )
-    # meta_scheduler_group.add_argument(
-    #     "--metascheduler-model-mlp-",
-    #     help="",
-    # )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-model-random-max-range",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy",
-        choices=["evolutionaly_search", "replay_trace", "replay_func"],
-        default="evolutionaly_search",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-population-size",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-init-measured-ratio",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-init-min-unmeasured",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-genetic-num-iters",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-genetic-mutate-prob",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-genetic-max-fail-count",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-evolutionaly-search-eps-greedy",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-strategy-replay-trace-max-fail-count",
-        help="",
-    )
-    meta_scheduler_group.add_argument(
-        "--metascheduler-space-post-order-apply-",
-        help="",
-    )
+        auto_scheduler_group.add_argument(
+            "--cache-line-bytes",
+            type=int,
+            help="the size of cache line in bytes. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--num-cores",
+            type=int,
+            help="the number of device cores. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--vector-unit-bytes",
+            type=int,
+            help="the width of vector units in bytes. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--max-shared-memory-per-block",
+            type=int,
+            help="the max shared memory per block in bytes. "
+            "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--max-local-memory-per-block",
+            type=int,
+            help="the max local memory per block in bytes. "
+            "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--max-threads-per-block",
+            type=int,
+            help="the max number of threads per block. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--max-vthread-extent",
+            type=int,
+            help="the max vthread extent. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--warp-size",
+            type=int,
+            help="the thread numbers of a warp. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--include-simple-tasks",
+            help="whether to extract simple tasks that do not include complicated ops",
+            action="store_true",
+        )
+        auto_scheduler_group.add_argument(
+            "--log-estimated-latency",
+            help="whether to log the estimated latency to the file after tuning a task",
+            action="store_true",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-verbose",
+            default=1,
+            type=int,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-strategy",
+            choices=["gradient", "round-robin"],
+            default="gradient",
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-strategy-gradient-alpha",
+            default=0.2,
+            type=float,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-strategy-gradient-beta",
+            default=2.0,
+            type=float,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-strategy-gradient-gamma",
+            default=0.5,
+            type=float,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-strategy-gradient-backward-window-size",
+            default=3,
+            type=int,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy",
+            choices=["sketch"],
+            default="sketch",
+            type=str,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-eps-greedy",
+            default=0.05,
+            type=float,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-retry-search-one-round-on-empty",
+            default=1,
+            type=int,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-sample-init-min-population",
+            default=50,
+            type=int,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-sample-init-use-measured-ratio",
+            default=0.2,
+            type=float,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-evolutionary-search-population",
+            default=2048,
+            type=int,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-evolutionary-search-num-iters",
+            default=4,
+            type=int,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-evolutionary-search-mutation-prob",
+            default=0.85,
+            type=float,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-cpu-multi-level-tiling-structure",
+            default="SSRSRS",
+            type=str,
+            help="",
+        )
+        # Notice: the default thread bind policy of GPU assumes the tiling structure to have at
+        # least 3 spatial tiling levels in outermost
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-gpu-multi-level-tiling-structure",
+            default="SSSRRSRS",
+            type=str,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-max-innermost-split-factor",
+            default=64,
+            type=int,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-max-vectorize-size",
+            default=16,
+            type=int,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-policy-sketch-disable-change-compute-location",
+            help="",
+            action="store_true",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-model",
+            choices=["xgb", "mlp", "random"],
+            default="xgb",
+            type=str,
+            help="",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-model-xgb-adaptive-training",
+            help="",
+            action="store_true",
+        )
+        auto_scheduler_group.add_argument(
+            "--autoscheduler-num-measures-per-round",
+            default=64,
+            type=int,
+            help="",
+        )
+        meta_scheduler_group = parser.add_argument_group(
+            "MetaScheduler options",
+            "MetaScheduler options, used when --enable-metascheduler is provided",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-space",
+            choices=["post-order-apply"],  # union is not really useful here
+            default="post-order-apply",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-rules",
+            default="from-target",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-postprocs",
+            default="from-target",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-mutator-probs",
+            default="from-target",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model",
+            choices=["xgb", "mlp", "random"],
+            default="xgb",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-max-depth",
+            default=10,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-gamma",
+            default=0.001,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-min-child-weight",
+            default=0,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-eta",
+            default=0.2,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-seed",
+            default=43,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-nthread",
+            default=None,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-num-warmup_samples",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-verbose-equal",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-average-peak-n",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-adaptive-training",
+            help="",
+        )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-mlp-",
+        #     help="",
+        # )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-random-max-range",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy",
+            choices=["evolutionaly_search", "replay_trace", "replay_func"],
+            default="evolutionaly_search",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-population-size",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-init-measured-ratio",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-init-min-unmeasured",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-genetic-num-iters",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-genetic-mutate-prob",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-genetic-max-fail-count",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-eps-greedy",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-replay-trace-max-fail-count",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-space-post-order-apply-",
+            help="",
+        )
+        meta_scheduler_group = parser.add_argument_group(
+            "MetaScheduler options",
+            "MetaScheduler options, used when --enable-metascheduler is provided",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-space",
+            choices=["post-order-apply"],  # union is not really useful here
+            default="post-order-apply",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-rules",
+            default="from-target",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-postprocs",
+            default="from-target",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-mutator-probs",
+            default="from-target",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model",
+            choices=["xgb", "mlp", "random"],
+            default="xgb",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-max-depth",
+            default=10,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-gamma",
+            default=0.001,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-min-child-weight",
+            default=0,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-eta",
+            default=0.2,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-seed",
+            default=43,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-nthread",
+            default=None,
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-num-warmup_samples",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-verbose-equal",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-average-peak-n",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-xgb-adaptive-training",
+            help="",
+        )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-mlp-",
+        #     help="",
+        # )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-model-random-max-range",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy",
+            choices=["evolutionaly_search", "replay_trace", "replay_func"],
+            default="evolutionaly_search",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-population-size",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-init-measured-ratio",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-init-min-unmeasured",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-genetic-num-iters",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-genetic-mutate-prob",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-genetic-max-fail-count",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-evolutionaly-search-eps-greedy",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-strategy-replay-trace-max-fail-count",
+            help="",
+        )
+        meta_scheduler_group.add_argument(
+            "--metascheduler-space-post-order-apply-",
+            help="",
+        )
     autotvm_group = parser.add_argument_group(
         "AutoTVM options",
         "AutoTVM options, used when the AutoScheduler or MetaScheduler is not enabled",
@@ -671,6 +670,16 @@ def add_tune_parser(subparsers, _, json_params):
         '"input_name:[dim1,dim2,...,dimn] input_name2:[dim1,dim2]"',
         type=parse_shape_string,
     )
+
+
+@register_parser
+def add_tune_parser(subparsers, _, json_params):
+    """Include parser for 'tune' subcommand"""
+
+    parser = subparsers.add_parser("tune", help="auto-tune a model")
+    parser.set_defaults(func=drive_tune)
+
+    add_tune_args(parser)
 
     for one_entry in json_params:
         parser.set_defaults(**one_entry)
@@ -847,6 +856,11 @@ def tune_model(
     autoscheduler_num_measures_per_round: int = 64,
     autoscheduler_model_type="xgb",  # TODO
     autoscheduler_adaptive=False,  # TODO
+    module_loader = None,  # TODO
+    build_func = "default",  # TODO
+    runtime = None,  # TODO
+    build_option : dict = None,
+    si_prefix: str = "G",
 ):
     """Use tuning to automatically optimize the functions in a model.
 
@@ -926,6 +940,16 @@ def tune_model(
         TODO
     autoscheduler_adaptive: TODO
         TODO
+    module_loader : TODO, optional
+        TODO
+    build_func : TODO, optional
+        TODO
+    runtime : TODO, optional
+        TODO
+    build_option : dict, optional
+        TODO
+    si_prefix : str
+        SI prefix for FLOPS.
 
     Returns
     -------
@@ -1002,6 +1026,7 @@ def tune_model(
                     n_parallel=parallel,
                     timeout=timeout,
                     min_repeat_ms=min_repeat_ms,
+                    module_loader=module_loader,
                 )
 
         else:
@@ -1047,6 +1072,20 @@ def tune_model(
                 alter_layout=desired_layout,
                 hardware_params=hardware_params,
                 include_simple_tasks=include_simple_tasks,
+                extra_config=build_option,
+            )
+
+            # Create the autoscheduler tuning options
+            # if build_option is None:
+            #     build_option = {}
+            builder = auto_scheduler.LocalBuilder(
+                # timeout = 1000
+                # n_parallel=1,
+                # build_kwargs=build_kwargs or {},
+                # do_fork=True,
+                # do_fork=False,
+                build_func=build_func,
+                runtime=runtime,
             )
         elif enable_metascheduler:
             tasks = metascheduler_get_tuning_tasks(
@@ -1088,9 +1127,11 @@ def tune_model(
                 num_measure_trials=trials,
                 measure_callbacks=[auto_scheduler.RecordToFile(tuning_records)],
                 runner=runner,
+                builder=builder,
                 early_stopping=early_stopping,
                 verbose=autoscheduler_verbose,
                 num_measures_per_round=autoscheduler_num_measures_per_round,
+                si_prefix=si_prefix,
             )
 
             logger.info("Autoscheduling with configuration: %s", tuning_options)
@@ -1141,15 +1182,25 @@ def tune_model(
             trials = int(trials / max(len(tasks), 1))
             logger.info("Autotuning with %d trials per task.", trials)
 
+            builder = autotvm.LocalBuilder(
+                n_parallel=max(parallel, 5),
+                build_kwargs={"build_option": build_option},
+                do_fork=True,
+                # do_fork=False,
+                build_func=build_func,
+                runtime=runtime,
+            )
+
             tuning_options = {
                 "tuner": tuner,
                 "trials": trials,
                 "early_stopping": early_stopping,
                 "measure_option": autotvm.measure_option(
-                    builder=autotvm.LocalBuilder(build_func="default"), runner=runner
+                    builder=builder, runner=runner
                 ),
                 "tuning_records": prior_records,
                 "tuner_options": autotvm_tuner_options.get(tuner, {}),
+                "si_prefix": si_prefix,
             }
             logger.info("Autotuning with configuration: %s", tuning_options)
 
@@ -1158,12 +1209,14 @@ def tune_model(
         return tuning_records
 
 
+
 def autotvm_get_tuning_tasks(
     mod: tvm.IRModule,
     params: Dict[str, tvm.nd.NDArray],
     target: str,
     target_host: Optional[str] = None,
     alter_layout: Optional[str] = None,
+    extra_config = None,
 ):
     """Get the autotvm tuning tasks for a given relay module.
 
@@ -1181,6 +1234,8 @@ def autotvm_get_tuning_tasks(
         The layout to convert the graph to. Note, the convert layout
         pass doesn't currently guarantee the whole of the graph will
         be converted to the chosen layout.
+    extra_config : TODO, optional
+        TODO
 
     Returns
     -------
@@ -1192,11 +1247,18 @@ def autotvm_get_tuning_tasks(
     if alter_layout:
         mod = convert_graph_layout(mod, alter_layout)
 
-    tasks = autotvm.task.extract_from_program(
-        mod["main"],
-        target=target,
-        params=params,
-    )
+    config = {}
+    if extra_config:
+        assert isinstance(extra_config, dict)
+        config.update(extra_config)
+    pass_context = tvm.transform.PassContext(opt_level=3, config=config)  # TODO
+    with pass_context:
+        tasks = autotvm.task.extract_from_program(
+            mod["main"],
+            target=target,
+            target_host=target_host,
+            params=params,
+        )
 
     return tasks
 
@@ -1435,6 +1497,7 @@ def tune_tasks(
     early_stopping: Optional[int] = None,
     tuning_records: Optional[str] = None,
     tuner_options: Optional[dict] = None,
+    si_prefix: str = "G",
 ):
     """Tune a list of tasks and output the history to a log file.
 
@@ -1457,6 +1520,8 @@ def tune_tasks(
         Path to the file produced by the tuning, to be used during
         tuning.
     tuner_options: dict, optional
+    si_prefix : str
+        SI prefix for FLOPS.
     """
     if not tasks:
         logger.warning("there were no tasks found to be tuned")
@@ -1480,7 +1545,7 @@ def tune_tasks(
         tuner_options = {}
 
     for i, tsk in enumerate(tasks):
-        prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
+        prefix = "\n[Task %2d/%2d] " % (i + 1, len(tasks))
 
         # Create a tuner
         tuner_obj = tuner_cls(tsk, **tuner_options)
@@ -1497,7 +1562,8 @@ def tune_tasks(
             early_stopping=early_stopping,
             measure_option=measure_option,
             callbacks=[
-                autotvm.callback.progress_bar(trials, prefix=prefix),
+                autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix),
                 autotvm.callback.log_to_file(log_file),
             ],
+            si_prefix=si_prefix,
         )
