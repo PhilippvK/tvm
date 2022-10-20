@@ -17,24 +17,35 @@
 """
 Provides support for micro targets (microTVM).
 """
+import logging
 import argparse
 import os
 from pathlib import Path
 import shutil
 import sys
 
-from . import TVMCException
+from urllib.parse import urlparse
+
+from tvm import autotvm, auto_scheduler
+from tvm.relay.backend import Runtime
+from . import TVMCException, frontends
+from .shape_parser import parse_shape_string
+from .autotuner import tune_model
 from .main import register_parser
 from .arguments import TVMCSuppressedArgumentParser
+from .target import _generate_target_kind_args, reconstruct_target_args
 from .project import (
     get_project_options,
     get_and_check_options,
     get_project_dir,
 )
 
+# pylint: disable=invalid-name
+logger = logging.getLogger("TVMC")
+
 try:
     import tvm.micro.project as project
-    from tvm.micro import get_microtvm_template_projects
+    from tvm.micro import get_microtvm_template_projects, AutoTvmModuleLoader, autotvm_build_func
     from tvm.micro.build import MicroTVMTemplateProjectNotFoundError
     from tvm.micro.project_api.server import ServerError
     from tvm.micro.project_api.client import ProjectAPIServerNotFoundError
@@ -43,6 +54,193 @@ try:
 except (ImportError, NameError):
     SUPPORT_MICRO = False
 
+def add_micro_tune_args(parser):
+    """Include parser for 'tune' subcommand"""
+
+    parser.add_argument(
+        "--early-stopping",
+        type=int,
+        help="minimum number of trials before early stopping",
+    )
+    parser.add_argument(
+        "--min-repeat-ms",
+        default=None,
+        type=int,
+        help="minimum time to run each trial, in milliseconds. "
+        "Defaults to 0 on x86 and 1000 on all other targets",
+    )
+    parser.add_argument(
+        "--model-format",
+        choices=frontends.get_frontend_names(),
+        help="specify input model format",
+    )
+    parser.add_argument(
+        "--number",
+        default=10,
+        type=int,
+        help="number of runs a single repeat is made of. "
+        "The final number of tuning executions is: "
+        "(1 + number * repeat)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        required=True,
+        help="output file to store the tuning records for the tuning process",
+    )
+    parser.add_argument(
+        "--parallel",
+        default=1,
+        type=int,
+        help="the maximum number of parallel devices to use when tuning",
+    )
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="how many times to repeat each measurement",
+    )
+    parser.add_argument(
+        "--rpc-key",
+        help="the RPC tracker key of the target device. "
+        "Required when --rpc-tracker is provided.",
+    )
+    parser.add_argument(
+        "--rpc-tracker",
+        help="hostname (required) and port (optional, defaults to 9090) of the RPC tracker, "
+        "e.g. '192.168.0.100:9999'",
+    )
+
+    parser.add_argument(
+        "--target",
+        help="compilation target as plain string, inline JSON or path to a JSON file",
+        required=False,
+        default="c",
+    )
+    parser.add_argument(
+        "--tasks",
+        default="all",
+        help="which tasks should be tuned, i.e. 0 0,2 3-5 all list",
+    )
+    # generate_target_args(parser)
+    _generate_target_kind_args(parser, "c")
+    _generate_target_kind_args(parser, "llvm")
+    # for codegen_name in get_codegen_names():
+    #     _generate_codegen_args(parser, codegen_name)
+    # TODO: --target?
+    # parser.add_argument(
+    #     "--target-host",
+    #     help="the host compilation target, defaults to 'llvm'",
+    #     default="llvm",
+    # )
+
+    parser.add_argument("--timeout", type=int, default=1000, help="compilation timeout, in seconds")
+    parser.add_argument(
+        "--trials",
+        type=int,
+        default=1000,
+        help="the maximum number of tuning trials to perform",
+    )
+    parser.add_argument(
+        "--tuning-records",
+        metavar="PATH",
+        help="path to an auto-tuning log file by AutoTVM.",
+    )
+    parser.add_argument(
+        "--desired-layout",
+        # choices=["NCHW", "NHWC"],
+        default=None,
+        help="change the data layout of the whole graph",
+    )
+    parser.add_argument(
+        "--enable-autoscheduler",
+        help="enable tuning the graph through the AutoScheduler tuner",
+        action="store_true",
+    )
+
+    auto_scheduler_group = parser.add_argument_group(
+        "AutoScheduler options",
+        "AutoScheduler options, used when --enable-autoscheduler is provided",
+    )
+
+    auto_scheduler_group.add_argument(
+        "--cache-line-bytes",
+        type=int,
+        help="the size of cache line in bytes. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--num-cores",
+        type=int,
+        help="the number of device cores. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--vector-unit-bytes",
+        type=int,
+        help="the width of vector units in bytes. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--max-shared-memory-per-block",
+        type=int,
+        help="the max shared memory per block in bytes. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--max-local-memory-per-block",
+        type=int,
+        help="the max local memory per block in bytes. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--max-threads-per-block",
+        type=int,
+        help="the max number of threads per block. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--max-vthread-extent",
+        type=int,
+        help="the max vthread extent. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--warp-size",
+        type=int,
+        help="the thread numbers of a warp. "
+        "If not specified, it will be autoset for the current machine.",
+    )
+    auto_scheduler_group.add_argument(
+        "--include-simple-tasks",
+        help="whether to extract simple tasks that do not include complicated ops",
+        action="store_true",
+    )
+    auto_scheduler_group.add_argument(
+        "--log-estimated-latency",
+        help="whether to log the estimated latency to the file after tuning a task",
+        action="store_true",
+    )
+    autotvm_group = parser.add_argument_group(
+        "AutoTVM options",
+        "AutoTVM options, used when the AutoScheduler is not enabled",
+    )
+    autotvm_group.add_argument(
+        "--tuner",
+        choices=["ga", "gridsearch", "random", "xgb", "xgb_knob", "xgb-rank"],
+        default="xgb",
+        help="type of tuner to use when tuning with autotvm.",
+    )
+    # TODO (@leandron) This is a path to a physical file, but
+    #     can be improved in future to add integration with a modelzoo
+    #     or URL, for example.
+    parser.add_argument("FILE", help="path to the input model file")
+    parser.add_argument(
+        "--input-shapes",
+        help="specify non-generic shapes for model to run, format is "
+        '"input_name:[dim1,dim2,...,dimn] input_name2:[dim1,dim2]"',
+        type=parse_shape_string,
+    )
 
 @register_parser
 def add_micro_parser(subparsers, main_parser, json_params):
@@ -105,6 +303,15 @@ def add_micro_parser(subparsers, main_parser, json_params):
     flash_parser.set_defaults(subcommand_handler=flash_handler)
     flash_parser.add_argument("project_dir", help="project dir where the built image is.")
 
+
+    # 'tune' subcommand
+    tune_parser = micro_parser.add_parser(
+        "tune",
+        help="Tune a model using a MicroTVM device.",
+    )
+    tune_parser.set_defaults(subcommand_handler=tune_handler)
+    add_micro_tune_args(tune_parser)
+
     # For each platform add arguments detected automatically using Project API info query.
 
     # Create subparsers for the platforms under 'create-project', 'build', and 'flash' subcommands.
@@ -121,12 +328,16 @@ def add_micro_parser(subparsers, main_parser, json_params):
     flash_platforms_parser = flash_parser.add_subparsers(
         title="platforms", help=help_msg, dest="platform"
     )
+    tune_platforms_parser = tune_parser.add_subparsers(
+        title="platforms", help=help_msg, dest="platform"
+    )
 
     subcmds = {
         # API method name    Parser associated to method      Handler func to call after parsing
         "generate_project": [create_project_platforms_parser, create_project_handler],
         "build": [build_platforms_parser, build_handler],
         "flash": [flash_platforms_parser, flash_handler],
+        "tune": [tune_platforms_parser, tune_handler],
     }
 
     # Helper to add a platform parser to a subcmd parser.
@@ -197,11 +408,15 @@ def add_micro_parser(subparsers, main_parser, json_params):
         "create": "generate_project",
         "build": "build",
         "flash": "flash",
+        "tune": "tune",
     }
 
     method = subcmd_to_method[subcmd]
     parser_by_subcmd_n_platform = parser_by_subcmd[method][platform]
     _, handler = subcmds[method]
+
+    # TODO: get rid of this workaround
+    options_by_method["tune"] = sum([options_by_method[method] for method in ["generate_project", "build", "flash", "open_transport"]], [])
 
     parser_by_subcmd_n_platform.formatter_class = (
         # Set raw help text so help_text format works
@@ -312,3 +527,99 @@ def flash_handler(args):
     except ServerError as error:
         print("The following error occurred on the Project API server side: ", error)
         sys.exit(1)
+
+
+def tune_handler(args):
+    """Tunes a model using the chosen target device.
+
+    Parameters
+    ----------
+    args: argparse.Namespace
+        Arguments from command line parser.
+    """
+    tvmc_model = frontends.load_model(args.FILE, args.model_format, shape_dict=args.input_shapes)
+
+    # Specify hardware parameters, although they'll only be used if autoscheduling.
+    hardware_params = auto_scheduler.HardwareParams(
+        num_cores=1,
+        # vector_unit_bytes=0,  # VLEN on riscv?
+        # cache_line_bytes=0,
+        max_shared_memory_per_block=0,
+        max_local_memory_per_block=0,
+        max_threads_per_block=0,
+        max_vthread_extent=0,
+        warp_size=0,
+        # num_cores=None,
+        # vector_unit_bytes=None,
+        # cache_line_bytes=None,
+        # max_shared_memory_per_block=None,
+        # max_local_memory_per_block=None,
+        # max_threads_per_block=None,
+        # max_vthread_extent=None,
+        # warp_size=None,
+        target=args.target,
+        # target_host="?",
+        target_host=None,
+        # target_host="llvm",
+    )
+
+    if args.rpc_tracker:
+        parsed_url = urlparse("//%s" % args.rpc_tracker)
+        rpc_hostname = parsed_url.hostname
+        rpc_port = parsed_url.port or 9090
+        logger.info("RPC tracker hostname: %s", rpc_hostname)
+        logger.info("RPC tracker port: %s", rpc_port)
+
+        if not args.rpc_key:
+            raise TVMCException("need to provide an RPC tracker key (--rpc-key) for remote tuning")
+    else:
+        rpc_hostname = None
+        rpc_port = None
+
+    options = get_and_check_options(args.project_option, args.valid_options)
+
+    runtime = Runtime("crt", {"system-lib": True})
+
+    module_loader = AutoTvmModuleLoader(
+        template_project_dir=args.template_dir,
+        project_options=options,
+    )
+
+    # print("options", options)
+    # print("args", args)
+    # drive_tune(args, micro=True, module_loader=module_loader)
+
+    tune_model(
+        tvmc_model,
+        "c",
+        tuning_records=args.output,
+        prior_records=args.tuning_records,
+        enable_autoscheduler=args.enable_autoscheduler,
+        rpc_key=args.rpc_key,
+        hostname=rpc_hostname,
+        port=rpc_port,
+        trials=args.trials,
+        # target_host=args.target_host,
+        # target_host="?",
+        target_host=None,
+        # target_host="llvm",
+        tuner=args.tuner,
+        min_repeat_ms=args.min_repeat_ms,
+        early_stopping=args.early_stopping,
+        desired_layout=args.desired_layout,
+        timeout=args.timeout,
+        repeat=args.repeat,
+        number=args.number,
+        parallel=args.parallel,
+        hardware_params=hardware_params,
+        include_simple_tasks=False,
+        log_estimated_latency=False,
+        additional_target_options=reconstruct_target_args(args),
+        module_loader=module_loader,
+        runtime=runtime,
+        build_func=autotvm_build_func,
+        # build_kwargs={"build_option": {"tir.disable_vectorize": True}},
+        build_option={"tir.disable_vectorize": True},
+        si_prefix="M",  # Display MFLOPS instead of GFLOPS
+        tasks_filter=args.tasks,
+    )
