@@ -103,6 +103,10 @@ def convert_to_mixed_precision(mod, ops=None, calculation_type="float16", acc_ty
                 raise TVMCException("Error converting mixed precision : {0}".format(str(err)))
 
 
+def split_data_kernel_layout(layout):
+    return [layout, "default"] if ":" not in layout else layout.split(":")[:2]
+
+
 def convert_graph_layout(mod, desired_layout, ops=None):
     """Alter the layout of the input graph.
 
@@ -111,7 +115,8 @@ def convert_graph_layout(mod, desired_layout, ops=None):
     mod : tvm.IRModule
         The relay module to convert.
     desired_layout : str
-        The layout to convert to.
+        The layout to convert to. Either only data layour or data and kernel (colon-separated).
+        New: this can now also be a dict of the form: nn.conv2d=NCHW,nn.conv2d_transpose=NHWC:HWOI
     ops : list
         List of operators to be layout converted.
 
@@ -123,7 +128,14 @@ def convert_graph_layout(mod, desired_layout, ops=None):
     if ops is None:
         ops = ["nn.conv2d", "nn.conv2d_transpose", "qnn.conv2d"]
 
-    desired_layouts = {op: [desired_layout, "default"] for op in ops}
+    desired_layouts = {}
+    if "," in desired_layout:
+        desired_layouts = {token.split("=")[0]: split_data_kernel_layout(token.split("=")[1]) for token in desired_layout.split(",")}
+    else:
+        # Assume for the time being that graphs only have
+        # conv2d as heavily-sensitive operators.
+        for op in ops:
+            desired_layouts[op] = split_data_kernel_layout(desired_layout)
 
     # Convert the layout of the graph where possible.
     seq = transform.Sequential(
