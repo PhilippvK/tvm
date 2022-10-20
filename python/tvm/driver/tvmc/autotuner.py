@@ -46,12 +46,7 @@ from .transform import convert_graph_layout
 logger = logging.getLogger("TVMC")
 
 
-@register_parser
-def add_tune_parser(subparsers, _, json_params):
-    """Include parser for 'tune' subcommand"""
-
-    parser = subparsers.add_parser("tune", help="auto-tune a model")
-    parser.set_defaults(func=drive_tune)
+def add_tune_args(parser, micro=False):
     parser.add_argument(
         "--early-stopping",
         type=int,
@@ -74,7 +69,7 @@ def add_tune_parser(subparsers, _, json_params):
     )
     parser.add_argument(
         "--number",
-        default=10,
+        default=1 if micro else 10,
         type=int,
         help="number of runs a single repeat is made of. "
         "The final number of tuning executions is: "
@@ -88,7 +83,7 @@ def add_tune_parser(subparsers, _, json_params):
     )
     parser.add_argument(
         "--parallel",
-        default=4,
+        default=1 if micro else 4 ,
         type=int,
         help="the maximum number of parallel devices to use when tuning",
     )
@@ -98,24 +93,26 @@ def add_tune_parser(subparsers, _, json_params):
         default=1,
         help="how many times to repeat each measurement",
     )
-    parser.add_argument(
-        "--rpc-key",
-        help="the RPC tracker key of the target device. "
-        "Required when --rpc-tracker is provided.",
-    )
-    parser.add_argument(
-        "--rpc-tracker",
-        help="hostname (required) and port (optional, defaults to 9090) of the RPC tracker, "
-        "e.g. '192.168.0.100:9999'",
-    )
+    if not micro:
+        parser.add_argument(
+            "--rpc-key",
+            help="the RPC tracker key of the target device. " "Required when --rpc-tracker is provided.",
+        )
+        parser.add_argument(
+            "--rpc-tracker",
+            help="hostname (required) and port (optional, defaults to 9090) of the RPC tracker, "
+            "e.g. '192.168.0.100:9999'",
+        )
 
-    generate_target_args(parser)
-    parser.add_argument(
-        "--target-host",
-        help="the host compilation target.",
-    )
+    generate_target_args(parser, micro=micro)
 
-    parser.add_argument("--timeout", type=int, default=10, help="compilation timeout, in seconds")
+    if not micro:
+        parser.add_argument(
+            "--target-host",
+            help="the host compilation target.",
+        )
+
+    parser.add_argument("--timeout", type=int, default=10, help="compilation timeout, in seconds")  # TODO: check if increase for micro is required
     parser.add_argument(
         "--trials",
         type=int,
@@ -133,75 +130,71 @@ def add_tune_parser(subparsers, _, json_params):
         default=None,
         help="change the data layout of the whole graph",
     )
-    parser.add_argument(
-        "--enable-autoscheduler",
-        help="enable tuning the graph through the AutoScheduler tuner",
-        action="store_true",
-    )
+    if not micro:
+        parser.add_argument(
+            "--enable-autoscheduler",
+            help="enable tuning the graph through the AutoScheduler tuner",
+            action="store_true",
+        )
 
-    auto_scheduler_group = parser.add_argument_group(
-        "AutoScheduler options",
-        "AutoScheduler options, used when --enable-autoscheduler is provided",
-    )
+    if not micro:
+        auto_scheduler_group = parser.add_argument_group(
+            "AutoScheduler options",
+            "AutoScheduler options, used when --enable-autoscheduler is provided",
+        )
 
-    auto_scheduler_group.add_argument(
-        "--cache-line-bytes",
-        type=int,
-        help="the size of cache line in bytes. "
-        "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--num-cores",
-        type=int,
-        help="the number of device cores. "
-        "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--vector-unit-bytes",
-        type=int,
-        help="the width of vector units in bytes. "
-        "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--max-shared-memory-per-block",
-        type=int,
-        help="the max shared memory per block in bytes. "
-        "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--max-local-memory-per-block",
-        type=int,
-        help="the max local memory per block in bytes. "
-        "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--max-threads-per-block",
-        type=int,
-        help="the max number of threads per block. "
-        "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--max-vthread-extent",
-        type=int,
-        help="the max vthread extent. "
-        "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--warp-size",
-        type=int,
-        help="the thread numbers of a warp. "
-        "If not specified, it will be autoset for the current machine.",
-    )
-    auto_scheduler_group.add_argument(
-        "--include-simple-tasks",
-        help="whether to extract simple tasks that do not include complicated ops",
-        action="store_true",
-    )
-    auto_scheduler_group.add_argument(
-        "--log-estimated-latency",
-        help="whether to log the estimated latency to the file after tuning a task",
-        action="store_true",
-    )
+        auto_scheduler_group.add_argument(
+            "--cache-line-bytes",
+            type=int,
+            help="the size of cache line in bytes. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--num-cores",
+            type=int,
+            help="the number of device cores. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--vector-unit-bytes",
+            type=int,
+            help="the width of vector units in bytes. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--max-shared-memory-per-block",
+            type=int,
+            help="the max shared memory per block in bytes. "
+            "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--max-local-memory-per-block",
+            type=int,
+            help="the max local memory per block in bytes. "
+            "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--max-threads-per-block",
+            type=int,
+            help="the max number of threads per block. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--max-vthread-extent",
+            type=int,
+            help="the max vthread extent. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--warp-size",
+            type=int,
+            help="the thread numbers of a warp. " "If not specified, it will be autoset for the current machine.",
+        )
+        auto_scheduler_group.add_argument(
+            "--include-simple-tasks",
+            help="whether to extract simple tasks that do not include complicated ops",
+            action="store_true",
+        )
+        auto_scheduler_group.add_argument(
+            "--log-estimated-latency",
+            help="whether to log the estimated latency to the file after tuning a task",
+            action="store_true",
+        )
     autotvm_group = parser.add_argument_group(
         "AutoTVM options",
         "AutoTVM options, used when the AutoScheduler is not enabled",
@@ -222,6 +215,16 @@ def add_tune_parser(subparsers, _, json_params):
         '"input_name:[dim1,dim2,...,dimn] input_name2:[dim1,dim2]"',
         type=parse_shape_string,
     )
+
+
+@register_parser
+def add_tune_parser(subparsers, _, json_params):
+    """Include parser for 'tune' subcommand"""
+
+    parser = subparsers.add_parser("tune", help="auto-tune a model")
+    parser.set_defaults(func=drive_tune)
+
+    add_tune_args(parser)
 
     for one_entry in json_params:
         parser.set_defaults(**one_entry)
@@ -318,6 +321,11 @@ def tune_model(
     include_simple_tasks: bool = False,
     log_estimated_latency: bool = False,
     additional_target_options: Optional[Dict[str, Dict[str, Any]]] = None,
+    module_loader = None,  # TODO
+    build_func = "default",  # TODO
+    runtime = None,  # TODO
+    build_option : dict = None,
+    si_prefix: str = "G",
 ):
     """Use tuning to automatically optimize the functions in a model.
 
@@ -376,6 +384,16 @@ def tune_model(
         If using the autoscheduler, write the estimated latency at each step of tuning to file.
     additional_target_options: Optional[Dict[str, Dict[str, Any]]]
         Additional target options in a dictionary to combine with initial Target arguments
+    module_loader : TODO, optional
+        TODO
+    build_func : TODO, optional
+        TODO
+    runtime : TODO, optional
+        TODO
+    build_option : dict, optional
+        TODO
+    si_prefix : str
+        SI prefix for FLOPS.
 
     Returns
     -------
@@ -425,6 +443,7 @@ def tune_model(
                 n_parallel=parallel,
                 timeout=timeout,
                 min_repeat_ms=min_repeat_ms,
+                module_loader=module_loader,
             )
         else:
             logger.info("Starting localhost tuning.")
@@ -438,6 +457,7 @@ def tune_model(
                 repeat=repeat,
                 timeout=timeout,
                 min_repeat_ms=min_repeat_ms,
+                module_loader=module_loader,
             )
 
             # For autoscheduling on some devices, we need to maintain a
@@ -456,6 +476,20 @@ def tune_model(
                 alter_layout=desired_layout,
                 hardware_params=hardware_params,
                 include_simple_tasks=include_simple_tasks,
+                extra_config=build_option,
+            )
+
+            # Create the autoscheduler tuning options
+            # if build_option is None:
+            #     build_option = {}
+            builder = auto_scheduler.LocalBuilder(
+                # timeout = 1000
+                # n_parallel=1,
+                # build_kwargs=build_kwargs or {},
+                # do_fork=True,
+                # do_fork=False,
+                build_func=build_func,
+                runtime=runtime,
             )
 
             # Create the autoscheduler tuning options
@@ -463,7 +497,9 @@ def tune_model(
                 num_measure_trials=trials,
                 measure_callbacks=[auto_scheduler.RecordToFile(tuning_records)],
                 runner=runner,
+                builder=builder,
                 early_stopping=early_stopping,
+                si_prefix=si_prefix,
             )
 
             logger.info("Autoscheduling with configuration: %s", tuning_options)
@@ -476,6 +512,7 @@ def tune_model(
                 params=params,
                 target=target,
                 alter_layout=desired_layout,
+                extra_config=build_option,
             )
 
             # In autotvm, trials is specified per task. We can convert the per-model input
@@ -483,14 +520,24 @@ def tune_model(
             trials = int(trials / max(len(tasks), 1))
             logger.info("Autotuning with %d trials per task.", trials)
 
+            builder = autotvm.LocalBuilder(
+                n_parallel=max(parallel, 5),
+                build_kwargs={"build_option": build_option},
+                do_fork=True,
+                # do_fork=False,
+                build_func=build_func,
+                runtime=runtime,
+            )
+
             tuning_options = {
                 "tuner": tuner,
                 "trials": trials,
                 "early_stopping": early_stopping,
                 "measure_option": autotvm.measure_option(
-                    builder=autotvm.LocalBuilder(build_func="default"), runner=runner
+                    builder=builder, runner=runner
                 ),
                 "tuning_records": prior_records,
+                "si_prefix": si_prefix,
             }
             logger.info("Autotuning with configuration: %s", tuning_options)
 
@@ -499,12 +546,14 @@ def tune_model(
         return tuning_records
 
 
+
 def autotvm_get_tuning_tasks(
     mod: tvm.IRModule,
     params: Dict[str, tvm.nd.NDArray],
     target: str,
     target_host: Optional[str] = None,
     alter_layout: Optional[str] = None,
+    extra_config = None,
 ):
     """Get the autotvm tuning tasks for a given relay module.
 
@@ -522,6 +571,8 @@ def autotvm_get_tuning_tasks(
         The layout to convert the graph to. Note, the convert layout
         pass doesn't currently guarantee the whole of the graph will
         be converted to the chosen layout.
+    extra_config : TODO, optional
+        TODO
 
     Returns
     -------
@@ -533,11 +584,18 @@ def autotvm_get_tuning_tasks(
     if alter_layout:
         mod = convert_graph_layout(mod, alter_layout)
 
-    tasks = autotvm.task.extract_from_program(
-        mod["main"],
-        target=target,
-        params=params,
-    )
+    config = {}
+    if extra_config:
+        assert isinstance(extra_config, dict)
+        config.update(extra_config)
+    pass_context = tvm.transform.PassContext(opt_level=3, config=config)  # TODO
+    with pass_context:
+        tasks = autotvm.task.extract_from_program(
+            mod["main"],
+            target=target,
+            target_host=target_host,
+            params=params,
+        )
 
     return tasks
 
@@ -642,6 +700,7 @@ def tune_tasks(
     trials: int,
     early_stopping: Optional[int] = None,
     tuning_records: Optional[str] = None,
+    si_prefix: str = "G",
 ):
     """Tune a list of tasks and output the history to a log file.
 
@@ -663,6 +722,8 @@ def tune_tasks(
     tuning_records: str, optional
         Path to the file produced by the tuning, to be used during
         tuning.
+    si_prefix : str
+        SI prefix for FLOPS.
     """
     if not tasks:
         logger.warning("there were no tasks found to be tuned")
@@ -672,7 +733,7 @@ def tune_tasks(
         early_stopping = trials
 
     for i, tsk in enumerate(tasks):
-        prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
+        prefix = "\n[Task %2d/%2d] " % (i + 1, len(tasks))
 
         # Create a tuner
         if tuner in ("xgb", "xgb-rank"):
@@ -700,7 +761,8 @@ def tune_tasks(
             early_stopping=early_stopping,
             measure_option=measure_option,
             callbacks=[
-                autotvm.callback.progress_bar(trials, prefix=prefix),
+                autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix),
                 autotvm.callback.log_to_file(log_file),
             ],
+            si_prefix=si_prefix,
         )
