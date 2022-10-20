@@ -130,7 +130,7 @@ def add_tune_parser(subparsers, _, json_params):
     )
     parser.add_argument(
         "--desired-layout",
-        choices=["NCHW", "NHWC"],
+        # choices=["NCHW", "NHWC"],
         default=None,
         help="change the data layout of the whole graph",
     )

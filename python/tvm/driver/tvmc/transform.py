@@ -21,6 +21,9 @@ from tvm import relay, transform
 from tvm.driver.tvmc import TVMCException
 
 
+def split_data_kernel_layout(layout):
+    return [layout, "default"] if ":" not in layout else layout.split(":")[:2]
+
 def convert_graph_layout(mod, desired_layout):
     """Alter the layout of the input graph.
 
@@ -29,21 +32,23 @@ def convert_graph_layout(mod, desired_layout):
     mod : tvm.IRModule
         The relay module to convert.
     desired_layout : str
-        The layout to convert to.
+        The layout to convert to. Either only data layour or data and kernel (colon-separated).
+        New: this can now also be a dict of the form: nn.conv2d=NCHW,nn.conv2d_transpose=NHWC:HWOI
 
     Returns
     -------
     mod : tvm.IRModule
         The converted module.
     """
+    desired_layouts = {}
+    if "," in desired_layout:
+        desired_layouts = {token.split("=")[0]: split_data_kernel_layout(token.split("=")[1]) for token in desired_layout.split(",")}
+    else:
+        # Assume for the time being that graphs only have
+        # conv2d as heavily-sensitive operators.
+        for op in ["nn.conv2d", "nn.conv2d_transpose", "qnn.conv2d"]:
+            desired_layouts[op] = split_data_kernel_layout(desired_layout)
 
-    # Assume for the time being that graphs only have
-    # conv2d as heavily-sensitive operators.
-    desired_layouts = {
-        "nn.conv2d": [desired_layout, "default"],
-        "nn.conv2d_transpose": [desired_layout, "default"],
-        "qnn.conv2d": [desired_layout, "default"],
-    }
 
     # Convert the layout of the graph where possible.
     seq = transform.Sequential(
