@@ -692,7 +692,7 @@ def tune_tasks(
         early_stopping = trials
 
     for i, tsk in enumerate(tasks):
-        prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
+        prefix = "\n[Task %2d/%2d] " % (i + 1, len(tasks))
 
         # Create a tuner
         if tuner in ("xgb", "xgb-rank"):
