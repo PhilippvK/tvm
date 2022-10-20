@@ -470,14 +470,29 @@ def tune_model(
             alter_layout=desired_layout,
             hardware_params=hardware_params,
             include_simple_tasks=include_simple_tasks,
+            extra_config=build_option,
         )
 
         # Create the autoscheduler tuning options
+        if build_option is None:
+            build_option = {}
+        builder = auto_scheduler.LocalBuilder(
+            # timeout = 1000
+            # n_parallel=1,
+            # build_kwargs=build_kwargs or {},
+            # do_fork=True,
+            # do_fork=False,
+            build_func=build_func,
+            runtime=runtime,
+            build_option=build_option,
+        )
         tuning_options = auto_scheduler.TuningOptions(
             num_measure_trials=trials,
             measure_callbacks=[auto_scheduler.RecordToFile(tuning_records)],
             runner=runner,
+            builder=builder,
             early_stopping=early_stopping,
+            si_prefix=si_prefix,
         )
 
         logger.info("Autoscheduling with configuration: %s", tuning_options)
@@ -497,14 +512,25 @@ def tune_model(
         trials = int(trials / max(len(tasks), 1))
         logger.info("Autotuning with %d trials per task.", trials)
 
+        builder = autotvm.LocalBuilder(
+            n_parallel=max(parallel, 5),
+            # n_parallel=1,
+            build_kwargs={"build_option": build_option},
+            do_fork=True,
+            # do_fork=False,
+            build_func=build_func,
+            runtime=runtime,
+        )
+
         tuning_options = {
             "tuner": tuner,
             "trials": trials,
             "early_stopping": early_stopping,
             "measure_option": autotvm.measure_option(
-                builder=autotvm.LocalBuilder(build_func="default"), runner=runner
+                builder=builder, runner=runner
             ),
             "tuning_records": prior_records,
+            "si_prefix": si_prefix,
         }
         logger.info("Autotuning with configuration: %s", tuning_options)
 
