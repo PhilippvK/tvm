@@ -572,7 +572,7 @@ def autoscheduler_get_tuning_tasks(
 
     Returns
     -------
-    tasks : list of autotvm.Tasks
+    tasks : List[auto_scheduler.SearchTask]
         list of tasks to be tuned
     weights : List[int]
         the weight (i.e. the number of appearance) of extracted tasks
