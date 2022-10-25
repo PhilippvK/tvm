@@ -191,11 +191,11 @@ class TaskScheduler:
     load_log_file: Optional[str]
         Load measurement records from this file. If it is not None, the status of the
         task scheduler, search policies and cost models will be restored according to this file.
-    verbose: int = 1
-        The level of verbosity. 0 means silent.
     alpha: float = 0.2
         The parameter used for 'gradient' strategy
     beta: float = 2
+        The parameter used for 'gradient' strategy
+    gamma: float = 0.5
         The parameter used for 'gradient' strategy
     backward_window_size: int = 3
         The parameter used for 'gradient' strategy
