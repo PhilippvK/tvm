@@ -143,20 +143,17 @@ def add_tune_parser(subparsers, _, json_params):
     auto_scheduler_group.add_argument(
         "--cache-line-bytes",
         type=int,
-        help="the size of cache line in bytes. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the size of cache line in bytes. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--num-cores",
         type=int,
-        help="the number of device cores. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the number of device cores. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--vector-unit-bytes",
         type=int,
-        help="the width of vector units in bytes. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the width of vector units in bytes. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--max-shared-memory-per-block",
@@ -173,20 +170,17 @@ def add_tune_parser(subparsers, _, json_params):
     auto_scheduler_group.add_argument(
         "--max-threads-per-block",
         type=int,
-        help="the max number of threads per block. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the max number of threads per block. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--max-vthread-extent",
         type=int,
-        help="the max vthread extent. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the max vthread extent. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--warp-size",
         type=int,
-        help="the thread numbers of a warp. "
-        "If not specified, it will be autoset for the current machine.",
+        help="the thread numbers of a warp. " "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--include-simple-tasks",
@@ -198,15 +192,335 @@ def add_tune_parser(subparsers, _, json_params):
         help="whether to log the estimated latency to the file after tuning a task",
         action="store_true",
     )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-verbose",
+        default=1,
+        type=int,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-strategy",
+        choices=["gradient", "round-robin"],
+        default="gradient",
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-strategy-gradient-alpha",
+        default=0.2,
+        type=float,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-strategy-gradient-beta",
+        default=2.0,
+        type=float,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-strategy-gradient-gamma",
+        default=0.5,
+        type=float,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-strategy-gradient-backward-window-size",
+        default=3,
+        type=int,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy",
+        choices=["sketch"],
+        default="sketch",
+        type=str,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-eps-greedy",
+        default=0.05,
+        type=float,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-retry-search-one-round-on-empty",
+        default=1,
+        type=int,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-sample-init-min-population",
+        default=50,
+        type=int,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-sample-init-use-measured-ratio",
+        default=0.2,
+        type=float,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-evolutionary-search-population",
+        default=2048,
+        type=int,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-evolutionary-search-num-iters",
+        default=4,
+        type=int,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-evolutionary-search-mutation-prob",
+        default=0.85,
+        type=float,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-cpu-multi-level-tiling-structure",
+        default="SSRSRS",
+        type=str,
+        help="",
+    )
+    # Notice: the default thread bind policy of GPU assumes the tiling structure to have at
+    # least 3 spatial tiling levels in outermost
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-gpu-multi-level-tiling-structure",
+        default="SSSRRSRS",
+        type=str,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-max-innermost-split-factor",
+        default=64,
+        type=int,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-max-vectorize-size",
+        default=16,
+        type=int,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy-sketch-disable-change-compute-location",
+        help="",
+        action="store_true",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-model",
+        choices=["xgb", "mlp", "random"],
+        default="xgb",
+        type=str,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-model-xgb-adaptive-training",
+        help="",
+        action="store_true",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-num-measures-per-round",
+        default=64,
+        type=int,
+        help="",
+    )
+    meta_scheduler_group = parser.add_argument_group(
+        "MetaScheduler options",
+        "MetaScheduler options, used when --enable-metascheduler is provided",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-space",
+        choices=["post-order-apply"],  # union is not really useful here
+        default="post-order-apply",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-rules",
+        default="from-target",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-postprocs",
+        default="from-target",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-mutator-probs",
+        default="from-target",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model",
+        choices=["xgb", "mlp", "random"],
+        default="xgb",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model-xgb-max-depth",
+        default=10,
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model-xgb-gamma",
+        default=0.001,
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model-xgb-min-child-weight",
+        default=0,
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model-xgb-eta",
+        default=0.2,
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model-xgb-seed",
+        default=43,
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model-xgb-nthread",
+        default=None,
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model-xgb-num-warmup_samples",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model-xgb-verbose-equal",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model-xgb-average-peak-n",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model-xgb-adaptive-training",
+        help="",
+    )
+    # meta_scheduler_group.add_argument(
+    #     "--metascheduler-model-mlp-",
+    #     help="",
+    # )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model-random-max-range",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-strategy",
+        choices=["evolutionaly_search", "replay_trace", "replay_func"],
+        default="evolutionaly_search",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-strategy-evolutionaly-search-population-size",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-strategy-evolutionaly-search-init-measured-ratio",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-strategy-evolutionaly-search-init-min-unmeasured",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-strategy-evolutionaly-search-genetic-num-iters",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-strategy-evolutionaly-search-genetic-mutate-prob",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-strategy-evolutionaly-search-genetic-max-fail-count",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-strategy-evolutionaly-search-eps-greedy",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-strategy-replay-trace-max-fail-count",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-space-post-order-apply-",
+        help="",
+    )
     autotvm_group = parser.add_argument_group(
         "AutoTVM options",
         "AutoTVM options, used when the AutoScheduler is not enabled",
     )
     autotvm_group.add_argument(
         "--tuner",
-        choices=["ga", "gridsearch", "random", "xgb", "xgb_knob", "xgb-rank"],
+        choices=["ga", "gridsearch", "random", "xgb"],
         default="xgb",
         help="type of tuner to use when tuning with autotvm.",
+    )
+    autotvm_group.add_argument(
+        "--tuner-ga-pop-size",
+        default=50,
+        type=int,
+        help="",
+    )
+    autotvm_group.add_argument(
+        "--tuner-ga-elite-num",
+        default=3,
+        type=int,
+        help="",
+    )
+    autotvm_group.add_argument(
+        "--tuner-ga-mutation-prob",
+        default=0.1,
+        type=float,
+        help="",
+    )
+    autotvm_group.add_argument(
+        "--tuner-xgb-plan-size",
+        default=50,
+        type=int,
+        help="",
+    )
+    autotvm_group.add_argument(
+        "--tuner-xgb-loss-type",
+        choices=["rank", "reg"],
+        default="rank",
+        help="",
+    )
+    autotvm_group.add_argument(
+        "--tuner-xgb-feature-type",
+        choices=["itervar", "knob", "curve"],
+        default="itervar",
+        help="",
+    )
+    # autotvm_group.add_argument(
+    #     "--tuner-xgb-num-threads",
+    #     default="logical",
+    #     help="",
+    # )
+    autotvm_group.add_argument(
+        "--tuner-xgb-optimizer",
+        choices=["sa"],
+        default="sa",
+        help="",
+    )
+    autotvm_group.add_argument(
+        "--tuner-xgb-log-interval",
+        default=50,
+        type=int,
+        help="",
+    )
+    autotvm_group.add_argument(
+        "--tuner-xgb-diversity-filter-ratio",
+        default=None,
+        type=float,
+        help="",
     )
     # TODO (@leandron) This is a path to a physical file, but
     #     can be improved in future to add integration with a modelzoo
@@ -221,6 +535,63 @@ def add_tune_parser(subparsers, _, json_params):
 
     for one_entry in json_params:
         parser.set_defaults(**one_entry)
+
+
+def parse_tuner_options(args):
+    """Parser for AutoTVM tuner kwargs
+
+    Parameters
+    ----------
+    args: argparse.Namespace
+        Arguments from command line parser.
+    """
+    return {
+        "xgb": {
+            "loss_type": args.tuner_xgb_loss_type,
+            "feature_type": args.tuner_xgb_feature_type,
+            # "num_threads": args.tuner_xgb_num_threads,
+            "optimizer": args.tuner_xgb_optimizer,
+            "log_interval": args.tuner_xgb_log_interval,
+            "diversity_filter_ratio": args.tuner_xgb_diversity_filter_ratio,
+        },
+        "ga": {
+            "pop_size": args.tuner_ga_pop_size,
+            "elite_num": args.tuner_ga_elite_num,
+            "mutation_prob": args.tuner_ga_mutation_prob,
+        }
+    }
+
+
+def parse_autoscheduler_options(args):
+    verbose = args. autoscheduler_verbose
+    strategy = args.autoscheduler_strategy
+    strategy_args = {
+        "gradient": {
+            "alpha": args.autoscheduler_strategy_gradient_alpha,
+            "beta": args.autoscheduler_strategy_gradient_beta,
+            "gamma": args.autoscheduler_strategy_gradient_gamma,
+            "backward_window_size": args.autoscheduler_strategy_gradient_backward_window_size,
+        }
+    }
+    policy = args.autoscheduler_policy,
+    policy_args = {
+        "eps_greedy": args.autoscheduler_policy_sketch_eps_greedy,
+        "retry_search_one_round_on_empty": args.autoscheduler_policy_sketch_retry_search_one_round_on_empty,
+        "sample_init_min_population": args.autoscheduler_policy_sketch_sample_init_min_population,
+        "sample_init_use_measured_ratio": args.autoscheduler_policy_sketch_sample_init_use_measured_ratio,
+        "evolutionary_search_population": args.autoscheduler_policy_sketch_evolutionary_search_population,
+        "evolutionary_search_num_iters": args.autoscheduler_policy_sketch_evolutionary_search_num_iters,
+        "evolutionary_search_mutation_prob": args.autoscheduler_policy_sketch_evolutionary_search_mutation_prob,
+        "cpu_multi_level_tiling_structure": args.autoscheduler_policy_sketch_cpu_multi_level_tiling_structure,
+        "gpu_multi_level_tiling_structure": args.autoscheduler_policy_sketch_gpu_multi_level_tiling_structure,
+        "max_innermost_split_factor": args.autoscheduler_policy_sketch_max_innermost_split_factor,
+        "max_vectorize_size": args.autoscheduler_policy_sketch_max_vectorize_size,
+        "disable_change_compute_location": args.autoscheduler_policy_sketch_disable_change_compute_location,
+    }
+    num_measures_per_round = args.autoscheduler_num_measures_per_round
+    model_type = args.autoscheduler_model
+    adaptive = args.autoscheduler_model_xgb_adaptive_training
+    return verbose, strategy, strategy_args, policy, policy_args, num_measures_per_round, model_type, adaptive
 
 
 def drive_tune(args):
@@ -267,6 +638,9 @@ def drive_tune(args):
 
     transform_args = parse_graph_transform_args(args)
 
+    autotvm_tuner_options = parse_tuner_options(args)
+    autoscheduler_verbose, autoscheduler_strategy, autoscheduler_strategy_args, autoscheduler_policy, autoscheduler_policy_args, autoscheduler_num_measures_per_round, autoscheduler_model_type, autoscheduler_adaptive = parse_autoscheduler_options(args)
+
     tune_model(
         tvmc_model,
         args.target,
@@ -290,6 +664,15 @@ def drive_tune(args):
         log_estimated_latency=args.log_estimated_latency,
         additional_target_options=reconstruct_target_args(args),
         **transform_args,
+        autotvm_tuner_options=autotvm_tuner_options,
+        autoscheduler_verbose=autoscheduler_verbose,
+        autoscheduler_strategy=autoscheduler_strategy,
+        autoscheduler_strategy_args=autoscheduler_strategy_args.get(autoscheduler_strategy, {}),
+        autoscheduler_policy=autoscheduler_policy,
+        autoscheduler_policy_args=autoscheduler_policy_args,
+        autoscheduler_num_measures_per_round=autoscheduler_num_measures_per_round,
+        autoscheduler_model_type=autoscheduler_model_type,
+        autoscheduler_adaptive=autoscheduler_adaptive,
     )
 
 
@@ -321,6 +704,15 @@ def tune_model(
     mixed_precision_ops: Optional[List[str]] = None,
     mixed_precision_calculation_type: Optional[str] = None,
     mixed_precision_acc_type: Optional[str] = None,
+    autotvm_tuner_options: Optional[Dict[str, Dict[str, Any]]] = None,
+    autoscheduler_verbose: int = 1,
+    autoscheduler_strategy: Optional[str] = None,
+    autoscheduler_strategy_args: Optional[Dict[str, Any]] = None,
+    autoscheduler_policy: Optional[str] = None,
+    autoscheduler_policy_args: Optional[Dict[str, Any]] = None,
+    autoscheduler_num_measures_per_round: int = 64,
+    autoscheduler_model_type="xgb",  # TODO
+    autoscheduler_adaptive=False,  # TODO
 ):
     """Use tuning to automatically optimize the functions in a model.
 
@@ -352,7 +744,7 @@ def tune_model(
         trials.
     tuner : str, optional
         The type of tuner to use when tuning with autotvm. Can be one of
-        "ga", "gridsearch", "random", "xgb", "xgb_knob", and "xgb-rank".
+        "ga", "gridsearch", "random", "xgb"
     min_repeat_ms : int, optional
         Minimum time to run each trial. Defaults to 0 on x86 and 1000 on other targets.
     early_stopping : int, optional
@@ -389,7 +781,24 @@ def tune_model(
         The calculation dtype to be used while mixed precision.
     mixed_precision_acc_type: str
         The accumulation data type to be used while mixed precision.
-
+    autotvm_tuner_options: Optional[Dict[str, Dict[str, Any]]]
+        Additional kwsrags for AutoTVM tuner object.
+    autoscheduler_verbose : int, optional
+        Verbosity level of autoscheduler. 0 equals silent.
+    autoscheduler_strategy: Optional[str]
+        TODO
+    autoscheduler_strategy_args: Optional[Dict[str, Any]]
+        TODO
+    autoscheduler_policy: Optional[str]
+        TODO
+    autoscheduler_policy_args: Optional[Dict[str, Any]]
+        TODO
+    autoscheduler_num_measures_per_round: Optional[int]
+        TODO
+    autoscheduler_model_type: TODO
+        TODO
+    autoscheduler_adaptive: TODO
+        TODO
 
     Returns
     -------
@@ -479,12 +888,26 @@ def tune_model(
                 measure_callbacks=[auto_scheduler.RecordToFile(tuning_records)],
                 runner=runner,
                 early_stopping=early_stopping,
+                verbose=autoscheduler_verbose,
+                num_measures_per_round=autoscheduler_num_measures_per_round,
             )
 
             logger.info("Autoscheduling with configuration: %s", tuning_options)
 
             # Schedule the tasks (i.e., produce a schedule for each task)
-            schedule_tasks(tasks, weights, tuning_options, prior_records, log_estimated_latency)
+            schedule_tasks(
+                tasks,
+                weights,
+                tuning_options,
+                prior_records,
+                log_estimated_latency,
+                strategy=autoscheduler_strategy,
+                strategy_args=autoscheduler_strategy_args,
+                policy=autoscheduler_policy,
+                model_type=autoscheduler_model_type,
+                adaptive=autoscheduler_adaptive,
+                # num_measures_per_round=?,
+            )
         else:
             tasks = autotvm_get_tuning_tasks(
                 mod=mod,
@@ -506,6 +929,7 @@ def tune_model(
                     builder=autotvm.LocalBuilder(build_func="default"), runner=runner
                 ),
                 "tuning_records": prior_records,
+                "tuner_options": autotvm_tuner_options.get(tuner, {}),
             }
             logger.info("Autotuning with configuration: %s", tuning_options)
 
@@ -609,6 +1033,13 @@ def schedule_tasks(
     tuning_options: auto_scheduler.TuningOptions,
     prior_records: Optional[str] = None,
     log_estimated_latency: bool = False,
+    strategy: str = "gradient",
+    strategy_args: Optional[Dict[str, Any]] = None,
+    policy="sketch",  # TODO
+    policy_args: Optional[Dict[str, Any]] = None,  # TODO
+    model_type="xgb",  # TODO
+    adaptive=False,  # TODO
+    # num_measures_per_round: ? = ?,
 ):
     """Generate the schedules for the different tasks (i.e., subgraphs) contained in the module.
     Store the schedules in a json file that will be used later by the compiler.
@@ -625,6 +1056,7 @@ def schedule_tasks(
         The json file used to preload the autoscheduler
     log_estimated_latency : bool, optional
         If true, writes the estimated runtime of the model during each step of tuning to file.
+    TODO
     """
     if not log_estimated_latency:
         callbacks = [auto_scheduler.task_scheduler.PrintTableInfo()]
@@ -634,13 +1066,32 @@ def schedule_tasks(
             auto_scheduler.task_scheduler.LogEstimatedLatency(("total_latency.tsv")),
         ]
 
+    if strategy_args is None:
+        strategy_args = {}
+
+    if policy_args is None:
+        policy_args = {}
+
     # Create the scheduler
     tuner = auto_scheduler.TaskScheduler(
-        tasks, task_weights, load_log_file=prior_records, callbacks=callbacks
+        tasks,
+        task_weights,
+        load_log_file=prior_records,
+        strategy=strategy,
+        **strategy_args,
+        callbacks=callbacks
     )
 
     # Tune the tasks
-    tuner.tune(tuning_options)
+    tuner.tune(
+        tuning_options,
+        search_policy=f"{policy[0]}.{model_type}",
+        search_policy_params=policy_args,
+        adaptive_training=adaptive,
+        # per_task_early_stopping=None
+    )
+
+
 
 
 def tune_tasks(
@@ -651,6 +1102,7 @@ def tune_tasks(
     trials: int,
     early_stopping: Optional[int] = None,
     tuning_records: Optional[str] = None,
+    tuner_options: Optional[dict] = None,
 ):
     """Tune a list of tasks and output the history to a log file.
 
@@ -672,6 +1124,7 @@ def tune_tasks(
     tuning_records: str, optional
         Path to the file produced by the tuning, to be used during
         tuning.
+    tuner_options: dict, optional
     """
     if not tasks:
         logger.warning("there were no tasks found to be tuned")
@@ -680,22 +1133,25 @@ def tune_tasks(
     if not early_stopping:
         early_stopping = trials
 
+    if tuner == "xgb":
+        tuner_cls = XGBTuner
+    elif tuner == "ga":
+        tuner_cls = GATuner
+    elif tuner == "random":
+        tuner_cls = RandomTuner
+    elif tuner == "gridsearch":
+        tuner_cls = GridSearchTuner
+    else:
+        raise TVMCException("invalid tuner: %s " % tuner)
+
+    if tuner_options is None:
+        tuner_options = {}
+
     for i, tsk in enumerate(tasks):
         prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
 
         # Create a tuner
-        if tuner in ("xgb", "xgb-rank"):
-            tuner_obj = XGBTuner(tsk, loss_type="rank")
-        elif tuner == "xgb_knob":
-            tuner_obj = XGBTuner(tsk, loss_type="rank", feature_type="knob")
-        elif tuner == "ga":
-            tuner_obj = GATuner(tsk, pop_size=50)
-        elif tuner == "random":
-            tuner_obj = RandomTuner(tsk)
-        elif tuner == "gridsearch":
-            tuner_obj = GridSearchTuner(tsk)
-        else:
-            raise TVMCException("invalid tuner: %s " % tuner)
+        tuner_obj = tuner_cls(tsk, **tuner_options)
 
         # If transfer learning is being used, load the existing results
         if tuning_records and os.path.exists(tuning_records):
