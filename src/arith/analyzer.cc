@@ -36,6 +36,7 @@ Analyzer::Analyzer()
       int_set(this) {}
 
 void Analyzer::Bind(const Var& var, const PrimExpr& expr, bool allow_override) {
+  // std::cout << "Bind " << allow_override << std::endl;
   PrimExpr new_expr = expr;
   new_expr = this->canonical_simplify(new_expr);
   new_expr = this->rewrite_simplify(new_expr);
@@ -49,6 +50,7 @@ void Analyzer::Bind(const Var& var, const PrimExpr& expr, bool allow_override) {
 }
 
 void Analyzer::Bind(const Var& var, const Range& range, bool allow_override) {
+  // std::cout << "Bind2 " << allow_override << std::endl;
   ICHECK(range.defined());
   if (tir::is_one(range->extent)) {
     this->Bind(var, range->min, allow_override);
@@ -62,12 +64,14 @@ void Analyzer::Bind(const Var& var, const Range& range, bool allow_override) {
 }
 
 void Analyzer::Bind(const Map<Var, Range>& variables, bool allow_override) {
+  // std::cout << "Bind3 " << allow_override << std::endl;
   for (const auto& iter : variables) {
     this->Bind(iter.first, iter.second, allow_override);
   }
 }
 
 void ConstraintContext::EnterWithScope() {
+  // std::cout << "EnterWithScope" << std::endl;
   ICHECK(recovery_functions_.size() == 0);
   // entering the scope.
   recovery_functions_.push_back(analyzer_->const_int_bound.EnterConstraint(constraint_));
@@ -78,6 +82,7 @@ void ConstraintContext::EnterWithScope() {
 }
 
 void ConstraintContext::ExitWithScope() {
+  // std::cout << "ExitWithScope" << std::endl;
   while (recovery_functions_.size()) {
     auto& func = recovery_functions_.back();
     if (func) {

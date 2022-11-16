@@ -164,6 +164,7 @@ def conv2d_nhwc_dsp_schedule(cfg, outs):
 
         source_index_w = output.op.body[0].source[0].a.value.indices[2].a
         stride_w = source_index_w.b.value if isinstance(source_index_w, Mul) else 1
+        # assert stride_w == 1
 
         # tile reduction axes
         n, oh, ow, co = sched[conv].op.axis
@@ -172,6 +173,7 @@ def conv2d_nhwc_dsp_schedule(cfg, outs):
         M = cfg["tile_ow"].size[-1]
         K = cfg["tile_ci"].size[-1]
         N = cfg["tile_co"].size[-1]
+        print("M", M, "K", K, "N", N)
 
         owo, owi = cfg["tile_ow"].apply(sched, conv, ow)
         cio, cii = cfg["tile_ci"].apply(sched, conv, ci)

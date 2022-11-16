@@ -59,6 +59,7 @@ def is_mmla_available():
 
 
 def is_aarch64_arm():
+    # return True
     """Checks whether we are compiling for an AArch64 target."""
     target = tvm.target.Target.current(allow_none=False)
     return "aarch64" in target.attrs.get("mtriple", "")

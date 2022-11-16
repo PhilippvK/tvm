@@ -42,7 +42,7 @@ def convert_graph_layout(mod, desired_layout):
     desired_layouts = {
         "nn.conv2d": [desired_layout, "default"],
         "nn.conv2d_transpose": [desired_layout, "default"],
-        "qnn.conv2d": [desired_layout, "default"],
+        "qnn.conv2d": [desired_layout, "HWOI"],
     }
 
     # Convert the layout of the graph where possible.

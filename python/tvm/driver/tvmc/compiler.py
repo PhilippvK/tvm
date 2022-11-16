@@ -300,6 +300,7 @@ def compile_model(
 
         if codegen["config_key"] is not None:
             config[codegen["config_key"]] = codegen_from_cli["opts"]
+        config.update({"tir.LoopPartition": {"partition_const_loop": True}})
         with tvm.transform.PassContext(config=config):
             mod = partition_function(mod, params, mod_name=mod_name, **codegen_from_cli["opts"])
 

@@ -631,6 +631,8 @@ namespace transform {
  * \return The pass for performing CSE.
  */
 Pass CommonSubexprElimTIR(bool enable_cse_tir, bool identify_equiv_terms) {
+  // std::cout << "CommonSubexprElimTIR" << enable_cse_tir << std::endl;
+  // enable_cse_tir = false;
   auto pass_func = [enable_cse_tir, identify_equiv_terms](PrimFunc f, IRModule m, PassContext ctx) {
     if (enable_cse_tir) {
       auto* n = f.CopyOnWrite();

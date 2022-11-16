@@ -307,12 +307,14 @@ void CodeGenC::RegisterHandleType(const VarNode* buf_var, DataType t) {
 void CodeGenC::PrintVecElemLoad(const std::string& vec, DataType t, int i,
                                 std::ostream& os) {  // NOLINT(*)
   os << vec << ".s" << std::hex << i << std::dec;
+  os << "DEF";
 }
 
 void CodeGenC::PrintVecElemStore(const std::string& vec, DataType t, int i,
                                  const std::string& value) {
   this->PrintIndent();
   stream << vec << ".s" << std::hex << i << " = " << value << ";\n" << std::dec;
+  stream << "GHI";
 }
 
 std::string CodeGenC::GetVecLoad(DataType t, const BufferNode* buffer, PrimExpr base) {
@@ -629,6 +631,7 @@ void CodeGenC::PrintVecBinaryOp(const std::string& op, DataType t, PrimExpr lhs,
     this->PrintExpr(rhs, os);
     os << ")";
   }
+  os << "ABC";
 }
 
 void CodeGenC::VisitStmt_(const AllocateConstNode* op) {
@@ -683,21 +686,33 @@ void CodeGenC::VisitExpr_(const BufferLoadNode* op, std::ostream& os) {  // NOLI
     HandleVolatileLoads(ref, op, os);
   } else {
     bool can_vector_load = false;
+    std::cout << "111" << std::endl;
     arith::PVar<PrimExpr> base;
     if (arith::ramp(base, 1, op->dtype.lanes()).Match(index)) {
+      std::cout << "121" << std::endl;
       const RampNode* ramp = index.as<RampNode>();
       ICHECK(ramp);
+      std::cout << "lanes=" << op->dtype.lanes() << std::endl;
+      std::cout << "ramp=" << ramp << std::endl;
+      std::cout << "ramp->base=" << ramp->base << std::endl;
       arith::ModularSet me = analyzer_->modular_set(ramp->base);
+      std::cout << "coeff=" << me->coeff << std::endl;
+      std::cout << "base=" << me->base << std::endl;
       // The condition: {k * coeff + base} divisible by the alignment for any k
       if (me->coeff % op->dtype.lanes() == 0 && me->base % op->dtype.lanes() == 0) {
+        std::cout << "122" << std::endl;
         can_vector_load = true;
       }
     }
+    // can_vector_load = true;
+    std::cout << "222" << std::endl;
 
     if (can_vector_load) {
+      std::cout << "232" << std::endl;
       std::string ref = GetVecLoad(op->dtype, op->buffer.get(), base.Eval());
       HandleVolatileLoads(ref, op, os);
     } else {
+      std::cout << "242" << std::endl;
       std::ostringstream svalue_expr;
       std::string sindex = SSAGetID(PrintExpr(index), index.dtype());
       std::string vid = GetVarID(buffer_var.get());
@@ -795,6 +810,7 @@ void CodeGenC::VisitExpr_(const LetNode* op, std::ostream& os) {  // NOLINT(*)
     let_binding_[op->var] = op;
   }
   std::string value = PrintExpr(op->value);
+  std::cout << "V LetNode " << op->value << " " << op->var << std::endl;
   var_idmap_[op->var.get()] = value;
   analyzer_->Bind(op->var, op->value);
   os << PrintExpr(op->body);
@@ -832,6 +848,7 @@ void CodeGenC::VisitExpr_(const SelectNode* op, std::ostream& os) {  // NOLINT(*
 
 void CodeGenC::VisitStmt_(const LetStmtNode* op) {
   std::string value = PrintExpr(op->value);
+  std::cout << "V LetStmtNode " << value << " " << op->var << std::endl;
   if (print_ssa_form_) {
     ICHECK(!var_idmap_.count(op->var.get()));
     var_idmap_[op->var.get()] = value;
@@ -999,6 +1016,7 @@ void CodeGenC::PrintVecElemLoadExpr(DataType t, int i, const std::string& value,
       os << "|";
     }
     os << "((0x000000ff << " << i * 8 << ") & (" << value << " << " << i * 8 << "))";
+    os << "JKL";
     return;
   }
 

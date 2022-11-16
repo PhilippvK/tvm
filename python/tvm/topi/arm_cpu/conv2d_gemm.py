@@ -25,33 +25,34 @@ from ..utils import get_const_tuple, get_const_int
 from ..nn.utils import get_pad_tuple
 from .tensor_intrin import (
     gemm_4x4_int8_int8_int32,
-    gemm_acc_4x4_int8_int8_int32,
-    gemm_acc_nx16_int8_int8_int32,
-    gemm_acc_2x2_int8_int8_int32,
+    # gemm_acc_4x4_int8_int8_int32,
+    # gemm_acc_nx16_int8_int8_int32,
+    # gemm_acc_2x2_int8_int8_int32,
 )
 from .arm_utils import is_aarch64_arm, is_dotprod_available, is_mmla_available
 
 
 def configure_knobs(cfg, M, K):
     """Configure auto-tuning knobs for the interleaved strategy"""
+    pass
 
-    x, y = cfg.axis(M // 4), cfg.axis(K // 16)
-    cfg.define_reorder("reorder_gemm", [x, y], policy="candidate", candidate=[[x, y], [y, x]])
+    # x, y = cfg.axis(M // 4), cfg.axis(K // 16)
+    # cfg.define_reorder("reorder_gemm", [x, y], policy="candidate", candidate=[[x, y], [y, x]])
 
-    outer_loop, inner_loop = cfg.axis(4), cfg.axis(16)
-    cfg.define_annotate(
-        "A_interleaved_unroll_vec", [outer_loop, inner_loop], policy="try_unroll_vec"
-    )
+    # outer_loop, inner_loop = cfg.axis(4), cfg.axis(16)
+    # cfg.define_annotate(
+    #     "A_interleaved_unroll_vec", [outer_loop, inner_loop], policy="try_unroll_vec"
+    # )
 
-    # Fallback configuration
-    if cfg.is_fallback:
-        cfg["reorder_gemm"] = ReorderEntity([0, 1])
-        cfg["A_interleaved_unroll_vec"] = AnnotateEntity(["unroll", "vec"])
+    # # Fallback configuration
+    # if cfg.is_fallback:
+    #     cfg["reorder_gemm"] = ReorderEntity([0, 1])
+    #     cfg["A_interleaved_unroll_vec"] = AnnotateEntity(["unroll", "vec"])
 
-    if not is_dotprod_available():
-        cfg.define_knob("gemm_quantized_unroll", [True, False])
-        if cfg.is_fallback:
-            cfg["gemm_quantized_unroll"] = OtherOptionEntity(False)
+    # if not is_dotprod_available():
+    #     cfg.define_knob("gemm_quantized_unroll", [True, False])
+    #     if cfg.is_fallback:
+    #         cfg["gemm_quantized_unroll"] = OtherOptionEntity(False)
 
 
 # Compute function
@@ -281,93 +282,98 @@ def compute_conv2d_gemm_without_weight_transform(
 
 def schedule_conv2d_gemm_interleaved(cfg, s, out, final_out):
     """Schedule the conv2d_gemm interleaved strategy"""
+    print("schedule_conv2d_gemm_interleaved", schedule_conv2d_gemm_interleaved)
     C = out.op.input_tensors[0]
     C_interleaved = C.op.input_tensors[0]
     A_interleaved = C_interleaved.op.input_tensors[0]
 
     # Input transform
     A_interleaved_input = A_interleaved.op.input_tensors[0]
-    if A_interleaved_input.op.name == "A_padded":
-        s[A_interleaved_input].compute_at(s[A_interleaved], A_interleaved.op.axis[3])
-        s[A_interleaved_input].vectorize(A_interleaved_input.op.axis[2])
-        s[A_interleaved_input].compute_inline()
-        data_im2col = A_interleaved_input.op.input_tensors[0]
-    else:
-        data_im2col = A_interleaved_input
+    # if A_interleaved_input.op.name == "A_padded":
+    #     s[A_interleaved_input].compute_at(s[A_interleaved], A_interleaved.op.axis[3])
+    #     s[A_interleaved_input].vectorize(A_interleaved_input.op.axis[2])
+    #     s[A_interleaved_input].compute_inline()
+    #     data_im2col = A_interleaved_input.op.input_tensors[0]
+    # else:
+    #     data_im2col = A_interleaved_input
 
-    b, m, n = data_im2col.op.axis
-    if data_im2col.op.name == "data_im2col":
-        n_outer, n_inner = s[data_im2col].split(n, 16)
-        s[data_im2col].unroll(n_outer)
-        s[data_im2col].vectorize(n_inner)
-        b_m_fused = s[data_im2col].fuse(b, m)
-        s[data_im2col].parallel(b_m_fused)
-    else:
-        s[data_im2col].compute_inline()
+    # b, m, n = data_im2col.op.axis
+    # if data_im2col.op.name == "data_im2col":
+    #     n_outer, n_inner = s[data_im2col].split(n, 16)
+    #     s[data_im2col].unroll(n_outer)
+    #     s[data_im2col].vectorize(n_inner)
+    #     b_m_fused = s[data_im2col].fuse(b, m)
+    #     s[data_im2col].parallel(b_m_fused)
+    # else:
+    #     s[data_im2col].compute_inline()
 
     # Computation(through tensorize)
     b, xo, yo, xi, yi = C_interleaved.op.axis[0:5]
-    outer_gemm, inner_gemm = cfg["reorder_gemm"].apply(s, C_interleaved, [xo, yo])
+    # outer_gemm, inner_gemm = cfg["reorder_gemm"].apply(s, C_interleaved, [xo, yo])
 
-    b_outer_gemm_fused = s[C_interleaved].fuse(b, outer_gemm)
-    s[C_interleaved].parallel(b_outer_gemm_fused)
-    s[A_interleaved].compute_at(s[C_interleaved], b_outer_gemm_fused)
-    _, _, _, outer_A_interleaved, inner_A_interleaved = A_interleaved.op.axis
-    cfg["A_interleaved_unroll_vec"].apply(
-        s, A_interleaved, [outer_A_interleaved, inner_A_interleaved]
-    )
+    # b_outer_gemm_fused = s[C_interleaved].fuse(b, outer_gemm)
+    # s[C_interleaved].parallel(b_outer_gemm_fused)
+    # s[A_interleaved].compute_at(s[C_interleaved], b_outer_gemm_fused)
+    # _, _, _, outer_A_interleaved, inner_A_interleaved = A_interleaved.op.axis
+    # cfg["A_interleaved_unroll_vec"].apply(
+    #     s, A_interleaved, [outer_A_interleaved, inner_A_interleaved]
+    # )
 
     in_type = A_interleaved.dtype
-    out_type = C.dtype
+    # out_type = C.dtype
 
-    k = C_interleaved.op.reduce_axis[0]
+    # k = C_interleaved.op.reduce_axis[0]
     _, M, N = C.shape
     if in_type in ["int8", "uint8"]:
-        if is_mmla_available():
-            gemm_acc = gemm_acc_2x2_int8_int8_int32(in_type)
-            xi_inner, yi_inner = C_interleaved.op.axis[-2:]
-            k_outer, k_inner = s[C_interleaved].split(k, 8)
-            s[C_interleaved].reorder(
-                b_outer_gemm_fused, inner_gemm, k_outer, xi, yi, xi_inner, yi_inner, k_inner
-            )
-            s[C_interleaved].tensorize(xi_inner, gemm_acc)
-            s[C_interleaved].unroll(xi)
-            s[C_interleaved].unroll(yi)
-        elif is_dotprod_available():
-            gemm_acc = gemm_acc_4x4_int8_int8_int32(in_type)
-            xi_outer, yi_outer, xi_inner, yi_inner = s[C_interleaved].tile(
-                xi, yi, x_factor=8, y_factor=4
-            )
-            k_outer, k_inner = s[C_interleaved].split(k, 4)
-            xi_inner_outer, xi_inner_inner = s[C_interleaved].split(xi_inner, 4)
-            s[C_interleaved].reorder(
-                b_outer_gemm_fused,
-                inner_gemm,
-                xi_outer,
-                yi_outer,
-                k_outer,
-                xi_inner_outer,
-                xi_inner_inner,
-                yi_inner,
-                k_inner,
-            )
-            s[C_interleaved].tensorize(xi_inner_inner, gemm_acc)
-            s[C_interleaved].unroll(xi_inner_outer)
+        # if is_mmla_available():
+        #     gemm_acc = gemm_acc_2x2_int8_int8_int32(in_type)
+        #     xi_inner, yi_inner = C_interleaved.op.axis[-2:]
+        #     k_outer, k_inner = s[C_interleaved].split(k, 8)
+        #     s[C_interleaved].reorder(
+        #         # b_outer_gemm_fused, inner_gemm, k_outer, xi, yi, xi_inner, yi_inner, k_inner
+        #         outer_gemm, inner_gemm, k_outer, xi, yi, xi_inner, yi_inner, k_inner
+        #     )
+        #     s[C_interleaved].tensorize(xi_inner, gemm_acc)
+        #     s[C_interleaved].unroll(xi)
+        #     s[C_interleaved].unroll(yi)
+        # elif is_dotprod_available():
+        #     gemm_acc = gemm_acc_4x4_int8_int8_int32(in_type)
+        #     xi_outer, yi_outer, xi_inner, yi_inner = s[C_interleaved].tile(
+        #         xi, yi, x_factor=8, y_factor=4
+        #     )
+        #     k_outer, k_inner = s[C_interleaved].split(k, 4)
+        #     xi_inner_outer, xi_inner_inner = s[C_interleaved].split(xi_inner, 4)
+        #     s[C_interleaved].reorder(
+        #         b_outer_gemm_fused,
+        #         inner_gemm,
+        #         xi_outer,
+        #         yi_outer,
+        #         k_outer,
+        #         xi_inner_outer,
+        #         xi_inner_inner,
+        #         yi_inner,
+        #         k_inner,
+        #     )
+        #     s[C_interleaved].tensorize(xi_inner_inner, gemm_acc)
+        #     s[C_interleaved].unroll(xi_inner_outer)
 
-        elif is_aarch64_arm():
+        # elif is_aarch64_arm():
+        if is_aarch64_arm():
+            print("is_aarch64_arm true")
             s[C_interleaved].reorder(yi, xi)
             K = A_interleaved_input.shape[2]
             assert in_type in ["int8", "uint8"], "Only int8 and uint8 gemm are supported"
-            unroll = cfg["gemm_quantized_unroll"].val
+            # unroll = cfg["gemm_quantized_unroll"].val
+            unroll = False
             gemm = gemm_4x4_int8_int8_int32(M, N, K, unroll, in_type)
             s[C_interleaved].tensorize(yi, gemm)
 
     # Output transform
-    if out != final_out:
-        n, h, w, c = out.op.axis
-        _, inner = s[out].split(c, 4)
-        s[C].compute_at(s[out], inner)
-        s[out].vectorize(inner)
+    # if out != final_out:
+    #     n, h, w, c = out.op.axis
+    #     _, inner = s[out].split(c, 4)
+    #     s[C].compute_at(s[out], inner)
+    #     s[out].vectorize(inner)
     return s
 
 

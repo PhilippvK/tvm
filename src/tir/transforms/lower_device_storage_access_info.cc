@@ -78,7 +78,10 @@ class StorageAccessInfoLower : public StmtExprMutator {
     op = expr.as<CallNode>();
     ICHECK_EQ(op->args.size(), 5U);
     DataType dtype = op->args[0].dtype();
+    std::cout << "MakeAccessPtr" << std::endl;
+    std::cout << "dtype=" << dtype << std::endl;
     const VarNode* buffer = op->args[1].as<VarNode>();
+    std::cout << "args=" << op->args << std::endl;
     Var buffer_var = Downcast<Var>(op->args[1]);
     PrimExpr offset = op->args[2];
     auto it = storage_info_.find(buffer);

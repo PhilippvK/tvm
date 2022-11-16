@@ -187,7 +187,13 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
             )
         elif layout == "NHWC":
             data_width_padding = _get_padding_width(padding)
+            # print("target.features.has_dsp", target.features.has_dsp)
+            # print("and dilation_w == dilation_h == 1", dilation_w == dilation_h == 1)
+            # print("kernel_layout == OHWI", kernel_layout == "OHWI")
+            # print("_is_simd_aligned(data.dtype, data.shape[2:], padding=(data_width_padding, 0))", _is_simd_aligned(data.dtype, data.shape[2:], padding=(data_width_padding, 0)))
+            # print("_is_simd_aligned(kernel.dtype, kernel.shape[2:])", _is_simd_aligned(kernel.dtype, kernel.shape[2:]))
             if (
+                # False
                 target.features.has_dsp
                 and dilation_w == dilation_h == 1
                 and kernel_layout == "OHWI"
@@ -201,6 +207,7 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
                     name="conv2d_nhwc_ohwi_dsp.arm_cpu",
                 )
             elif target.features.has_dsp and kernel_layout == "HWOI":
+            # elif False and kernel_layout == "HWOI":
                 strategy.add_implementation(
                     wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_dsp),
                     wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_dsp),
@@ -550,7 +557,8 @@ def schedule_dense_arm_cpu(attrs, inputs, out_type, target):
     strategy = _op.OpStrategy()
     data, _ = inputs
 
-    if target.features.has_dsp and data.dtype in ["int8", "int16"]:
+    # if target.features.has_dsp and data.dtype in ["int8", "int16"]:
+    if False and data.dtype in ["int8", "int16"]:
         strategy.add_implementation(
             wrap_compute_dense(topi.arm_cpu.dense_dsp),
             wrap_topi_schedule(topi.arm_cpu.schedule_dense_dsp),

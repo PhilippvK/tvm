@@ -24,7 +24,7 @@ from ...target import codegen
 from ..nn.conv2d import _get_workload as _get_conv2d_workload, unpack_NCHWc_to_nchw
 from ..x86.conv2d_int8 import _pack_data
 from ..nn.utils import get_pad_tuple
-from .tensor_intrin import dot_int8_int8_int32_neon_82, dot_int8_int8_int32_neon
+# from .tensor_intrin import dot_int8_int8_int32_neon_82, dot_int8_int8_int32_neon
 from .conv2d_gemm import (
     compute_conv2d_gemm_without_weight_transform,
     schedule_conv2d_gemm_interleaved,
@@ -155,10 +155,11 @@ def schedule_conv2d_NCHWc_int8(cfg, outs):
             assert n_elems == 4
             dtype = "uint" if data.dtype == "uint8" else "int"
             if is_dotprod_available():
-                intrin = dot_int8_int8_int32_neon_82(int32_lanes=4, dtype=dtype)
+                # intrin = dot_int8_int8_int32_neon_82(int32_lanes=4, dtype=dtype)
+                pass
             elif is_neon_available():
                 assert dtype == "int", "uint8 not supported if dot product is not available"
-                intrin = dot_int8_int8_int32_neon()
+                # intrin = dot_int8_int8_int32_neon()
             else:
                 raise RuntimeError(
                     "Cannot schedule schedule_NCHWc_int8 without neon or arm v8.2 neon support"
@@ -176,13 +177,15 @@ def schedule_conv2d_NCHWc_int8(cfg, outs):
             else:
                 inline_fused = True
             if kh == 1 and kw == 1:
-                conv2d_generic.schedule_conv_NCHWc_cpu_1x1_int8(
-                    *args, int32_lanes=4, int8_elems=4, intrin=intrin, inline_fused=inline_fused
-                )
+                pass
+                # conv2d_generic.schedule_conv_NCHWc_cpu_1x1_int8(
+                #     *args, int32_lanes=4, int8_elems=4, intrin=intrin, inline_fused=inline_fused
+                # )
             else:
-                conv2d_generic.schedule_conv_NCHWc_cpu_common_int8(
-                    *args, int32_lanes=4, int8_elems=4, intrin=intrin, inline_fused=inline_fused
-                )
+                pass
+                # conv2d_generic.schedule_conv_NCHWc_cpu_common_int8(
+                #     *args, int32_lanes=4, int8_elems=4, intrin=intrin, inline_fused=inline_fused
+                # )
 
     traverse_inline(s, outs[0].op, _callback)
     return s
@@ -209,9 +212,9 @@ def _compute_conv2d_NHWC_quantized(
 ):
     N, IH, IW, IC = get_const_tuple(data.shape)
     KH, KW, _, OC = get_const_tuple(kernel.shape)
-    tile_rows_B, tile_cols_B = get_tiling_B_interleaved_t(interleave_A)
+    # tile_rows_B, tile_cols_B = get_tiling_B_interleaved_t(interleave_A)
 
-    kernel = nn.conv2d_gemm_weight_transform(kernel, tile_rows_B, tile_cols_B)
+    # kernel = nn.conv2d_gemm_weight_transform(kernel, tile_rows_B, tile_cols_B)
     return compute_conv2d_gemm_without_weight_transform(
         cfg, data, kernel, strides, padding, dilation, out_dtype, (KH, KW), OC, interleave_A
     )
@@ -249,10 +252,10 @@ def _schedule_conv2d_NHWC_quantized(cfg, outs, interleave_A):
     # Vectorize the output and then inline all the rest
     out = outs[0]
     n, h, w, c = out.op.axis
-    n_h_fused = s[out].fuse(n, h)
-    outer, inner = s[out].split(c, 4)
-    s[out].vectorize(inner)
-    s[out].parallel(n_h_fused)
+    # n_h_fused = s[out].fuse(n, h)
+    # outer, inner = s[out].split(c, 4)
+    # s[out].vectorize(inner)
+    # s[out].parallel(n_h_fused)
 
     def _callback(op):
         """Traverse operators from computation graph"""
@@ -265,9 +268,10 @@ def _schedule_conv2d_NHWC_quantized(cfg, outs, interleave_A):
             if out != conv_out:
                 s[conv_out].compute_at(s[out], inner)
             else:
-                C = conv_out.op.input_tensors[0]
-                if interleave_A:
-                    s[C].compute_at(s[out], inner)
+                pass
+                # C = conv_out.op.input_tensors[0]
+                # if interleave_A:
+                #     s[C].compute_at(s[out], inner)
 
     traverse_inline(s, outs[0].op, _callback)
     return s

@@ -25,7 +25,7 @@ from tvm.autotvm.task.space import SplitEntity, OtherOptionEntity
 from .. import nn
 from ..utils import traverse_inline, get_const_tuple, get_const_int
 from ..nn.utils import get_pad_tuple
-from .tensor_intrin import smlal_int16_int32
+# from .tensor_intrin import smlal_int16_int32
 from .arm_utils import is_aarch64_arm
 from .mprofile.dsp.depthwise_conv2d import (
     depthwise_conv2d_nhwc_dsp_compute,
@@ -366,8 +366,9 @@ def schedule_depthwise_conv2d_nhwc(cfg, outs):
             data_pad_value = cfg["data_pad_strategy"].val
 
         if use_tensorization and data_pad_value != 3:
-            smlal = smlal_int16_int32()
-            s[conv].tensorize(ci, smlal)
+            pass
+            # smlal = smlal_int16_int32()
+            # s[conv].tensorize(ci, smlal)
         else:
             s[conv].vectorize(ci)
 

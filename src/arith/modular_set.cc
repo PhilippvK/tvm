@@ -90,6 +90,8 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   explicit Impl(Analyzer* parent) : parent_(parent) {}
 
   void Update(const Var& var, const ModularSet& info, bool allow_override) {
+    std::cout << "Update" << std::endl;
+    std::cout << "var=" << var << std::endl;
     if (!allow_override) {
       auto it = var_map_.find(var);
       if (it != var_map_.end()) {
@@ -100,6 +102,11 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
       }
     }
     var_map_[var] = Entry(info->coeff, info->base);
+    std::cout << "info: " << info->coeff << " " << info->base << std::endl;
+    std::cout << "keys:" << std::endl;
+    for(auto kv : var_map_) {
+        std::cout << "k=" << kv.first << std::endl;
+    }
   }
 
   // Detect useful constraints and use them in the analysis scope.
@@ -123,6 +130,9 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   Entry VisitExprDefault_(const Object* op) final { return Everything(); }
 
   Entry VisitExpr_(const LetNode* op) final {
+    // std::cout << "visit LetNode" << std::endl;
+    // std::cout << "op->var=" << op->var << std::endl;
+
     auto it = var_map_.find(op->var);
     // if the var has not been binded, update the info.
     if (it == var_map_.end()) {
@@ -140,6 +150,7 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   Entry VisitExpr_(const IntImmNode* op) final { return Entry(0, op->value); }
 
   Entry VisitExpr_(const AddNode* op) final {
+    // std::cout << "visit AddNode" << std::endl;
     Entry a = VisitExpr(op->a);
     Entry b = VisitExpr(op->b);
     int64_t coeff = ZeroAwareGCD(a.coeff, b.coeff);
@@ -147,6 +158,7 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   }
 
   Entry VisitExpr_(const SubNode* op) final {
+    // std::cout << "visit SubNode" << std::endl;
     Entry a = VisitExpr(op->a);
     Entry b = VisitExpr(op->b);
     int64_t coeff = ZeroAwareGCD(a.coeff, b.coeff);
@@ -154,6 +166,7 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   }
 
   Entry VisitExpr_(const MulNode* op) final {
+    // std::cout << "visit MulNode" << std::endl;
     Entry a = VisitExpr(op->a);
     Entry b = VisitExpr(op->b);
     // Simplification rule, x, y, z are in Z
@@ -185,6 +198,7 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   }
 
   Entry VisitExpr_(const DivNode* op) final {
+    // std::cout << "visit DivNode" << std::endl;
     Entry b = VisitExpr(op->b);
     if (b.is_const()) {
       return DivByConst(op->a, b.base, false);
@@ -193,6 +207,7 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   }
 
   Entry VisitExpr_(const FloorDivNode* op) final {
+    // std::cout << "visit FloorDivNode" << std::endl;
     Entry b = VisitExpr(op->b);
     if (b.is_const()) {
       return DivByConst(op->a, b.base, true);
@@ -201,18 +216,21 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   }
 
   Entry VisitExpr_(const MinNode* op) final {
+    // std::cout << "visit MinNode" << std::endl;
     Entry a = VisitExpr(op->a);
     Entry b = VisitExpr(op->b);
     return Union(a, b);
   }
 
   Entry VisitExpr_(const MaxNode* op) final {
+    // std::cout << "visit MaxNode" << std::endl;
     Entry a = VisitExpr(op->a);
     Entry b = VisitExpr(op->b);
     return Union(a, b);
   }
 
   Entry VisitExpr_(const SelectNode* op) final {
+    // std::cout << "visit SelectNode" << std::endl;
     Entry a = VisitExpr(op->true_value);
     Entry b = VisitExpr(op->false_value);
     return Union(a, b);
@@ -230,6 +248,7 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   }
 
   Entry VisitExpr_(const FloorModNode* op) final {
+    // std::cout << "visit FloorModNode" << std::endl;
     Entry b = VisitExpr(op->b);
     if (b.is_const()) {
       return ModByConst(op->a, b.base, true);
@@ -238,6 +257,7 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   }
 
   Entry VisitExpr_(const ModNode* op) final {
+    // std::cout << "visit ModNode" << std::endl;
     Entry b = VisitExpr(op->b);
     if (b.is_const()) {
       return ModByConst(op->a, b.base, false);
@@ -248,6 +268,7 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   Entry VisitExpr_(const CallNode* op) final {
     // only special handle >> which can be
     // used for index calculation.
+    // std::cout << "visit CallNode" << std::endl;
     if (op->op.same_as(tir::builtin::shift_right())) {
       return VisitRightShift(op);
     } else if (op->op.same_as(tir::builtin::bitwise_and())) {
@@ -258,11 +279,20 @@ class ModularSetAnalyzer::Impl : public ExprFunctor<ModularSetAnalyzer::Entry(co
   }
 
   Entry VisitExpr_(const VarNode* op) final {
+    std::cout << "visit VarNode" << std::endl;
     Var v = GetRef<Var>(op);
+    std::cout << "v=" << v << std::endl;
+
+    std::cout << "keys:" << std::endl;
+    for(auto kv : var_map_) {
+        std::cout << "k=" << kv.first << std::endl;
+    }
     auto it = var_map_.find(v);
     if (it != var_map_.end()) {
+      std::cout << "FOUND" << std::endl;
       return it->second;
     } else {
+      // std::cout << "EVERY" << std::endl;
       return Everything();
     }
   }
