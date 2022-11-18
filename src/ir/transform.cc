@@ -91,14 +91,17 @@ bool PassArrayContains(const Array<runtime::String>& pass_array, const std::stri
 }
 
 bool PassContext::PassEnabled(const PassInfo& info) const {
+  // std::cout << "PassEnabled " << info << std::endl;
   if (PassArrayContains(operator->()->disabled_pass, info->name)) {
+    // std::cout << "> false" << std::endl;
     return false;
   }
 
   if (PassArrayContains(operator->()->required_pass, info->name)) {
+    // std::cout << "> true" << std::endl;
     return true;
   }
-
+  // std::cout << "> " << (operator->()->opt_level >= info->opt_level) << std::endl;
   return operator->()->opt_level >= info->opt_level;
 }
 
@@ -263,7 +266,8 @@ IRModule Pass::operator()(IRModule mod, const PassContext& pass_ctx) const {
   ICHECK(node != nullptr);
   const PassInfo& pass_info = node->Info();
   if (!pass_ctx.InstrumentBeforePass(mod, pass_info)) {
-    DLOG(INFO) << "Skipping pass : " << pass_info->name
+    // DLOG(INFO) << "Skipping pass : " << pass_info->name
+    LOG(WARNING) << "Skipping pass : " << pass_info->name
                << " with opt level: " << pass_info->opt_level;
     return mod;
   }
