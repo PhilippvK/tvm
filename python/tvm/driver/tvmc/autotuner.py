@@ -65,7 +65,8 @@ def add_tune_parser(subparsers, _, json_params):
         "--min-repeat-ms",
         default=None,
         type=int,
-        help="minimum time to run each trial, in milliseconds. " "Defaults to 0 on x86 and 1000 on all other targets",
+        help="minimum time to run each trial, in milliseconds. "
+        "Defaults to 0 on x86 and 1000 on all other targets",
     )
     parser.add_argument(
         "--model-format",
@@ -100,7 +101,8 @@ def add_tune_parser(subparsers, _, json_params):
     )
     parser.add_argument(
         "--rpc-key",
-        help="the RPC tracker key of the target device. " "Required when --rpc-tracker is provided.",
+        help="the RPC tracker key of the target device. "
+        "Required when --rpc-tracker is provided.",
     )
     parser.add_argument(
         "--rpc-tracker",
@@ -157,17 +159,20 @@ def add_tune_parser(subparsers, _, json_params):
     auto_scheduler_group.add_argument(
         "--cache-line-bytes",
         type=int,
-        help="the size of cache line in bytes. " "If not specified, it will be autoset for the current machine.",
+        help="the size of cache line in bytes. "
+        "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--num-cores",
         type=int,
-        help="the number of device cores. " "If not specified, it will be autoset for the current machine.",
+        help="the number of device cores. "
+        "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--vector-unit-bytes",
         type=int,
-        help="the width of vector units in bytes. " "If not specified, it will be autoset for the current machine.",
+        help="the width of vector units in bytes. "
+        "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--max-shared-memory-per-block",
@@ -184,17 +189,20 @@ def add_tune_parser(subparsers, _, json_params):
     auto_scheduler_group.add_argument(
         "--max-threads-per-block",
         type=int,
-        help="the max number of threads per block. " "If not specified, it will be autoset for the current machine.",
+        help="the max number of threads per block. "
+        "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--max-vthread-extent",
         type=int,
-        help="the max vthread extent. " "If not specified, it will be autoset for the current machine.",
+        help="the max vthread extent. "
+        "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--warp-size",
         type=int,
-        help="the thread numbers of a warp. " "If not specified, it will be autoset for the current machine.",
+        help="the thread numbers of a warp. "
+        "If not specified, it will be autoset for the current machine.",
     )
     auto_scheduler_group.add_argument(
         "--include-simple-tasks",
@@ -264,7 +272,9 @@ def drive_tune(args):
         Arguments from command line parser.
     """
     if not os.path.isfile(args.FILE):
-        raise TVMCException(f"Input file '{args.FILE}' doesn't exist, is a broken symbolic link, or a directory.")
+        raise TVMCException(
+            f"Input file '{args.FILE}' doesn't exist, is a broken symbolic link, or a directory."
+        )
 
     tvmc_model = frontends.load_model(args.FILE, args.model_format, shape_dict=args.input_shapes)
 
@@ -409,10 +419,10 @@ def tune_model(
     include_simple_tasks: bool = False,
     log_estimated_latency: bool = False,
     additional_target_options: Optional[Dict[str, Dict[str, Any]]] = None,
-    module_loader = None,  # TODO
-    build_func = "default",  # TODO
-    runtime = None,  # TODO
-    build_option : dict = None,
+    module_loader=None,  # TODO
+    build_func="default",  # TODO
+    runtime=None,  # TODO
+    build_option: dict = None,
     tasks_filter: str = "all",
     si_prefix: str = "G",
     visualize_mode: str = "none",
@@ -524,7 +534,9 @@ def tune_model(
 
     if rpc_key:
         if hostname is None or port is None:
-            raise TVMCException("You must provide a hostname and port to connect to a remote RPC device.")
+            raise TVMCException(
+                "You must provide a hostname and port to connect to a remote RPC device."
+            )
         if isinstance(port, str):
             port = int(port)
 
@@ -541,11 +553,12 @@ def tune_model(
             timeout=timeout,
             min_repeat_ms=min_repeat_ms,
             module_loader=module_loader,
-
         )
     else:
         logger.info("Starting localhost tuning.")
-        runner_ctor = auto_scheduler.LocalRPCMeasureContext if enable_autoscheduler else autotvm.LocalRunner
+        runner_ctor = (
+            auto_scheduler.LocalRPCMeasureContext if enable_autoscheduler else autotvm.LocalRunner
+        )
         local_server = runner_ctor(
             number=number,
             repeat=repeat,
@@ -646,9 +659,7 @@ def tune_model(
             "tuner": tuner,
             "trials": trials,
             "early_stopping": early_stopping,
-            "measure_option": autotvm.measure_option(
-                builder=builder, runner=runner
-            ),
+            "measure_option": autotvm.measure_option(builder=builder, runner=runner),
             "tuning_records": prior_records,
             "si_prefix": si_prefix,
         }
@@ -807,12 +818,13 @@ def schedule_tasks(
         )
 
     # Create the scheduler
-    tuner = auto_scheduler.TaskScheduler(tasks, task_weights, load_log_file=prior_records, callbacks=callbacks)
+    tuner = auto_scheduler.TaskScheduler(
+        tasks, task_weights, load_log_file=prior_records, callbacks=callbacks
+    )
 
     # Tune the tasks
-    tuner.tune(tuning_options,
-            search_policy="default")
-            # search_policy="sketch.random")
+    tuner.tune(tuning_options, search_policy="default")
+    # search_policy="sketch.random")
 
 
 def tune_tasks(
