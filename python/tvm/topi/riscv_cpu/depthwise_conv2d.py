@@ -27,6 +27,11 @@ from ..utils import traverse_inline, get_const_tuple, get_const_int
 from ..nn.utils import get_pad_tuple
 from .riscv_utils import is_riscv64
 
+from .extensions.pext.depthwise_conv2d import (
+    depthwise_conv2d_nhwc_pext_compute,
+    depthwise_conv2d_nhwc_pext_schedule,
+)
+
 
 # @autotvm.register_topi_compute("depthwise_conv2d_nchw.riscv_cpu")
 # def depthwise_conv2d_nchw(_, data, kernel, strides, padding, dilation, out_dtype):
@@ -366,3 +371,17 @@ def schedule_depthwise_conv2d_nhwc(cfg, outs):
 
     traverse_inline(s, outs[0].op, _callback)
     return s
+
+
+@autotvm.register_topi_compute("depthwise_conv2d_nhwc_pext.riscv_cpu")
+def depthwise_conv2d_nhwc_pext(cfg, data, kernel, strides, padding, dilation, out_dtype):
+    """Compute conv2d_nhwc with RISC-V P-Extension instructions."""
+    return depthwise_conv2d_nhwc_pext_compute(
+        cfg, data, kernel, strides, padding, dilation, out_dtype
+    )
+
+
+@autotvm.register_topi_schedule("depthwise_conv2d_nhwc_pext.riscv_cpu")
+def schedule_depthwise_conv2d_nhwc_pext(cfg, outs):
+    """Create schedule for conv2d_nhwc_pext"""
+    return depthwise_conv2d_nhwc_pext_schedule(cfg, outs)
