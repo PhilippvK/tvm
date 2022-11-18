@@ -244,11 +244,8 @@ def drive_run(args):
                 "i.e. when '--device micro'."
             )
 
-        if args.profile:
-            raise TVMCException("--profile is not currently supported for micro devices.")
-
-        if args.print_time:
-            raise TVMCException("--print-time is not currently supported for micro devices.")
+        if args.profile and args.print_time:
+            raise TVMCException("--profile and --print-time can not be used simultaneously on micro devices..")
 
         # Get and check options for micro targets.
         options = get_and_check_options(args.project_option, args.valid_options)
@@ -646,13 +643,34 @@ def run_module(
                 outputs[output_name] = val.numpy()
         else:
             # TODO(gromero): Adjust for micro targets.
-            if profile:
-                logger.debug("Creating runtime with profiling enabled.")
-                module = debug_executor.create(tvmc_package.graph, lib, dev, dump_root="./prof")
-            else:
-                if device == "micro":
+            fallback = False
+            if device == "micro":
+                if profile:
+                    logger.debug("Creating runtime (micro) with profiling enabled.")
+                    module = tvm.micro.create_local_debug_executor(
+                        tvmc_package.graph, lib, dev
+                    )
+                else:
                     logger.debug("Creating runtime (micro) with profiling disabled.")
-                    module = tvm.micro.create_local_graph_executor(tvmc_package.graph, lib, dev)
+                    if benchmark:
+                        try:
+                            module = executor.create(tvmc_package.graph, lib, dev)
+                        except AttributeError:
+                            logger.debug("Falling back to local micro session.")
+                            fallback = True
+                    else:
+                        fallback = True
+
+                    if fallback:
+                        module = tvm.micro.create_local_graph_executor(
+                            tvmc_package.graph, lib, dev
+                        )
+
+            else:
+                if profile:
+                    logger.debug("Creating runtime with profiling enabled.")
+                    module = debug_executor.create(tvmc_package.graph, lib, dev, dump_root="./prof")
+                    # module = executor.create(tvmc_package.graph, lib, dev)
                 else:
                     logger.debug("Creating runtime with profiling disabled.")
                     module = executor.create(tvmc_package.graph, lib, dev)
@@ -662,7 +680,7 @@ def run_module(
 
             logger.debug("Collecting graph input shape and type:")
 
-            if isinstance(session, tvm.rpc.client.RPCSession):
+            if isinstance(session, tvm.rpc.client.RPCSession) or (device == "micro" and not fallback):
                 # RPC does not support datatypes such as Array and Map,
                 # fallback to obtaining input information from graph json.
                 shape_dict, dtype_dict = get_input_info(tvmc_package.graph, tvmc_package.params)
@@ -678,13 +696,13 @@ def run_module(
             module.set_input(**inputs_dict)
 
             # Run must be called explicitly if profiling
-            if profile:
+            if profile and (device != "micro"):
                 logger.info("Running the module with profiling enabled.")
                 report = module.profile()
                 # This print is intentional
                 print(report)
 
-            if not benchmark or device == "micro":
+            if not benchmark or (device == "micro" and (fallback or profile)):
                 # TODO(gromero): Fix time_evaluator() for micro targets. Once it's
                 # fixed module.benchmark() can be used instead and this if/else can
                 # be removed.
