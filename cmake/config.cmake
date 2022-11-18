@@ -263,6 +263,9 @@ set(USE_CMSISNN OFF)
 set(USE_TENSORRT_CODEGEN OFF)
 set(USE_TENSORRT_RUNTIME OFF)
 
+# Whether enable CoreDSL codegen
+set(USE_COREDSL_CODEGEN OFF)
+
 # Whether use VITIS-AI codegen
 set(USE_VITIS_AI OFF)
 
