@@ -504,6 +504,7 @@ class FlopCalculationError(RuntimeError):
 
 
 def compute_flop(sch):
+    print("compute_flop")
     """Calculate number of FLOP (floating number operations) of the compute ops in a schedule
 
     Parameters
@@ -625,4 +626,5 @@ def compute_flop(sch):
             "Please use `cfg.add_flop` to manually set "
             "FLOP for this operator"
         )
+    print("ret", ret)
     return ret
