@@ -4955,25 +4955,42 @@ class ConvInteger(OnnxOpConverter):
         padding = attr["pads"] if "pads" in attr else 0
         groups = attr["group"] if "group" in attr else 1
 
-        if ndim != 4:
+        if ndim == 4:
+            return _qnn.op.conv2d(
+                data,
+                weight,
+                _op.cast(data_zp, "int32"),
+                _op.cast(weight_zp, "int32"),
+                _expr.const(1.0, "float32"),
+                _expr.const(1.0, "float32"),
+                kernel_size=attr["kernel_shape"],
+                channels=out_channels,
+                strides=strides,
+                padding=padding,
+                dilation=dilation,
+                groups=groups,
+            )
+        elif ndim == 3:
+            return _qnn.op.conv1d(
+                data,
+                weight,
+                _op.cast(data_zp, "int32"),
+                _op.cast(weight_zp, "int32"),
+                _expr.const(1.0, "float32"),
+                _expr.const(1.0, "float32"),
+                kernel_size=attr["kernel_shape"],
+                channels=out_channels,
+                strides=strides,
+                padding=padding,
+                dilation=dilation,
+                groups=groups,
+            )
+        else:
             raise tvm.error.OpAttributeInvalid(
-                "Only 2D kernels are supported for operator ConvInteger."
+                "Only 1D/2D kernels are supported for operator ConvInteger."
             )
 
-        return _qnn.op.conv2d(
-            data,
-            weight,
-            _op.cast(data_zp, "int32"),
-            _op.cast(weight_zp, "int32"),
-            _expr.const(1.0, "float32"),
-            _expr.const(1.0, "float32"),
-            kernel_size=attr["kernel_shape"],
-            channels=out_channels,
-            strides=strides,
-            padding=padding,
-            dilation=dilation,
-            groups=groups,
-        )
+
 
 
 class BitShift(OnnxOpConverter):
