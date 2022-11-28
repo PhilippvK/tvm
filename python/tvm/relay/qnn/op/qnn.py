@@ -1240,3 +1240,106 @@ def leaky_relu(x, alpha, input_scale, input_zero_point, output_scale, output_zer
         output_scale,
         output_zero_point,
     )
+
+
+def conv1d(
+    data,
+    kernel,
+    input_zero_point,
+    kernel_zero_point,
+    input_scale,
+    kernel_scale,
+    kernel_size,
+    channels,
+    strides=1,
+    padding=0,
+    dilation=1,
+    groups=1,
+    data_layout="NCW",
+    kernel_layout="OIW",
+    out_layout="",
+    out_dtype="int32",
+):
+    r"""Quantized 1D convolution.
+
+    Parameters
+    ----------
+    data : tvm.relay.Expr
+        The input data to the operator.
+
+    kernel : tvm.relay.Expr
+        The kernel expressions.
+
+    input_zero_point: tvm.relay.Expr
+           The zero point of the data distribution.
+
+    kernel_zero_point: tvm.relay.Expr
+           The zero point of the quantized_kernel distribution.
+
+    input_scale: tvm.relay.Expr
+           The scale for the input tensor. The scale for the input tensor is
+           stored purely for convenience here. See more commentary below.
+
+    kernel_scale: tvm.relay.Expr
+           The scale for the weight tensor. The scale for the weight tensor is
+           stored for access to this during relay. This information is not
+           needed in the pass pipeline after qnn.conv2d is lowered to the
+           sequence of steps as in nn.conv2d. See also input_scale in Requantize.
+
+    kernel_size : tuple of int
+        The spatial width and height of the convolution kernel.
+
+    channels : int
+        Number of output channels of this convolution.
+
+    strides : tuple of int, optional
+        The strides of convolution.
+
+    padding : tuple of int, optional
+        The padding of convolution on both sides of inputs before convolution.
+
+    dilation : tuple of int, optional
+        Specifies the dilation rate to be used for dilated convolution.
+
+    groups : int, optional
+        Number of groups for grouped convolution.
+
+    data_layout : str, optional
+        Layout of the input.
+
+    kernel_layout : str, optional
+        Layout of the kernel.
+
+    out_layout : str, optional
+        Layout of the output, by default, out_layout is the same as data_layout
+
+    out_dtype : str, optional
+        Specifies the output data type for mixed precision conv2d.
+
+    Returns
+    -------
+    result : tvm.relay.Expr
+        The computed result.
+    """
+
+    # TODO enforce 4-way padding in topi/nn/conv2d after #4644 merged
+    # convert 2-way padding to 4-way padding
+    # padding = get_pad_tuple2d(padding)
+    return _make.conv1d(
+        data,
+        kernel,
+        input_zero_point,
+        kernel_zero_point,
+        input_scale,
+        kernel_scale,
+        strides,
+        padding,
+        dilation,
+        groups,
+        channels,
+        kernel_size,
+        data_layout,
+        kernel_layout,
+        out_layout,
+        out_dtype,
+    )
