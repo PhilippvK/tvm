@@ -463,6 +463,6 @@ def save_dumps(module_name: str, dumps: Dict[str, str], dump_root: str = "."):
     """
 
     for dump_format in dumps:
-        dump_name = module_name + "." + dump_format
+        dump_name = str(module_name) + "." + dump_format
         with open(Path(dump_root, dump_name), "w") as f:
             f.write(dumps[dump_format])
