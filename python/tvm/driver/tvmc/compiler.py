@@ -378,8 +378,15 @@ def compile_model(
                 lib = graph_module.get_lib()
             # TODO lib.get_source call have inconsistent behavior for unsupported
             #      formats (@leandron).
-            source = mod.astext() if source_type == "relay" else lib.get_source(source_type)
+            if source_type == "relay":
+                # source = str(mod)
+                source = mod.astext()
+            elif source_type == "tir":
+               raise NotImplementedError
+            else:
+                source = lib.get_source(source_type)
             dumps[source_type] = source
+        print("dumps", dumps)
 
         # Create a new tvmc model package object from the graph definition.
         package_path = tvmc_model.export_package(
