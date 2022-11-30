@@ -378,7 +378,7 @@ def compile_model(
                 lib = graph_module.get_lib()
             # TODO lib.get_source call have inconsistent behavior for unsupported
             #      formats (@leandron).
-            source = str(mod) if source_type == "relay" else lib.get_source(source_type)
+            source = mod.astext() if source_type == "relay" else lib.get_source(source_type)
             dumps[source_type] = source
 
         # Create a new tvmc model package object from the graph definition.
