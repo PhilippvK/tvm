@@ -23,6 +23,7 @@ from typing import Any, Optional, Dict, List, Union, Callable, Sequence
 from pathlib import Path
 
 import tvm
+from tvm import te
 from tvm import autotvm, auto_scheduler
 from tvm import relay
 from tvm.driver.tvmc.registry import generate_registry_args, reconstruct_registry_entity
@@ -437,6 +438,27 @@ def build(
         logger.debug("building with vm compile")
         return relay.vm.compile(mod, target=tvm_target, params=params)
     logger.debug("building with relay build")
+    def _lower_relay_to_tir(relay_prim_func: relay.Function) -> tvm.tir.PrimFunc:
+
+        def _get_tensors(te_cached_func):
+            return list(te_cached_func.inputs) + list(te_cached_func.outputs)
+
+        lower_to_te = tvm._ffi.get_global_func("relay.backend.LowerToTE")
+        te_cached_func = lower_to_te(relay_prim_func)
+        x = _get_tensors(te_cached_func)
+        tir_prim_func = te.create_prim_func(x)
+        return tir_prim_func
+
+    def _lower_stir_to_nstir(prim_func: tvm.tir.PrimFunc) -> tvm.tir.PrimFunc:
+        mod = tvm.lower(tvm.ir.IRModule.from_expr(prim_func))
+        prim_func = mod[prim_func.attrs["global_symbol"]]
+        return prim_func
+
+    tmp = _lower_relay_to_tir(mod["main"])
+    print("A1", tmp)
+    tmp_ = _lower_stir_to_nstir(tmp)
+    print("B2", tmp_)
+
     return relay.build(
         mod,
         target=tvm_target,
