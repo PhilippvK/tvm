@@ -694,8 +694,10 @@ class VisualizeProgress(TaskSchedulerCallback):
         self.live = live
         self.out_path = out_path
         self.init_plot(title)
+        self.visualizer = tune_viz.AutoSchedulerVisualizer(...)
 
     def __del__(self):
+        self.visualizer.finish()
         import matplotlib.pyplot as plt
 
         if self.out_path:
@@ -706,6 +708,7 @@ class VisualizeProgress(TaskSchedulerCallback):
             plt.show()
 
     def pre_tune(self, task_scheduler, task_id):
+        self.visualizer.pre_tune(task_scheduler, task_id)
         for i, task in enumerate(task_scheduler.tasks):
             cts = task_scheduler.task_cts[i]
             if cts == 0:
@@ -714,6 +717,7 @@ class VisualizeProgress(TaskSchedulerCallback):
         self.update_plot()
 
     def post_tune(self, task_scheduler, task_id):
+        self.visualizer.post_tune(task_scheduler, task_id)
         for i, task in enumerate(task_scheduler.tasks):
             if task_scheduler.best_costs[i] < 1e9:
                 flops = task_scheduler.tasks[i].compute_dag.flop_ct / task_scheduler.best_costs[i]
