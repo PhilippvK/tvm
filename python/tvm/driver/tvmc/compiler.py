@@ -312,6 +312,7 @@ def compile_model(
     ):
         if desired_layout:
             mod = convert_graph_layout(mod, desired_layout)
+        mod = relay.transform.InferType()(mod)
 
         for partition_function, opts in zip(partition_functions, partition_opts):
             mod = partition_function(mod, params, mod_name=mod_name, **opts)
