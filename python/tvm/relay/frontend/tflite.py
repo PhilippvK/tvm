@@ -334,7 +334,7 @@ class OperatorConverter(object):
             if custom_op_code_str == b"TFLite_Detection_PostProcess":
                 return "DETECTION_POSTPROCESS"
 
-            raise NotImplementedError("Custom operators are currently not supported")
+            raise NotImplementedError(f"Custom operators are currently not supported ({custom_op_code_str})")
         return op_code_str
 
     def get_input_tensors(self, op):
