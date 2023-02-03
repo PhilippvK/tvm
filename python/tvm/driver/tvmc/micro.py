@@ -598,7 +598,8 @@ def tune_handler(args):
 
     tune_model(
         tvmc_model,
-        "c",
+        # "c",
+        "llvm",
         tuning_records=args.output,
         prior_records=args.tuning_records,
         enable_autoscheduler=args.enable_autoscheduler,

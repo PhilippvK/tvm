@@ -46,7 +46,7 @@
 #define SPIKE_CPU_FREQ_HZ (100000000)
 #endif  // SPIKE_CPU_FREQ_HZ
 
-// #define DBG
+#define DBG
 
 #ifdef DBG
 FILE *fp;
@@ -64,6 +64,9 @@ extern "C" {
 
 ssize_t MicroTVMWriteFunc(void* context, const uint8_t* data, size_t num_bytes) {
   ssize_t to_return = write(STDOUT_FILENO, data, num_bytes);
+  for (int i = 0; i < num_bytes; i++) {
+    dbgprintf("data=%d [%c]\n", data[i], data[i]);
+  }
   fflush(stdout);
   return to_return;
 }
@@ -81,10 +84,12 @@ void TVMPlatformAbort(tvm_crt_error_t error_code) {
 MemoryManagerInterface* memory_manager;
 
 tvm_crt_error_t TVMPlatformMemoryAllocate(size_t num_bytes, DLDevice dev, void** out_ptr) {
+  dbgprintf("Allocate: %d\n", num_bytes);
   return memory_manager->Allocate(memory_manager, num_bytes, dev, out_ptr);
 }
 
 tvm_crt_error_t TVMPlatformMemoryFree(void* ptr, DLDevice dev) {
+  dbgprintf("Free\n");
   return memory_manager->Free(memory_manager, ptr, dev);
 }
 

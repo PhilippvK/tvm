@@ -22,9 +22,9 @@ ABI ?= ilp32d
 
 INCLUDES ?= -isystem crt/include -Icrt_config -I./src/
 # CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -Wno-error=stringop-overread -Wno-error=format-extra-args -march=$(ARCH) -mabi=$(ABI) -O3
-CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -march=$(ARCH) -mabi=$(ABI) -O3
-CXXFLAGS ?= -Werror -Wall -std=c++11 -DTVM_HOST_USE_GRAPH_EXECUTOR_MODULE -march=$(ARCH) -mabi=$(ABI) -O3
-LDFLAGS ?= -Werror -Wall -march=$(ARCH) -mabi=$(ABI)
+CFLAGS ?= -Werror -Wall -Wno-error=incompatible-pointer-types -march=$(ARCH) -mabi=$(ABI) -O3  -target riscv32 --gcc-toolchain=/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/riscv_gcc/ --sysroot=/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/riscv_gcc/riscv32-unknown-elf
+CXXFLAGS ?= -Werror -Wall -std=c++11 -DTVM_HOST_USE_GRAPH_EXECUTOR_MODULE -march=$(ARCH) -mabi=$(ABI) -O3 -target riscv32 --gcc-toolchain=/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/riscv_gcc/ --sysroot=/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/riscv_gcc/riscv32-unknown-elf
+LDFLAGS ?= -Werror -Wall -march=$(ARCH) -mabi=$(ABI) -fuse-ld=lld -target riscv32 --gcc-toolchain=/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/riscv_gcc/ --sysroot=/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/riscv_gcc/riscv32-unknown-elf -lm
 
 # Codegen produces spurious lines like: int32_t arg2_code = ((int32_t*)arg_type_ids)[(2)];
 MODEL_CFLAGS ?= -Wno-error=unused-variable -Wno-error=missing-braces
@@ -34,9 +34,11 @@ PREFIX ?= $(TRIPLE)-
 # AR ?= ${PREFIX}ar
 AR = ${PREFIX}ar
 # CC ?= ${PREFIX}gcc
-CC = ${PREFIX}gcc
+# CC = ${PREFIX}gcc
+CC = clang
 # CXX ?= ${PREFIX}g++
-CXX = ${PREFIX}g++
+# CXX = ${PREFIX}g++
+CXX = clang++
 # RANLIB ?= ${PREFIX}ranlib
 RANLIB = ${PREFIX}ranlib
 
