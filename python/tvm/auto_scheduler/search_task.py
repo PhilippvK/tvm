@@ -167,6 +167,8 @@ class TuningOptions(Object):
         Callback functions called after each measurement.
         Candidates:
         - auto_scheduler.RecordToFile
+    si_prefix:  str = "G"
+        SI prefix for FLOPS.
     """
 
     def __init__(
@@ -178,6 +180,7 @@ class TuningOptions(Object):
         builder="local",
         runner="local",
         measure_callbacks=None,
+        si_prefix="G",
     ):
         if isinstance(builder, str):
             if builder == "local":
@@ -210,6 +213,7 @@ class TuningOptions(Object):
             builder,
             runner,
             measure_callbacks,
+            si_prefix,
         )
 
 
