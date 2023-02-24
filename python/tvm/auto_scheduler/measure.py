@@ -605,7 +605,7 @@ class MeasureErrorNo(object):
     UNKNOWN_ERROR = 8  # Unknown error
 
 
-def _local_build_worker(inp_serialized, build_func, verbose):
+def _local_build_worker(inp_serialized, build_func, verbose, pass_config):
     tic = time.time()
     inp = MeasureInput.deserialize(inp_serialized)
     task = inp.task
@@ -629,7 +629,7 @@ def _local_build_worker(inp_serialized, build_func, verbose):
         filename = os.path.join(dirname, "tmp_func." + build_func.output_format)
 
         try:
-            with transform.PassContext().current():
+            with tvm.transform.PassContext(config=pass_config):
                 func = build_module.build(sch, args, target=task.target)
             func.export_library(filename, build_func)
         # pylint: disable=broad-except
@@ -662,9 +662,9 @@ def local_build_worker(args):
     res : BuildResult
         The build result of this Builder thread.
     """
-    inp, build_func, verbose = args
+    inp, build_func, verbose, pass_config = args
 
-    return _local_build_worker(inp, build_func, verbose)
+    return _local_build_worker(inp, build_func, verbose, pass_config)
 
 
 @tvm._ffi.register_func("auto_scheduler.local_builder.build")
@@ -691,6 +691,8 @@ def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbo
     res : List[BuildResult]
         The build results of these MeasureInputs.
     """
+    current_pass_context = tvm.ir.transform.PassContext.current()
+    current_config = dict(current_pass_context.config)
     assert build_func == BuildFunc.name, (
         "BuildFunc.name: " + BuildFunc.name + ", but args is: " + build_func
     )
@@ -704,6 +706,7 @@ def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbo
                 i.serialize(),
                 BuildFunc.build_func,
                 verbose,
+                current_config,
             )
             for i in inputs
         ],
