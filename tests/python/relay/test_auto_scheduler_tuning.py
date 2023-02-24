@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 """Test end-to-end network tuning with auto-scheduler"""
+import pytest
 import tempfile
 
 import numpy as np
@@ -26,7 +27,7 @@ import tvm.testing
 from test_auto_scheduler_task_extraction import get_network
 
 
-def tune_network(network, target):
+def tune_network(network, target, dev):
     # Extract tasks
     mod, params = get_network(network)
     target = tvm.target.Target(target)
@@ -82,7 +83,6 @@ def tune_network(network, target):
 
         # Check the correctness
         def get_output(data, lib):
-            dev = tvm.cuda()
             module = graph_executor.GraphModule(lib["default"](dev))
             module.set_input("data", data)
             module.run()
@@ -105,10 +105,16 @@ def tune_network(network, target):
 
 
 @tvm.testing.requires_cuda
-def test_tuning_cuda():
-    tune_network("mlp", "cuda")
-    tune_network("winograd-test", "cuda")
+@pytest.mark.parametrize("network", ["mlp", "winograd-test"])
+def test_tuning_cuda(network):
+    tune_network(network, "cuda", tvm.cuda())
+
+
+@pytest.mark.parametrize("network", ["mlp", "winograd-test"])
+def test_tuning_x86(network):
+    tune_network(network, "llvm", tvm.cpu())
 
 
 if __name__ == "__main__":
     test_tuning_cuda()
+    test_tuning_x86()
