@@ -34,7 +34,7 @@ TVM_REGISTER_NODE_TYPE(TuningOptionsNode);
 
 TuningOptions::TuningOptions(int num_measure_trials, int early_stopping, int num_measures_per_round,
                              int verbose, ProgramBuilder builder, ProgramRunner runner,
-                             Optional<Array<MeasureCallback>> measure_callbacks) {
+                             Optional<Array<MeasureCallback>> measure_callbacks, String si_prefix) {
   auto node = make_object<TuningOptionsNode>();
   node->num_measure_trials = num_measure_trials;
   node->early_stopping = early_stopping;
@@ -43,6 +43,7 @@ TuningOptions::TuningOptions(int num_measure_trials, int early_stopping, int num
   node->builder = std::move(builder);
   node->runner = std::move(runner);
   node->measure_callbacks = std::move(measure_callbacks);
+  node->si_prefix = std::move(si_prefix);
   data_ = std::move(node);
 }
 
@@ -71,9 +72,9 @@ std::pair<te::Schedule, Array<te::Tensor>> AutoSchedule(SearchPolicy search_poli
 TVM_REGISTER_GLOBAL("auto_scheduler.TuningOptions")
     .set_body_typed([](int num_measure_trials, int early_stopping, int num_measures_per_round,
                        int verbose, ProgramBuilder builder, ProgramRunner runner,
-                       Optional<Array<MeasureCallback>> measure_callbacks) {
+                       Optional<Array<MeasureCallback>> measure_callbacks, String si_prefix) {
       return TuningOptions(num_measure_trials, early_stopping, num_measures_per_round, verbose,
-                           builder, runner, measure_callbacks);
+                           builder, runner, measure_callbacks, si_prefix);
     });
 
 TVM_REGISTER_GLOBAL("auto_scheduler.AutoSchedule")
