@@ -32,6 +32,7 @@ import numpy as np
 from .search_policy import SearchPolicy, SketchPolicy, PreloadMeasuredStates
 from .cost_model import RandomModel, XGBModel
 from .utils import array_mean
+from ..autotvm.utils import format_si_prefix
 from .measure import ProgramMeasurer
 from .measure_record import RecordReader
 from . import _ffi_api
@@ -576,11 +577,16 @@ class PrintTableInfo(TaskSchedulerCallback):
         if task_scheduler.tune_option.verbose < 1:
             return
 
+        si_prefix = task_scheduler.tune_option.si_prefix
+
+        # Validate si_prefix argument
+        format_si_prefix(0, si_prefix)
+
         _ffi_api.PrintTitle("Task Scheduler")
         print(
             "|  ID  "
             "|                       Task Description                        "
-            "| Latency (ms) | Speed (GFLOPS) | Trials |"
+            f"| Latency (ms) | Speed ({si_prefix}FLOPS) | Trials |"
         )
         print(
             "----------------------------------------------------------------"
@@ -597,8 +603,8 @@ class PrintTableInfo(TaskSchedulerCallback):
             )
             task_desc = task_scheduler.tasks[i].desc
             speed_str = (
-                "%.2f"
-                % (task_scheduler.tasks[i].compute_dag.flop_ct / task_scheduler.best_costs[i] / 1e9)
+                "%.5f"
+                % (format_si_prefix(task_scheduler.tasks[i].compute_dag.flop_ct / task_scheduler.best_costs[i], si_prefix))
                 if task_scheduler.best_costs[i] < 1e9
                 else "-"
             )
