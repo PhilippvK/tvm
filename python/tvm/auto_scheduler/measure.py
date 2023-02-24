@@ -659,7 +659,14 @@ def _local_build_worker(inp_serialized, build_func, verbose, runtime, pass_confi
         try:
             with tvm.transform.PassContext(config=pass_config):
                 func = build_module.build(sch, args, target=task.target, target_host=None, runtime=runtime)
-            func.export_library(filename, build_func)
+            if build_func.output_format == ".model-library-format":
+                try:
+                    from tvm import micro  # pylint: disable=import-outside-toplevel
+                except ImportError:
+                    raise ImportError("Requires USE_MICRO")
+                micro.export_model_library_format(func, filename)
+            else:
+                func.export_library(filename, build_func)
         # pylint: disable=broad-except
         except Exception:
             error_no = MeasureErrorNo.COMPILE_HOST
