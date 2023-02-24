@@ -47,6 +47,7 @@ def tune_network(network, target):
             measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
         )
         tuner.tune(tune_option, search_policy="sketch.random")
+        assert tuner.best_score is not None and tuner.best_score < 1e9, "Tuning failed"
         del measure_ctx
 
         # Compile with the history best
