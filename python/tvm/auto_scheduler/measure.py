@@ -46,6 +46,7 @@ from tvm.driver import build_module
 from tvm.ir import transform
 from tvm.runtime import Object, module, ndarray
 from tvm.target import Target
+from tvm.relay.backend.runtime import Runtime
 
 from . import _ffi_api
 from .loop_state import StateObject
@@ -80,6 +81,7 @@ class BuildFunc:
 
     name = "default"
     build_func = tar.tar
+    runtime = Runtime("cpp")
 
 
 @tvm._ffi.register_object("auto_scheduler.MeasureCallback")
@@ -326,9 +328,11 @@ class LocalBuilder(ProgramBuilder):
         If is 'default', use default build function
         If is 'ndk', use function for android ndk
         If is callable, use it as custom build function, expect lib_format field.
+    runtime: Optional[Runtime]
+        Specify the runtime to generate artifacts for.
     """
 
-    def __init__(self, timeout=15, n_parallel=multiprocessing.cpu_count(), build_func="default"):
+    def __init__(self, timeout=15, n_parallel=multiprocessing.cpu_count(), build_func="default", runtime=None):
         if build_func == "default":
             BuildFunc.name = "default"
             BuildFunc.build_func = tar.tar
@@ -340,6 +344,7 @@ class LocalBuilder(ProgramBuilder):
             BuildFunc.build_func = build_func
         else:
             raise ValueError("Invalid build_func" + build_func)
+        BuildFunc.runtime = runtime or Runtime("cpp")
 
         self.__init_handle_by_constructor__(
             _ffi_api.LocalBuilder, timeout, n_parallel, BuildFunc.name
@@ -605,7 +610,7 @@ class MeasureErrorNo(object):
     UNKNOWN_ERROR = 8  # Unknown error
 
 
-def _local_build_worker(inp_serialized, build_func, verbose, pass_config):
+def _local_build_worker(inp_serialized, build_func, verbose, runtime, pass_config):
     tic = time.time()
     inp = MeasureInput.deserialize(inp_serialized)
     task = inp.task
@@ -630,7 +635,7 @@ def _local_build_worker(inp_serialized, build_func, verbose, pass_config):
 
         try:
             with tvm.transform.PassContext(config=pass_config):
-                func = build_module.build(sch, args, target=task.target)
+                func = build_module.build(sch, args, target=task.target, runtime=runtime)
             func.export_library(filename, build_func)
         # pylint: disable=broad-except
         except Exception:
@@ -655,16 +660,16 @@ def local_build_worker(args):
     Parameters
     ----------
     args: Tuple[MeasureInput, callable, int]
-        inputs, build-func, verbose args passed to local_builder_build
+        inputs, build-func, verbose, runtime and build-option args passed to local_builder_build
 
     Returns
     -------
     res : BuildResult
         The build result of this Builder thread.
     """
-    inp, build_func, verbose, pass_config = args
+    inp, build_func, verbose, pass_config, runtime = args
 
-    return _local_build_worker(inp, build_func, verbose, pass_config)
+    return _local_build_worker(inp, build_func, verbose, runtime, pass_config)
 
 
 @tvm._ffi.register_func("auto_scheduler.local_builder.build")
@@ -707,6 +712,7 @@ def local_builder_build(inputs, timeout, n_parallel, build_func="default", verbo
                 BuildFunc.build_func,
                 verbose,
                 current_config,
+                BuildFunc.runtime,
             )
             for i in inputs
         ],
