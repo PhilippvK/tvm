@@ -234,6 +234,7 @@ def recover_measure_input(inp, rebuild_state=False):
     from .search_task import SearchTask  # lazily import to avoid recursive dependency
 
     task = inp.task
+    task.target_host = None
     task.target, task.target_host = Target.canon_target_and_host(task.target, task.target_host)
     new_task = SearchTask(
         workload_key=task.workload_key,
@@ -657,7 +658,7 @@ def _local_build_worker(inp_serialized, build_func, verbose, runtime, pass_confi
 
         try:
             with tvm.transform.PassContext(config=pass_config):
-                func = build_module.build(sch, args, target=task.target, runtime=runtime)
+                func = build_module.build(sch, args, target=task.target, target_host=None, runtime=runtime)
             func.export_library(filename, build_func)
         # pylint: disable=broad-except
         except Exception:
