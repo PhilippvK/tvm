@@ -1103,7 +1103,7 @@ def tune_model(
                 transform_args=transform_args,
                 hardware_params=hardware_params,
                 include_simple_tasks=include_simple_tasks,
-                extra_config=build_option,
+                # extra_config=build_option,
             )
 
             # Create the autoscheduler tuning options
