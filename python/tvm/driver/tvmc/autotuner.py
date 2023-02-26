@@ -594,7 +594,7 @@ def add_tune_parser(subparsers, _, json_params):
     )
     autotvm_group = parser.add_argument_group(
         "AutoTVM options",
-        "AutoTVM options, used when the AutoScheduler is not enabled",
+        "AutoTVM options, used when the AutoScheduler or MetaScheduler is not enabled",
     )
     autotvm_group.add_argument(
         "--tuner",
@@ -866,7 +866,7 @@ def tune_model(
         When true, use autoscheduling rather than autotvm. This should produce
         faster kernels for compatible model-target pairs.
     enable_metascheduler : bool, optional
-        When true, use autoscheduling rather than autotvm. This should produce
+        When true, use metascheduling rather than autotvm. This should produce
         faster kernels for compatible model-target pairs.
     rpc_key : str, optional
         The RPC tracker key of the target device. Required when rpc_tracker is provided.
@@ -938,6 +938,11 @@ def tune_model(
     # model is fixed. For now, creating a clone avoids the issue.
     mod = deepcopy(tvmc_model.mod)
     params = tvmc_model.params
+
+    if enable_autoscheduler and enable_metascheduler:
+        raise TVMCException(
+            "Autoscheduler and Metascheduler can not be enabled at the same time."
+        )
 
     with tvm.transform.PassContext(opt_level=3):
         if tuning_records is None:
