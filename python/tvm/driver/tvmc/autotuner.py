@@ -1114,6 +1114,31 @@ def tune_model(
                 f_export = None,
                 initializer = None
             )
+            # MICRO:
+            # from tvm.contrib.micro.meta_schedule.local_builder_micro import get_local_builder_micro
+            # from tvm.contrib.micro.meta_schedule.rpc_runner_micro import get_rpc_runner_micro
+            # builder = get_local_builder_micro()
+            # with get_rpc_runner_micro(
+            #     platform=platform, options=options, session_timeout_sec=120
+            # ) as runner:
+            # class RPCRunnerMicro(PyRunner):
+            # platform: str = "crt",
+            # project_options: Optional[dict] = None,
+            # rpc_configs: Optional[List[RPCConfig]] = None,
+            # evaluator_config: Optional[EvaluatorConfig] = None,
+            # max_workers: Optional[int] = None,
+            # initializer: Optional[Callable[[], None]] = None,
+            # session_timeout_sec: int = 300,
+            # def get_rpc_runner_micro(
+            #     platform,
+            #     options,
+            #     evaluator_config: EvaluatorConfig = None,
+            #     tracker_host: Optional[str] = None,
+            #     tracker_port: Union[None, int, str] = None,
+            #     session_timeout_sec: int = 300,
+            #     rpc_timeout_sec: int = 10,
+            #     serial_numbers: List[str] = None,
+            # ):
         else:
             tasks = autotvm_get_tuning_tasks(
                 mod=mod,
