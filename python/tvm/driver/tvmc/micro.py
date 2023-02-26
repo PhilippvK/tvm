@@ -361,15 +361,28 @@ def tune_handler(args):
         project_options=options,
     )
 
+    if args.rpc_tracker:
+        parsed_url = urlparse("//%s" % args.rpc_tracker)
+        rpc_hostname = parsed_url.hostname
+        rpc_port = parsed_url.port or 9090
+        logger.info("RPC tracker hostname: %s", rpc_hostname)
+        logger.info("RPC tracker port: %s", rpc_port)
+
+        if not args.rpc_key:
+            raise TVMCException("need to provide an RPC tracker key (--rpc-key) for remote tuning")
+    else:
+        rpc_hostname = None
+        rpc_port = None
+
     tune_model(
         tvmc_model,
         args.target,
         tuning_records=args.output,
         prior_records=args.tuning_records,
         enable_autoscheduler=False,
-        rpc_key=None,
-        hostname=None,
-        port=None,
+        rpc_key=args.rpc_key,
+        hostname=rpc_hostname,
+        port=rpc_port,
         trials=args.trials,
         target_host=None,
         tuner=args.tuner,
