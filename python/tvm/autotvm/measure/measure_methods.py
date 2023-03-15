@@ -703,8 +703,8 @@ def run_through_rpc(
                     for arg in args:
                         random_fill(arg)
                 dev.sync()
-
             costs = time_f(*args).results
+        remote.close()
 
         if len(costs) > 2:  # remove largest and smallest value to reduce variance
             costs = list(costs)
