@@ -16,18 +16,24 @@
 # under the License.
 
 import fcntl
+import multiprocessing
 import os
 import sys
+import shlex
 import os.path
 import pathlib
 import select
 import shutil
+import logging
 import subprocess
 import tarfile
 import time
 import re
 
 from tvm.micro.project_api import server
+
+_LOG = logging.getLogger(__name__)
+_LOG.setLevel(logging.WARNING)
 
 
 PROJECT_DIR = pathlib.Path(os.path.dirname(__file__) or os.path.getcwd())
@@ -39,7 +45,8 @@ MODEL_LIBRARY_FORMAT_RELPATH = "model.tar"
 IS_TEMPLATE = not os.path.exists(os.path.join(PROJECT_DIR, MODEL_LIBRARY_FORMAT_RELPATH))
 
 # Used this size to pass most CRT tests in TVM.
-WORKSPACE_SIZE_BYTES = 2 * 1024 * 1024
+# WORKSPACE_SIZE_BYTES = 2 * 1024 * 1024
+WORKSPACE_SIZE_BYTES = 1 * 1024 * 1024
 
 CMAKEFILE_FILENAME = "CMakeLists.txt"
 
@@ -49,6 +56,12 @@ BUILD_TARGET = "build/main"
 ARCH = "rv32gc"
 ABI = "ilp32d"
 TRIPLE = "riscv32-unknown-elf"
+NPROC = multiprocessing.cpu_count()
+
+def check_call(cmd_args, *args, **kwargs):
+    cwd_str = "" if "cwd" not in kwargs else f" (in cwd: {kwargs['cwd']})"
+    _LOG.info("run%s: %s", cwd_str, " ".join(shlex.quote(a) for a in cmd_args))
+    return subprocess.check_call(cmd_args, *args, **kwargs)
 
 
 class Handler(server.ProjectAPIHandler):
@@ -72,6 +85,13 @@ class Handler(server.ProjectAPIHandler):
                     type="bool",
                     default=False,
                     help="Run make with verbose output",
+                ),
+                server.ProjectOption(
+                    "quiet",
+                    optional=["build"],
+                    type="bool",
+                    default=False,
+                    help="Supress all compilation messages",
                 ),
                 server.ProjectOption(
                     "workspace_size_bytes",
@@ -219,15 +239,18 @@ class Handler(server.ProjectAPIHandler):
         build_dir = PROJECT_DIR / "build"
         build_dir.mkdir()
         cmake_args = []
+        cmake_args.append("-DCMAKE_BUILD_TYPE=Debug")
         cmake_args.append("-DRISCV_ARCH=" + options.get("arch", ARCH))
         cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
         cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
         cmake_args.append("-DRISCV_ELF_GCC_PREFIX=" + options.get("gcc_prefix", ""))
         cmake_args.append("-DRISCV_ELF_GCC_BASENAME=" + options.get("gcc_name", TRIPLE))
-        subprocess.check_call(["cmake", "..", *cmake_args], cwd=build_dir)
-        subprocess.check_call(["make"], cwd=build_dir)
-        # subprocess.check_call(["cmake", "..", *cmake_args], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-        # subprocess.check_call(["make"], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        if options.get("quiet"):
+            check_call(["cmake", "..", *cmake_args], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            check_call(["make", f"-j{NPROC}"], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        else:
+            check_call(["cmake", "..", *cmake_args], cwd=build_dir)
+            check_call(["make", f"-j{NPROC}"], cwd=build_dir)
 
     def flash(self, options):
         pass  # Flashing does nothing on host.
@@ -252,8 +275,11 @@ class Handler(server.ProjectAPIHandler):
         args.extend(options.get("etiss_args", []))
         ini_path = "etiss.ini"
         args.append("-i" + ini_path)
+        # args.append("tgdb")
+        # args.append("noattach")
         # print("args", args)
         # input(">")
+        # time.sleep(30)
         self._proc = subprocess.Popen(
             args,
             stdin=subprocess.PIPE,
@@ -306,7 +332,7 @@ class Handler(server.ProjectAPIHandler):
             to_return = 0
 
         if not to_return:
-            self.disconnect_transport()
+            self.close_transport()
             raise server.TransportClosedError()
         # print("ret", to_return)
 
