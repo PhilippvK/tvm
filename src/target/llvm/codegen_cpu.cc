@@ -1331,6 +1331,7 @@ void CodeGenCPU::DefineFunctionRegistry(Array<String> func_names) {
   ICHECK(is_system_lib_) << "Loading of --system-lib modules is yet to be defined for C runtime";
   Array<String> symbols;
   std::vector<llvm::Constant*> funcs;
+  // func_names.push_back("__tvm_main__");
   for (auto sym : func_names) {
     symbols.push_back(sym);
     auto* sym_func =
@@ -1339,6 +1340,7 @@ void CodeGenCPU::DefineFunctionRegistry(Array<String> func_names) {
 
     funcs.emplace_back(sym_func);
   }
+  // std::cout << "symbols=" << symbols << std::endl;
   llvm::ArrayType* t_tvm_crt_func_ptrs =
       llvm::ArrayType::get(ftype_tvm_backend_packed_c_func_->getPointerTo(), funcs.size());
   llvm::DataLayout layout(module_.get());
