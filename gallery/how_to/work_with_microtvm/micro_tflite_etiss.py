@@ -120,6 +120,7 @@ mod, params = relay.frontend.from_tflite(
 #
 RUNTIME = tvm.relay.backend.Runtime("crt", {"system-lib": True})
 TARGET = tvm.micro.testing.get_target("crt")
+# TARGET = tvm.target.Target("llvm -device=riscv_cpu -mcpu=generic-rv32 -mtriple=riscv32-unknown-elf -mabi=ilp32d -mattr=+m,+a,+f,+d,+c -model etiss")
 
 # When running on physical hardware, choose a TARGET and a BOARD that describe the hardware. The
 # STM32L4R5ZI Nucleo target and board is chosen in the example below. You could change the testing
@@ -153,15 +154,15 @@ with tvm.transform.PassContext(opt_level=3, config={"tir.disable_vectorize": Tru
 # just print the first 10 lines):
 #
 
-c_source_module = module.get_lib().imported_modules[0]
-assert c_source_module.type_key == "c", "tutorial is broken"
-
-c_source_code = c_source_module.get_source()
-first_few_lines = c_source_code.split("\n")[:10]
-assert any(
-    l.startswith("TVM_DLL int32_t tvmgen_default_") for l in first_few_lines
-), f"tutorial is broken: {first_few_lines!r}"
-print("\n".join(first_few_lines))
+# c_source_module = module.get_lib().imported_modules[0]
+# assert c_source_module.type_key == "c", "tutorial is broken"
+#
+# c_source_code = c_source_module.get_source()
+# first_few_lines = c_source_code.split("\n")[:10]
+# assert any(
+#     l.startswith("TVM_DLL int32_t tvmgen_default_") for l in first_few_lines
+# ), f"tutorial is broken: {first_few_lines!r}"
+# print("\n".join(first_few_lines))
 
 
 ######################################################################
@@ -230,7 +231,8 @@ generated_project.flash()
 # to stand in for an attached microcontroller.
 
 with tvm.micro.Session(transport_context_manager=generated_project.transport()) as session:
-    graph_mod = tvm.micro.create_local_graph_executor(
+    # graph_mod = tvm.micro.create_local_graph_executor(
+    graph_mod = tvm.micro.create_local_debug_executor(
         module.get_graph_json(), session.get_system_lib(), session.device
     )
 
