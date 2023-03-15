@@ -178,7 +178,7 @@ void CodeGenLLVM::InitTarget() {
     } else {
       native_vector_bits_ = 128;
       std::string arch_name = std::string(tm->getTargetTriple().getArchName());
-      LOG(WARNING) << "Set native vector bits to be 128 for " << arch_name;
+      // LOG(WARNING) << "Set native vector bits to be 128 for " << arch_name;
     }
   }
 
