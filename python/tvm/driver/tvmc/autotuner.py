@@ -984,6 +984,7 @@ def tune_model(
         )
 
     with tvm.transform.PassContext(opt_level=3):
+        mod = apply_graph_transforms(mod, transform_args)
         if tuning_records is None:
             tuning_records = tvmc_model.default_tuning_records_path()
 
