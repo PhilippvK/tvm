@@ -1097,7 +1097,7 @@ def tune_model(
             #     build_option = {}
             builder = auto_scheduler.LocalBuilder(
                 # timeout = 1000
-                # n_parallel=1,
+                n_parallel=1,
                 # build_kwargs=build_kwargs or {},
                 # do_fork=True,
                 # do_fork=False,
