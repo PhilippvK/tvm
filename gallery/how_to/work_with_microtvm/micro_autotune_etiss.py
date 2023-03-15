@@ -26,8 +26,8 @@
 
 This tutorial explains how to autotune a model using the C runtime.
 """
-import sys
-import logging
+# import sys
+# import logging
 # logging.basicConfig(level="DEBUG", stream=sys.stdout)
 
 
@@ -107,7 +107,10 @@ params = {"weight": weight_sample}
 #
 
 RUNTIME = Runtime("crt", {"system-lib": True})
-TARGET = tvm.micro.testing.get_target("crt")
+# TARGET = tvm.micro.testing.get_target("crt")
+# TARGET = tvm.target.Target("c")
+TARGET = tvm.target.Target("llvm -device=riscv_cpu -mcpu=generic-rv32 -mtriple=riscv32-unknown-elf -mabi=ilp32d -mattr=+m,+a,+f,+d,+c -model etiss")
+# --target-llvm-device riscv_cpu --target-llvm-mcpu generic-rv32 --target-llvm-mtriple riscv32-unknown-elf --target-llvm-mabi ilp32d --target-llvm-mattr +m,+a,+f,+d,+c --target-llvm-model etiss
 
 # Compiling for physical hardware
 # --------------------------------------------------------------------------
