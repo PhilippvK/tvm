@@ -130,22 +130,6 @@ def add_tune_args(parser, micro=False):
         help="path to an auto-tuning log file by AutoTVM.",
     )
     generate_transform_args(parser)
-    parser.add_argument(
-        "--enable-autoscheduler",
-        help="enable tuning the graph through the AutoScheduler tuner",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--enable-metascheduler",
-        help="enable tuning the graph through the MetaScheduler tuner",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--desired-layout",
-        # choices=["NCHW", "NHWC"],
-        default=None,
-        help="change the data layout of the whole graph",
-    )
     if not micro:
         parser.add_argument(
             "--enable-autoscheduler",
@@ -350,260 +334,260 @@ def add_tune_args(parser, micro=False):
             type=int,
             help="",
         )
-        meta_scheduler_group = parser.add_argument_group(
-            "MetaScheduler options",
-            "MetaScheduler options, used when --enable-metascheduler is provided",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-space",
-            choices=["post-order-apply"],  # union is not really useful here
-            default="post-order-apply",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-rules",
-            default="from-target",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-postprocs",
-            default="from-target",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-mutator-probs",
-            default="from-target",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model",
-            choices=["xgb", "mlp", "random"],
-            default="xgb",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-max-depth",
-            default=10,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-gamma",
-            default=0.001,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-min-child-weight",
-            default=0,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-eta",
-            default=0.2,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-seed",
-            default=43,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-nthread",
-            default=None,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-num-warmup_samples",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-verbose-equal",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-average-peak-n",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-adaptive-training",
-            help="",
-        )
+        # meta_scheduler_group = parser.add_argument_group(
+        #     "MetaScheduler options",
+        #     "MetaScheduler options, used when --enable-metascheduler is provided",
+        # )
         # meta_scheduler_group.add_argument(
-        #     "--metascheduler-model-mlp-",
+        #     "--metascheduler-space",
+        #     choices=["post-order-apply"],  # union is not really useful here
+        #     default="post-order-apply",
         #     help="",
         # )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-random-max-range",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy",
-            choices=["evolutionaly_search", "replay_trace", "replay_func"],
-            default="evolutionaly_search",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-population-size",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-init-measured-ratio",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-init-min-unmeasured",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-genetic-num-iters",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-genetic-mutate-prob",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-genetic-max-fail-count",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-eps-greedy",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-replay-trace-max-fail-count",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-space-post-order-apply-",
-            help="",
-        )
-        meta_scheduler_group = parser.add_argument_group(
-            "MetaScheduler options",
-            "MetaScheduler options, used when --enable-metascheduler is provided",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-space",
-            choices=["post-order-apply"],  # union is not really useful here
-            default="post-order-apply",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-rules",
-            default="from-target",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-postprocs",
-            default="from-target",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-mutator-probs",
-            default="from-target",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model",
-            choices=["xgb", "mlp", "random"],
-            default="xgb",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-max-depth",
-            default=10,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-gamma",
-            default=0.001,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-min-child-weight",
-            default=0,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-eta",
-            default=0.2,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-seed",
-            default=43,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-nthread",
-            default=None,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-num-warmup_samples",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-verbose-equal",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-average-peak-n",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-adaptive-training",
-            help="",
-        )
         # meta_scheduler_group.add_argument(
-        #     "--metascheduler-model-mlp-",
+        #     "--metascheduler-rules",
+        #     default="from-target",
         #     help="",
         # )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-random-max-range",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy",
-            choices=["evolutionaly_search", "replay_trace", "replay_func"],
-            default="evolutionaly_search",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-population-size",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-init-measured-ratio",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-init-min-unmeasured",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-genetic-num-iters",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-genetic-mutate-prob",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-genetic-max-fail-count",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-eps-greedy",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-replay-trace-max-fail-count",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-space-post-order-apply-",
-            help="",
-        )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-postprocs",
+        #     default="from-target",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-mutator-probs",
+        #     default="from-target",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model",
+        #     choices=["xgb", "mlp", "random"],
+        #     default="xgb",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-max-depth",
+        #     default=10,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-gamma",
+        #     default=0.001,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-min-child-weight",
+        #     default=0,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-eta",
+        #     default=0.2,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-seed",
+        #     default=43,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-nthread",
+        #     default=None,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-num-warmup_samples",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-verbose-equal",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-average-peak-n",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-adaptive-training",
+        #     help="",
+        # )
+        # # meta_scheduler_group.add_argument(
+        # #     "--metascheduler-model-mlp-",
+        # #     help="",
+        # # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-random-max-range",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy",
+        #     choices=["evolutionaly_search", "replay_trace", "replay_func"],
+        #     default="evolutionaly_search",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-population-size",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-init-measured-ratio",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-init-min-unmeasured",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-genetic-num-iters",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-genetic-mutate-prob",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-genetic-max-fail-count",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-eps-greedy",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-replay-trace-max-fail-count",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-space-post-order-apply-",
+        #     help="",
+        # )
+        # meta_scheduler_group = parser.add_argument_group(
+        #     "MetaScheduler options",
+        #     "MetaScheduler options, used when --enable-metascheduler is provided",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-space",
+        #     choices=["post-order-apply"],  # union is not really useful here
+        #     default="post-order-apply",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-rules",
+        #     default="from-target",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-postprocs",
+        #     default="from-target",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-mutator-probs",
+        #     default="from-target",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model",
+        #     choices=["xgb", "mlp", "random"],
+        #     default="xgb",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-max-depth",
+        #     default=10,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-gamma",
+        #     default=0.001,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-min-child-weight",
+        #     default=0,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-eta",
+        #     default=0.2,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-seed",
+        #     default=43,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-nthread",
+        #     default=None,
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-num-warmup_samples",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-verbose-equal",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-average-peak-n",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-xgb-adaptive-training",
+        #     help="",
+        # )
+        # # meta_scheduler_group.add_argument(
+        # #     "--metascheduler-model-mlp-",
+        # #     help="",
+        # # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-model-random-max-range",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy",
+        #     choices=["evolutionaly_search", "replay_trace", "replay_func"],
+        #     default="evolutionaly_search",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-population-size",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-init-measured-ratio",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-init-min-unmeasured",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-genetic-num-iters",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-genetic-mutate-prob",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-genetic-max-fail-count",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-evolutionaly-search-eps-greedy",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-strategy-replay-trace-max-fail-count",
+        #     help="",
+        # )
+        # meta_scheduler_group.add_argument(
+        #     "--metascheduler-space-post-order-apply-",
+        #     help="",
+        # )
     autotvm_group = parser.add_argument_group(
         "AutoTVM options",
         "AutoTVM options, used when the AutoScheduler or MetaScheduler is not enabled",
