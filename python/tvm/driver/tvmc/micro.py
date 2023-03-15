@@ -342,6 +342,31 @@ def flash_handler(args):
         sys.exit(1)
 
 
+def parse_tuner_options(args):
+    """Parser for AutoTVM tuner kwargs
+
+    Parameters
+    ----------
+    args: argparse.Namespace
+        Arguments from command line parser.
+    """
+    return {
+        "xgb": {
+            "loss_type": args.tuner_xgb_loss_type,
+            "feature_type": args.tuner_xgb_feature_type,
+            # "num_threads": args.tuner_xgb_num_threads,
+            "optimizer": args.tuner_xgb_optimizer,
+            "log_interval": args.tuner_xgb_log_interval,
+            "diversity_filter_ratio": args.tuner_xgb_diversity_filter_ratio,
+        },
+        "ga": {
+            "pop_size": args.tuner_ga_pop_size,
+            "elite_num": args.tuner_ga_elite_num,
+            "mutation_prob": args.tuner_ga_mutation_prob,
+        }
+    }
+
+
 def tune_handler(args):
     """Tunes a model using the chosen target device.
 
@@ -374,6 +399,7 @@ def tune_handler(args):
         rpc_hostname = None
         rpc_port = None
 
+    autotvm_tuner_options = parse_tuner_options(args)
     tune_model(
         tvmc_model,
         args.target,
@@ -403,4 +429,5 @@ def tune_handler(args):
         # build_kwargs={"build_option": {"tir.disable_vectorize": True}},
         build_option={"tir.disable_vectorize": True},
         si_prefix="M",  # Display MFLOPS instead of GFLOPS
+        autotvm_tuner_options=autotvm_tuner_options,
     )
