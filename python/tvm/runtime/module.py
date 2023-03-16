@@ -339,8 +339,7 @@ class Module(object):
         try:
             feval = _ffi_api.RPCTimeEvaluator(
                 self,
-                # func_name,
-                "default_function",
+                func_name,
                 dev.device_type,
                 dev.device_id,
                 number,
