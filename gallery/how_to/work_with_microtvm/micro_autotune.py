@@ -149,7 +149,6 @@ module_loader = tvm.micro.AutoTvmModuleLoader(
 )
 builder = tvm.autotvm.LocalBuilder(
     n_parallel=1,
-    build_kwargs={"build_option": {"tir.disable_vectorize": True}},
     do_fork=True,
     build_func=tvm.micro.autotvm_build_func,
     runtime=RUNTIME,
@@ -190,18 +189,19 @@ autotune_log_file = pathlib.Path("microtvm_autotune.log.txt")
 if os.path.exists(autotune_log_file):
     os.remove(autotune_log_file)
 
-num_trials = 10
-for task in tasks:
-    tuner = tvm.autotvm.tuner.GATuner(task)
-    tuner.tune(
-        n_trial=num_trials,
-        measure_option=measure_option,
-        callbacks=[
-            tvm.autotvm.callback.log_to_file(str(autotune_log_file)),
-            tvm.autotvm.callback.progress_bar(num_trials, si_prefix="M"),
-        ],
-        si_prefix="M",
-    )
+with pass_context:
+    num_trials = 10
+    for task in tasks:
+        tuner = tvm.autotvm.tuner.GATuner(task)
+        tuner.tune(
+            n_trial=num_trials,
+            measure_option=measure_option,
+            callbacks=[
+                tvm.autotvm.callback.log_to_file(str(autotune_log_file)),
+                tvm.autotvm.callback.progress_bar(num_trials, si_prefix="M"),
+            ],
+            si_prefix="M",
+        )
 
 ############################
 # Timing the untuned program
