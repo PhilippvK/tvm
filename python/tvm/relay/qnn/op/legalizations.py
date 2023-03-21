@@ -470,6 +470,25 @@ def helper_align_up(value, aligner):
 # ARM CPU legalizations.
 ########################
 
+# @qnn_conv2d_legalize.register("pulp")
+# def _qnn_conv2d_legalize_pulp(attrs, inputs, types):
+#     target = tvm.target.Target.current(allow_none=False)
+#     is_depthwise = relay.op.strategy.is_depthwise_conv2d(
+#         types[0].shape,
+#         attrs["data_layout"],
+#         types[1].shape,
+#         attrs["kernel_layout"],
+#         attrs["groups"],
+#     )
+#     # use_int8_on_arm = (not is_depthwise) and attrs["data_layout"] == "NHWC"
+#     # use_int8_on_arm = False
+#     # other_options = use_int8_on_arm or target.features.has_dotprod
+#     # other_options = use_int8_on_arm or False
+#     # if target.features.has_asimd and not other_options:
+#     if True:
+#         return helper_no_fast_int8_hw_legalization(attrs, inputs, types, relay.nn.conv2d)
+#     # ARM prefers the dtypes to be same.
+#     return helper_change_dtypes_to_be_same(attrs, inputs, types, relay.qnn.op.conv2d)
 
 @qnn_conv2d_legalize.register("arm_cpu")
 def _qnn_conv2d_legalize_arm_cpu(attrs, inputs, types):
@@ -532,6 +551,13 @@ def _qnn_conv2d_legalize_cuda(attrs, inputs, types):
         # prefers the dtypes to be same. Mixed type is not yet supported.
         return helper_change_dtypes_to_be_same(attrs, inputs, types, relay.qnn.op.conv2d)
     if is_target(["cuda", "rocm"]):
+        # CUDA prefers both datatypes to be int8.
+        return helper_change_dtypes_to_int8(attrs, inputs, types, relay.qnn.op.conv2d)
+    return None
+
+@qnn_conv2d_legalize.register(["pulp"])
+def _qnn_conv2d_legalize_pulp(attrs, inputs, types):
+    if is_target(["pulp"]):
         # CUDA prefers both datatypes to be int8.
         return helper_change_dtypes_to_int8(attrs, inputs, types, relay.qnn.op.conv2d)
     return None

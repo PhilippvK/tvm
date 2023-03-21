@@ -1,0 +1,139 @@
+import re
+
+from .generic import *
+from .. import op as _op
+import logging
+
+logger = logging.getLogger(__name__)
+
+_NCHWc_matcher = re.compile("^NCHW[0-9]+c$")
+_OIHWio_matcher = re.compile("^OIHW[0-9]+i[0-9]+o$")
+
+@conv2d_strategy.register("pulp")
+def conv2d_strategy(attrs, inputs, out_type, target):
+    print("conv2d_strategy")
+    """conv2d pulp strategy"""
+
+    logger.info("Registering strategy for conv2d")
+    logger.info("attrs:")
+    for k in attrs.keys():
+        logger.info("  %s: %s", str(k), str(attrs[k]))
+    logger.info("inputs: %s", str(inputs))
+    logger.info("out_type: %s", str(out_type))
+    logger.info("target: %s", str(target))
+
+    strategy = _op.OpStrategy()
+    data, kernel = inputs
+    dilation = get_const_tuple(attrs.dilation)
+    groups = attrs.groups
+    layout = attrs.data_layout
+    kernel_layout = attrs.kernel_layout
+    (dilation_h, dilation_w) = dilation
+    if dilation_h < 1 or dilation_w < 1:
+        raise ValueError("dilation should be positive value")
+
+    if groups == 1:
+        if layout == "NCHW":
+            assert kernel_layout == "OIHW"
+            print("A1")
+            strategy.add_implementation(
+                wrap_compute_conv2d(topi.pulp.conv2d_nchw),
+                wrap_topi_schedule(topi.pulp.schedule_conv2d_nchw),
+                name="conv2d_nchw.pulp",
+            )
+        elif _NCHWc_matcher.match(layout):  # check if layout is NCHWxc
+            print("match NCHWxc")
+            assert _OIHWio_matcher.match(kernel_layout)  # check if kernel is OIHWio
+            return conv2d_NCHWc_strategy_pulp(attrs, inputs, out_type, target)
+        elif layout == "NHWC":
+            assert kernel_layout == "HWIO" or kernel_layout == "OHWI"
+            if kernel_layout == "HWIO":
+                print("A2a")
+                strategy.add_implementation(
+                    wrap_compute_conv2d(topi.pulp.conv2d_nhwc),
+                    wrap_topi_schedule(topi.pulp.schedule_conv2d_nhwc),
+                    name="conv2d_nhwc.pulp",
+                )
+            else:
+                print("A2b")
+                strategy.add_implementation(
+                    wrap_compute_conv2d(topi.pulp.conv2d_nhwc_ohwi),
+                    wrap_topi_schedule(topi.pulp.schedule_conv2d_nhwc_ohwi),
+                    name="conv2d_nhwc_ohwi.pulp"
+                )
+        elif layout == "HWCN":
+            assert kernel_layout == "HWIO"
+            print("A3")
+            strategy.add_implementation(
+                wrap_compute_conv2d(topi.nn.conv2d_hwcn),
+                wrap_topi_schedule(topi.generic.schedule_conv2d_hwcn),
+                name="conv2d_hwcn.generic",
+            )
+        else:
+            print("A4")
+            raise RuntimeError("Unsupported conv2d layout {}".format(layout))
+    elif is_depthwise_conv2d(data.shape, layout, kernel.shape, kernel_layout, groups):
+        if layout == "NCHW":
+            print("B1")
+            assert kernel_layout == "OIHW"
+            strategy.add_implementation(
+                wrap_compute_conv2d(topi.nn.depthwise_conv2d_nchw),
+                wrap_topi_schedule(topi.generic.schedule_depthwise_conv2d_nchw),
+                name="depthwise_conv2d_nchw.generic",
+            )
+        elif layout == "NHWC":
+            print("B2")
+            assert kernel_layout == "HWOI"
+            strategy.add_implementation(
+                wrap_compute_conv2d(topi.nn.depthwise_conv2d_nhwc),
+                wrap_topi_schedule(topi.generic.schedule_depthwise_conv2d_nhwc),
+                name="depthwise_conv2d_nhwc.generic",
+            )
+        else:
+            print("B3")
+            raise RuntimeError("Unsupported depthwise_conv2d layout {}".format(layout))
+    else:  # group_conv2d
+        if layout == "NCHW":
+            assert kernel_layout == "OIHW"
+            print("C1")
+            strategy.add_implementation(
+                wrap_compute_conv2d(topi.nn.group_conv2d_nchw, has_groups=True),
+                wrap_topi_schedule(topi.generic.schedule_group_conv2d_nchw),
+                name="group_conv2d_nchw.generic",
+            )
+        elif layout == "NHWC":
+            assert kernel_layout == "HWIO"
+            print("C2")
+            strategy.add_implementation(
+                wrap_compute_conv2d(topi.nn.group_conv2d_nhwc, has_groups=True),
+                wrap_topi_schedule(topi.generic.schedule_group_conv2d_nhwc),
+                name="group_conv2d_nhwc.generic",
+            )
+        else:
+            print("C3")
+            raise RuntimeError("Unsupported group_conv2d layout {}".format(layout))
+    return strategy
+
+@conv2d_NCHWc_strategy.register("pulp")
+def conv2d_NCHWc_strategy_pulp(attrs, inputs, out_type, target):
+    print("pulp: conv2d_NCHWc_strategy_pulp")
+    """conv2d_NCHWc pulp strategy"""
+    strategy = _op.OpStrategy()
+    data, kernel = inputs
+    # if topi.x86.is_int8_hw_support(data.dtype, kernel.dtype):
+    if False:
+        print("pulp: is_int8_hw_support")
+        strategy.add_implementation(
+            wrap_compute_conv2d(
+                topi.pulp.conv2d_NCHWc_int8, need_data_layout=True, need_out_layout=True
+            ),
+            wrap_topi_schedule(topi.pulp.schedule_conv2d_NCHWc_int8),
+            name="conv2d_NCHWc_int8.pulp",
+        )
+    else:
+        strategy.add_implementation(
+            wrap_compute_conv2d(topi.pulp.conv2d_NCHWc, need_data_layout=True, need_out_layout=True),
+            wrap_topi_schedule(topi.pulp.schedule_conv2d_NCHWc),
+            name="conv2d_NCHWc.pulp",
+        )
+    return strategy
