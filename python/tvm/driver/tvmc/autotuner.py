@@ -1356,7 +1356,7 @@ def tune_model(
 
             # In autotvm, trials is specified per task. We can convert the per-model input
             # provided to per-task trials by dividing by the number of tasks.
-            trials = int(trials / max(len(tasks), 1))
+            trials = int(max(1, trials / max(len(tasks), 1)))
             logger.info("Autotuning with %d trials per task.", trials)
 
             builder = autotvm.LocalBuilder(
