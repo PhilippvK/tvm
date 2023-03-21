@@ -1753,6 +1753,7 @@ def tune_tasks(
         tuner_options = {}
 
     for i, tsk in enumerate(tasks):
+<<<<<<< HEAD
         prefix = "\n[Task %2d/%2d] " % (i + 1, len(tasks))
 
         if trials > 0:
@@ -1772,6 +1773,7 @@ def tune_tasks(
                 measure_option=measure_option,
                 callbacks=[
                     autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix),
+                autotvm.callback.progress_bar(min(trials, len(tsk.config_space)), prefix=prefix, si_prefix=si_prefix),
                     autotvm.callback.log_to_file(log_file),
                 ],
                 si_prefix=si_prefix,
