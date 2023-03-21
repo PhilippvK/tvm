@@ -204,7 +204,8 @@ mattr = "+m,+a,+f,+d,+c"
 if xcorev:
     mattr += ",+xcorevmac"
 # TARGET = tvm.target.Target("llvm -device=riscv_cpu -mcpu=generic-rv32 -mtriple=riscv32-unknown-elf -mabi=ilp32d -mattr=+m,+a,+f,+d,+c,+xcorevmac -model etiss")
-TARGET = tvm.target.Target(f"llvm -device=riscv_cpu -mcpu=generic-rv32 -mtriple=riscv32-unknown-elf -mabi=ilp32d -mattr={mattr} -model etiss")
+TARGET = tvm.target.Target(f"llvm -device=riscv_cpu -mcpu=generic-rv32 -mtriple=riscv32-unknown-elf -mabi=ilp32d -mattr={mattr} -model etiss -keys=pulp")
+# TARGET = tvm.target.Target(f"llvm -device=riscv_cpu -mcpu=generic-rv32 -mtriple=riscv32-unknown-elf -mabi=ilp32d -mattr={mattr} -model etiss")
 # --target-llvm-device riscv_cpu --target-llvm-mcpu generic-rv32 --target-llvm-mtriple riscv32-unknown-elf --target-llvm-mabi ilp32d --target-llvm-mattr +m,+a,+f,+d,+c --target-llvm-model etiss
 
 # Compiling for physical hardware
