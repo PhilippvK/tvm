@@ -1,0 +1,8 @@
+numpy
+scipy
+decorator
+psutil
+typing_extensions
+attrs
+tornado
+cloudpickle
