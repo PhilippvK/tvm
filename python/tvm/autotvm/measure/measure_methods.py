@@ -678,7 +678,8 @@ def run_through_rpc(
             # around it.
             f_prepare = "cache_flush_cpu_non_first_arg" if enable_cpu_cache_flush else ""
             time_f = mod.time_evaluator(
-                mod.entry_name,
+                # mod.entry_name,
+                "default_function",
                 dev,
                 number=number,
                 repeat=repeat,
