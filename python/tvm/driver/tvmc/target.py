@@ -89,14 +89,17 @@ def _generate_codegen_args(parser, codegen_name):
                     )
 
 
-def generate_target_args(parser):
+def generate_target_args(parser, micro=False):
     """Walks through the TargetKind registry and generates arguments for each Target's options"""
     parser.add_argument(
         "--target",
         help="compilation target as plain string, inline JSON or path to a JSON file",
         required=False,
     )
+    MICRO_TARGET_KINDS = ["c", "llvm"]
     for target_kind in _valid_target_kinds():
+        if micro and target_kind not in MICRO_TARGET_KINDS:
+            continue
         _generate_target_kind_args(parser, target_kind)
     for codegen_name in get_codegen_names():
         _generate_codegen_args(parser, codegen_name)
@@ -107,9 +110,10 @@ def _reconstruct_target_kind_args(args, kind_name):
     for target_option, target_type in TargetKind.options_from_name(kind_name).items():
         if target_type in INTERNAL_TO_NATIVE_TYPE:
             var_name = f"target_{kind_name.replace('-', '_')}_{target_option.replace('-', '_')}"
-            option_value = getattr(args, var_name)
-            if option_value is not None:
-                kind_options[target_option] = getattr(args, var_name)
+            if hasattr(args, var_name):
+                option_value = getattr(args, var_name)
+                if option_value is not None:
+                    kind_options[target_option] = getattr(args, var_name)
     return kind_options
 
 
