@@ -21,6 +21,8 @@ Provides support to auto-tuning networks using AutoTVM.
 import os.path
 import logging
 import time
+import tempfile
+import shutil
 from copy import deepcopy
 from typing import Any, Optional, Dict, List, Union
 
@@ -33,6 +35,7 @@ from tvm.autotvm.tuner import GATuner
 from tvm.autotvm.tuner import GridSearchTuner
 from tvm.autotvm.tuner import RandomTuner
 from tvm.autotvm.tuner import XGBTuner
+from tvm import meta_schedule as ms
 from tvm.target import Target
 
 from . import TVMCException, composite_target, frontends
@@ -135,6 +138,11 @@ def add_tune_parser(subparsers, _, json_params):
         help="enable tuning the graph through the AutoScheduler tuner",
         action="store_true",
     )
+    parser.add_argument(
+        "--enable-metascheduler",
+        help="enable tuning the graph through the MetaScheduler tuner",
+        action="store_true",
+    )
 
     auto_scheduler_group = parser.add_argument_group(
         "AutoScheduler options",
@@ -219,6 +227,43 @@ def add_tune_parser(subparsers, _, json_params):
         type=str,
         help="",
     )
+    meta_scheduler_group = parser.add_argument_group(
+        "MetaScheduler options",
+        "MetaScheduler options, used when --enable-metascheduler is provided",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-space",
+        choices=["post-order-apply"],  # union is not really useful here
+        default="post-order-apply",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-rules",
+        default="from-target",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-postprocs",
+        default="from-target",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-mutator-probs",
+        default="from-target",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-model",
+        choices=["xgb", "mlp", "random"],
+        default="xgb",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-strategy",
+        choices=["evolutionaly_search", "replay_trace", "replay_func"],
+        default="evolutionaly_search",
+        help="",
+    )
     autotvm_group = parser.add_argument_group(
         "AutoTVM options",
         "AutoTVM options, used when the AutoScheduler is not enabled",
@@ -294,6 +339,7 @@ def drive_tune(args):
         tuning_records=args.output,
         prior_records=args.tuning_records,
         enable_autoscheduler=args.enable_autoscheduler,
+        enable_metascheduler=args.enable_metascheduler,
         rpc_key=args.rpc_key,
         hostname=rpc_hostname,
         port=rpc_port,
@@ -323,6 +369,7 @@ def tune_model(
     tuning_records: Optional[str] = None,
     prior_records: Optional[str] = None,
     enable_autoscheduler: bool = False,
+    enable_metascheduler: bool = False,
     rpc_key: Optional[str] = None,
     hostname: Optional[str] = None,
     port: Optional[Union[int, str]] = 9090,
@@ -364,6 +411,9 @@ def tune_model(
         A path to previous tuning results that will be used to hot-start the tuning
         cost model if provided.
     enable_autoscheduler : bool, optional
+        When true, use autoscheduling rather than autotvm. This should produce
+        faster kernels for compatible model-target pairs.
+    enable_metascheduler : bool, optional
         When true, use autoscheduling rather than autotvm. This should produce
         faster kernels for compatible model-target pairs.
     rpc_key : str, optional
@@ -463,35 +513,72 @@ def tune_model(
 
             logger.info("Tuning will be performed on device %s at %s:%d.", rpc_key, hostname, port)
 
-            runner_ctor = auto_scheduler.RPCRunner if enable_autoscheduler else autotvm.RPCRunner
-            runner = runner_ctor(
-                key=rpc_key,
-                host=hostname,
-                port=port,
-                number=number,
-                repeat=repeat,
-                n_parallel=parallel,
-                timeout=timeout,
-                min_repeat_ms=min_repeat_ms,
-            )
+            if enable_autoscheduler:
+                runner_ctor = auto_scheduler.RPCRunner
+            elif enable_metascheduler:
+                runner_ctor = ms.runner.RPCRunner
+            else:
+                runner_ctor = autotvm.RPCRunner
+
+            if enable_metascheduler:
+                rpc_config = ms.runner.RPCConfig(
+                    tracker_host=rpc.tracker_host,
+                    tracker_port=rpc.tracker_port,
+                    tracker_key=rpc.tracker_key,
+                    session_priority=1,
+                    session_timeout_sec=100,
+                )
+                evaluator_config = ms.runner.EvaluatorConfig(
+                    number=number,
+                    repeat=repeat,
+                    min_repeat_ms=min_repeat_ms,
+                    # enable_cpu_cache_flush=False,
+                )
+                runner = runner_ctor(rpc_config, evaluator_config)
+            else:
+                runner = runner_ctor(
+                    key=rpc_key,
+                    host=hostname,
+                    port=port,
+                    number=number,
+                    repeat=repeat,
+                    n_parallel=parallel,
+                    timeout=timeout,
+                    min_repeat_ms=min_repeat_ms,
+                )
+
         else:
             logger.info("Starting localhost tuning.")
-            runner_ctor = (
-                auto_scheduler.LocalRPCMeasureContext
-                if enable_autoscheduler
-                else autotvm.LocalRunner
-            )
-            local_server = runner_ctor(
-                number=number,
-                repeat=repeat,
-                timeout=timeout,
-                min_repeat_ms=min_repeat_ms,
-            )
+            if enable_autoscheduler:
+                runner_ctor = auto_scheduler.LocalRPCMeasureContext
+            elif enable_metascheduler:
+                runner_ctor = ms.runner.LocalRunner
+            else:
+                runner_ctor = autotvm.LocalRunner
+
+            if enable_metascheduler:
+                evaluator_config = ms.runner.EvaluatorConfig(
+                    number=number,
+                    repeat=repeat,
+                    min_repeat_ms=min_repeat_ms,
+                    # enable_cpu_cache_flush=False,
+                )
+                local_server = runner_ctor(timeout_sec=timeout, evaluator_config=evaluator_config
+                )
+            else:
+                local_server = runner_ctor(
+                    number=number,
+                    repeat=repeat,
+                    timeout=timeout,
+                    min_repeat_ms=min_repeat_ms,
+                )
 
             # For autoscheduling on some devices, we need to maintain a
             # LocalRPCMeasureContext object.
             if enable_autoscheduler:
                 runner = local_server.runner
+            elif enable_metascheduler:
+                runner = local_server
             else:
                 runner = local_server
 
@@ -505,7 +592,41 @@ def tune_model(
                 hardware_params=hardware_params,
                 include_simple_tasks=include_simple_tasks,
             )
+        elif enable_metascheduler:
+            tasks = metascheduler_get_tuning_tasks(
+                mod=mod,
+                params=params,
+                target=target,
+                alter_layout=desired_layout,
+            )
+            if prior_records:
+                prior_workloads_path = f"{prior_records}_workload.json"
+                prior_records_path = f"{prior_records}_tuning_record.json"
+                database = ms.database.JSONDatabase(path_workload=prior_workloads_path, path_tuning_record=prior_records_path)
+            else:
+                database = "json"
+            tasks = metascheduler_get_tuning_tasks(
+                mod=mod,
+                params=params,
+                target=target,
+                alter_layout=desired_layout,
+            )
+            builder = ms.builder.LocalBuilder(
+                max_workers = None,
+                timeout_sec = timeout,
+                f_build = None,
+                f_export = None,
+                initializer = None
+            )
+        else:
+            tasks = autotvm_get_tuning_tasks(
+                mod=mod,
+                params=params,
+                target=target,
+                transform_args=transform_args,
+            )
 
+        if enable_autoscheduler:
             # Create the autoscheduler tuning options
             tuning_options = auto_scheduler.TuningOptions(
                 num_measure_trials=trials,
@@ -526,13 +647,32 @@ def tune_model(
                 strategy=autoscheduler_strategy,
                 policy=autoscheduler_policy,
                 model_type=autoscheduler_model_type,
-        else:
-            tasks = autotvm_get_tuning_tasks(
-                mod=mod,
-                params=params,
-                target=target,
-                transform_args=transform_args,
             )
+        elif enable_metascheduler:
+            tuning_options = {
+                "trials": trials,
+                "space": "post-order-apply",
+                "strategy": "evolutionary",
+                # "database": "json",  # TODO
+                "database": database,  # TODO
+                # "builder": "local",  # TODO
+                "builder": builder,  # TODO
+                # "runner": "local",  # TODO
+                "runner": runner,  # TODO
+            }
+            logger.info("Metascheduling with configuration: %s", tuning_options)
+            with tempfile.TemporaryDirectory() as work_dir:
+                database_ = schedule_tasks_ms(
+                    tasks,
+                    work_dir,
+                    **tuning_options,
+                )
+
+                workloads_path = f"{tuning_records}_workload.json"
+                records_path = f"{tuning_records}_tuning_record.json"
+                shutil.copyfile(database_.path_tuning_record, records_path)
+                shutil.copyfile(database_.path_workload, workloads_path)
+        else:
 
             # In autotvm, trials is specified per task. We can convert the per-model input
             # provided to per-task trials by dividing by the number of tasks.
@@ -644,6 +784,53 @@ def autoscheduler_get_tuning_tasks(
     return tasks, task_weights
 
 
+def metascheduler_get_tuning_tasks(
+    mod: tvm.IRModule,
+    params: Optional[Dict[str, tvm.nd.NDArray]],
+    target: Union[Target, str],
+    target_host: Optional[str] = None,
+    alter_layout: Optional[str] = None,
+):
+    """Get the autoscheduler tuning tasks for a given relay module.
+
+    Parameters
+    ----------
+    mod : tvm.IRModule
+        The relay module from which to extract tuning tasks.
+    params : dict
+        The params for the relay module.
+    target : tvm.target.Target
+        The compilation target.
+    target_host : str, optional
+        The compilation target for the host.
+    alter_layout : str, optional
+        The layout to convert the graph to. Note, the convert layout
+        pass doesn't currently guarantee the whole of the graph will
+        be converted to the chosen layout.
+
+    Returns
+    -------
+    tasks : List[ms.ExtractedTask]
+        list of tasks to be tuned
+    """
+    target, target_host = Target.canon_target_and_host(target, target_host)
+
+    if alter_layout:
+        mod = convert_graph_layout(mod, alter_layout)
+
+    # Extract the tasks
+    tasks = ms.relay_integration.extract_tasks(
+        mod["main"],
+        target,
+        params,
+        # opt_level=?,
+        # executor=?,
+        # module_equality=?
+    )
+
+    return tasks
+
+
 def schedule_tasks(
     tasks: List[auto_scheduler.SearchTask],
     task_weights: List[float],
@@ -685,6 +872,67 @@ def schedule_tasks(
         tuning_options,
         search_policy=f"{policy[0]}.{model_type}",
     )
+
+
+def schedule_tasks_ms(
+    tasks: List[ms.ExtractedTask],
+    work_dir: str,
+    trials: int,
+    space: ms.SpaceGenerator.SpaceGeneratorType = "post-order-apply",
+    strategy: ms.SearchStrategy.SearchStrategyType = "evolutionary",
+    database="json",  # TODO
+    builder = "local",  # TODO
+    runner = "local",  # TODO
+
+):
+    """TODO
+
+    Parameters
+    ----------
+    tasks : list
+        A list of meta_schedule.ExtractedTask to tune.
+    trials : int
+        The number of schedules to try out for the entire model.
+    work_dir : TODO
+        TODO
+    space ; TODO
+        TODO
+    strategy : TODO
+        TODO
+    database : TODO
+        TODO
+    TODO
+    """
+
+    # space = "post-order-apply"  # TODO
+    # strategy = "evolutionary"  # TODO
+    callbacks = "default"  # TODO
+    scheduler = "gradient"  # TODO
+    cost_model = "xgb"  # TODO
+
+    tasks, task_weights = ms.relay_integration.extracted_tasks_to_tune_contexts(
+        tasks,
+        work_dir,
+        space=space,
+        strategy=strategy,
+    )
+
+    database = ms.tune.tune_tasks(
+        tasks=tasks,
+        task_weights=task_weights,
+        work_dir=work_dir,
+        max_trials_global=trials,
+        # max_trials_per_task=None
+        # num_trials_per_iter=64
+        builder=builder,
+        runner=runner,
+        database=database,
+        cost_model=cost_model,
+        measure_callbacks=callbacks,
+        task_scheduler=scheduler,
+        # module_equality="structural"
+    )
+    return database
 
 
 def tune_tasks(
