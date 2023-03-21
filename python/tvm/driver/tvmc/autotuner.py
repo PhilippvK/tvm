@@ -210,6 +210,26 @@ def add_tune_parser(subparsers, _, json_params):
         help="whether to log the estimated latency to the file after tuning a task",
         action="store_true",
     )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-strategy",
+        choices=["gradient", "round-robin"],
+        default="gradient",
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-policy",
+        choices=["sketch"],
+        default="sketch",
+        type=str,
+        help="",
+    )
+    auto_scheduler_group.add_argument(
+        "--autoscheduler-model",
+        choices=["xgb", "mlp", "random"],
+        default="xgb",
+        type=str,
+        help="",
+    )
     autotvm_group = parser.add_argument_group(
         "AutoTVM options",
         "AutoTVM options, used when the AutoScheduler is not enabled",
@@ -295,6 +315,7 @@ def drive_tune(args):
 
     transform_args = parse_graph_transform_args(args)
 
+<<<<<<< HEAD
     with OptionallyDisableLegalize(args.disable_legalize):
         tune_model(
             tvmc_model,
@@ -317,6 +338,9 @@ def drive_tune(args):
             hardware_params=hardware_params,
             include_simple_tasks=args.include_simple_tasks,
             log_estimated_latency=args.log_estimated_latency,
+            autoscheduler_strategy=args.autoscheduler_strategy,
+            autoscheduler_policy=args.autoscheduler_policy,
+            autoscheduler_model=args.autoscheduler_model,
             additional_target_options=reconstruct_target_args(args),
             tasks_filter=args.tasks,
             **transform_args,
@@ -433,6 +457,9 @@ def tune_model(
     hardware_params: Optional[HardwareParams] = None,
     include_simple_tasks: bool = False,
     log_estimated_latency: bool = False,
+    autoscheduler_strategy: Optional[str] = None,
+    autoscheduler_policy: Optional[str] = None,
+    autoscheduler_model_type: Optional[str] = "xgb",
     additional_target_options: Optional[Dict[str, Dict[str, Any]]] = None,
     tasks_filter: str = "all",
     desired_layout: Optional[str] = None,
@@ -495,6 +522,12 @@ def tune_model(
         the autoscheduler.
     log_estimated_latency : bool, optional
         If using the autoscheduler, write the estimated latency at each step of tuning to file.
+    autoscheduler_strategy: str, optional
+        TODO
+    autoscheduler_policy: str, optional
+        TODO
+    autoscheduler_model_type: str, optional
+        TODO
     additional_target_options: Optional[Dict[str, Dict[str, Any]]]
         Additional target options in a dictionary to combine with initial Target arguments
     tasks_filter : str, optional
@@ -627,7 +660,15 @@ def tune_model(
             logger.info("Autoscheduling with configuration: %s", tuning_options)
 
             # Schedule the tasks (i.e., produce a schedule for each task)
-            schedule_tasks(tasks, weights, tuning_options, prior_records, log_estimated_latency)
+            schedule_tasks(
+                tasks,
+                weights,
+                tuning_options,
+                prior_records,
+                log_estimated_latency,
+                strategy=autoscheduler_strategy,
+                policy=autoscheduler_policy,
+                model_type=autoscheduler_model_type,
         else:
             # In autotvm, trials is specified per task. We can convert the per-model input
             # provided to per-task trials by dividing by the number of tasks.
@@ -776,7 +817,10 @@ def schedule_tasks(
     )
 
     # Tune the tasks
-    tuner.tune(tuning_options)
+    tuner.tune(
+        tuning_options,
+        search_policy=f"{policy[0]}.{model_type}",
+    )
 
 
 def tune_tasks(
