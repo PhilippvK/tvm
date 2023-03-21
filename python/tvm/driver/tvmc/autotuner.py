@@ -464,7 +464,6 @@ def tune_model(
                 runner = local_server
 
         if enable_autoscheduler:
-
             tasks, weights = autoscheduler_get_tuning_tasks(
                 mod=mod,
                 params=params,

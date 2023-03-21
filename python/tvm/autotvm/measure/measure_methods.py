@@ -131,6 +131,10 @@ class LocalBuilder(Builder):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
         self.tmp_dir = tempfile.mkdtemp()
 
+        # Subprocesses can not inherit current PassContext.
+        # As a workaround we pass it manually to the build_func.
+        self.build_kwargs["ctx"] = tvm.ir.transform.PassContext.current()
+
         for i in range(0, len(measure_inputs), self.n_parallel):
             futures = []
             for inp in measure_inputs[i : i + self.n_parallel]:
@@ -495,7 +499,7 @@ class LocalRunner(RPCRunner):
         return server, tracker
 
 
-def _build_func_common(measure_input, runtime=None, checks=None, build_option=None):
+def _build_func_common(measure_input, runtime=None, checks=None, build_option=None, ctx=None):
     """Common part for building a configuration"""
     target, task, config = measure_input
     target, task.target_host = Target.canon_target_and_host(target, task.target_host)
@@ -518,7 +522,7 @@ def _build_func_common(measure_input, runtime=None, checks=None, build_option=No
             func = vta.build(s, args, target_host=task.target_host)
         else:
             current_pass_context: tvm.ir.transform.PassContext = (
-                tvm.ir.transform.PassContext.current()
+                ctx or tvm.ir.transform.PassContext.current()
             )
             current_config = dict(current_pass_context.config)
             if build_option is not None:
