@@ -1154,12 +1154,7 @@ def tune_model(
                 database = ms.database.JSONDatabase(path_workload=prior_workloads_path, path_tuning_record=prior_records_path)
             else:
                 database = "json"
-            tasks = metascheduler_get_tuning_tasks(
-                mod=mod,
-                params=params,
-                target=target,
-                alter_layout=desired_layout,
-            )
+
             builder = ms.builder.LocalBuilder(
                 max_workers = None,
                 timeout_sec = timeout,
