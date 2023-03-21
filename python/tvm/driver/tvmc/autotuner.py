@@ -24,7 +24,7 @@ import time
 import tempfile
 import shutil
 from copy import deepcopy
-from typing import Any, Optional, Dict, List, Union
+from typing import Any, Optional, Dict, List, Union, Tuple
 
 from urllib.parse import urlparse
 
@@ -33,6 +33,7 @@ from tvm import autotvm, auto_scheduler
 from tvm.auto_scheduler.search_task import HardwareParams
 from tvm.autotvm.tuner import GATuner
 from tvm.autotvm.tuner import GridSearchTuner
+from tvm.autotvm.graph_tuner import DPTuner, PBQPTuner
 from tvm.autotvm.tuner import RandomTuner
 from tvm.autotvm.tuner import XGBTuner
 from tvm import meta_schedule as ms
@@ -593,6 +594,24 @@ def add_tune_args(parser, micro=False):
         "AutoTVM options, used when the AutoScheduler or MetaScheduler is not enabled",
     )
     autotvm_group.add_argument(
+        "--enable-graph-tuner",
+        help="Benchmark different combinations of layout transformations "
+        "to find the configuration with the smallest end-to-end latency.",
+        action="store_true",
+    )
+    autotvm_group.add_argument(
+        "--graph-tuner-implementation",
+        choices=["dp", "?"],
+        default="dp",
+        help="TODO",
+    )
+    autotvm_group.add_argument(
+        "--graph-tuner-min-exec-num",
+        type=int,
+        default=100,
+        help="TODO",
+    )
+    autotvm_group.add_argument(
         "--tuner",
         choices=["ga", "gridsearch", "random", "xgb"],
         default="xgb",
@@ -789,8 +808,12 @@ def drive_tune(args):
     tune_model(
         tvmc_model,
         args.target,
+        input_shapes=args.input_shapes,
         tuning_records=args.output,
         prior_records=args.tuning_records,
+        enable_graph_tuner=args.enable_graph_tuner,
+        graph_tuner_implementation=args.graph_tuner_implementation,
+        graph_tuner_min_exec_num=args.graph_tuner_min_exec_num,
         enable_autoscheduler=args.enable_autoscheduler,
         enable_metascheduler=args.enable_metascheduler,
         rpc_key=args.rpc_key,
@@ -825,8 +848,12 @@ def drive_tune(args):
 def tune_model(
     tvmc_model: TVMCModel,
     target: str,
+    input_shapes: Optional[Dict[str, Tuple]] = None,
     tuning_records: Optional[str] = None,
     prior_records: Optional[str] = None,
+    enable_graph_tuner: bool = False,
+    graph_tuner_implementation: str = "dp",
+    graph_tuner_min_exec_num: int = 100,
     enable_autoscheduler: bool = False,
     enable_metascheduler: bool = False,
     rpc_key: Optional[str] = None,
@@ -880,6 +907,12 @@ def tune_model(
     prior_records: str, optional
         A path to previous tuning results that will be used to hot-start the tuning
         cost model if provided.
+    enable_graph_tuner : bool, optional
+        TODO
+    graph_tuner_implementation : str, optional
+        TODO
+    graph_tuner_min_exec_num : int, optional
+        TODO
     enable_autoscheduler : bool, optional
         When true, use autoscheduling rather than autotvm. This should produce
         faster kernels for compatible model-target pairs.
@@ -981,6 +1014,10 @@ def tune_model(
     if enable_autoscheduler and enable_metascheduler:
         raise TVMCException(
             "Autoscheduler and Metascheduler can not be enabled at the same time."
+        )
+    if enable_graph_tuner and (enable_autoscheduler or enable_metascheduler):
+        raise TVMCException(
+            "GraphTuner can only be used with AutoTVM"
         )
 
     with tvm.transform.PassContext(opt_level=3):
@@ -1247,8 +1284,31 @@ def tune_model(
             logger.info("Autotuning with configuration: %s", tuning_options)
 
             tune_tasks(tasks, tuning_records, **tuning_options)
+            if enable_graph_tuner:
+                if trials == 0:
+                    assert tuning_records is not None
+                    assert os.path.exists(tuning_records)
+                assert graph_tuner_implementation in ["dp", "pbqp"]
+                graph_tuner_cls = DPTuner if graph_tuner_implementation == "dp" else PBQPTuner
+                assert input_shapes is not None
+                executor = graph_tuner_cls(
+                    graph=mod["main"],  # TODO
+                    input_shapes=input_shapes,
+                    records=tuning_records if trials > 0 else prior_records,
+                    target_ops=[  # TODO
+                        tvm.relay.op.get("nn.conv2d"),
+                        # tvm.relay.op.get("qnn.conv2d"),
+                        # relay.op.get("nn.avg_pool2d"),
+                        # relay.op.get("nn.max_pool2d"),
+                    ],
+                    target=target,  # TODO
+                )
+                executor.benchmark_layout_transform(min_exec_num=graph_tuner_min_exec_num)
+                executor.run()
+                graph_opt_sch_file = tuning_records + ".graph"  # TODO
+                executor.write_opt_sch2record_file(graph_opt_sch_file)
 
-        return tuning_records
+            return tuning_records
 
 
 
@@ -1539,6 +1599,9 @@ def tune_tasks(
     tuning_records: Optional[str] = None,
     tuner_options: Optional[dict] = None,
     si_prefix: str = "G",
+    enable_graph_tuner: bool = False,
+    graph_tuner_implementation: str = "dp",
+    graph_tuner_min_exec_num: int = 100,
 ):
     """Tune a list of tasks and output the history to a log file.
 
@@ -1563,6 +1626,12 @@ def tune_tasks(
     tuner_options: dict, optional
     si_prefix : str
         SI prefix for FLOPS.
+    enable_graph_tuner : bool
+        TODO
+    graph_tuner_implementation : str
+        TODO
+    graph_tuner_min_exec_num : int
+        TODO
     """
     if not tasks:
         logger.warning("there were no tasks found to be tuned")
@@ -1588,23 +1657,24 @@ def tune_tasks(
     for i, tsk in enumerate(tasks):
         prefix = "\n[Task %2d/%2d] " % (i + 1, len(tasks))
 
-        # Create a tuner
-        tuner_obj = tuner_cls(tsk, **tuner_options)
+        if trials > 0:
+            # Create a tuner
+            tuner_obj = tuner_cls(tsk, **tuner_options)
 
-        # If transfer learning is being used, load the existing results
-        if tuning_records and os.path.exists(tuning_records):
-            logger.info("loading tuning records from %s", tuning_records)
-            start_time = time.time()
-            tuner_obj.load_history(autotvm.record.load_from_file(tuning_records))
-            logging.info("loaded history in %.2f sec(s)", time.time() - start_time)
+            # If transfer learning is being used, load the existing results
+            if tuning_records and os.path.exists(tuning_records):
+                logger.info("loading tuning records from %s", tuning_records)
+                start_time = time.time()
+                tuner_obj.load_history(autotvm.record.load_from_file(tuning_records))
+                logging.info("loaded history in %.2f sec(s)", time.time() - start_time)
 
-        tuner_obj.tune(
-            n_trial=min(trials, len(tsk.config_space)),
-            early_stopping=early_stopping,
-            measure_option=measure_option,
-            callbacks=[
-                autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix),
-                autotvm.callback.log_to_file(log_file),
-            ],
-            si_prefix=si_prefix,
-        )
+            tuner_obj.tune(
+                n_trial=min(trials, len(tsk.config_space)),
+                early_stopping=early_stopping,
+                measure_option=measure_option,
+                callbacks=[
+                    autotvm.callback.progress_bar(trials, prefix=prefix, si_prefix=si_prefix),
+                    autotvm.callback.log_to_file(log_file),
+                ],
+                si_prefix=si_prefix,
+            )
