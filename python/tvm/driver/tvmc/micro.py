@@ -25,16 +25,13 @@ from pathlib import Path
 import shutil
 import sys
 
-from urllib.parse import urlparse
-
-from tvm import autotvm, auto_scheduler
 from tvm.relay.backend import Runtime
 from . import TVMCException, frontends
-from .shape_parser import parse_shape_string
 from .autotuner import tune_model, add_tune_args
 from .main import register_parser
 from .arguments import TVMCSuppressedArgumentParser
-from .target import _generate_target_kind_args, reconstruct_target_args
+from .target import reconstruct_target_args
+from .transform import parse_graph_transform_args
 from .project import (
     get_project_options,
     get_and_check_options,
@@ -369,6 +366,7 @@ def tune_handler(args):
         template_project_dir=args.template_dir,
         project_options=options,
     )
+    transform_args = parse_graph_transform_args(args)
 
     tune_model(
         tvmc_model,
@@ -384,7 +382,6 @@ def tune_handler(args):
         tuner=args.tuner,
         min_repeat_ms=args.min_repeat_ms,
         early_stopping=args.early_stopping,
-        desired_layout=args.desired_layout,
         timeout=args.timeout,
         repeat=args.repeat,
         number=args.number,
@@ -398,4 +395,6 @@ def tune_handler(args):
         build_func=autotvm_build_func,
         extra_config={"tir.disable_vectorize": True},
         si_prefix="M",  # Display MFLOPS instead of GFLOPS
+        tasks_filter=args.tasks,
+        **transform_args,
     )
