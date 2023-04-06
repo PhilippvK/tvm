@@ -96,6 +96,12 @@ def add_tune_args(parser, micro=False):
         default=1,
         help="how many times to repeat each measurement",
     )
+    parser.add_argument(
+        "--tasks",
+        default="all",
+        help="which tasks should be tuned, i.e. 0 0,2 3-5 all list",
+    )
+
     if not micro:
         parser.add_argument(
             "--rpc-key",
