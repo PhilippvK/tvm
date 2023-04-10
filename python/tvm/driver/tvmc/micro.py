@@ -27,7 +27,7 @@ import sys
 
 from tvm.relay.backend import Runtime
 from . import TVMCException, frontends
-from .autotuner import tune_model, add_tune_args
+from .autotuner import tune_model, add_tune_args, parse_visualize_arg
 from .main import register_parser
 from .arguments import TVMCSuppressedArgumentParser
 from .target import reconstruct_target_args
@@ -367,6 +367,7 @@ def tune_handler(args):
         project_options=options,
     )
     transform_args = parse_graph_transform_args(args)
+    visualize_mode, visualize_path = parse_visualize_arg(args.visualize)
 
     tune_model(
         tvmc_model,
@@ -396,5 +397,7 @@ def tune_handler(args):
         extra_config={"tir.disable_vectorize": True},
         si_prefix="M",  # Display MFLOPS instead of GFLOPS
         tasks_filter=args.tasks,
+        visualize_mode=visualize_mode,
+        visualize_path=visualize_path,
         **transform_args,
     )
