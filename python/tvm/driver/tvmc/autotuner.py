@@ -1201,37 +1201,6 @@ def tune_model(
                 runner = local_server
 
         if enable_autoscheduler:
-            tasks, weights = autoscheduler_get_tuning_tasks(
-                mod=mod,
-                params=params,
-                target=target,
-                transform_args=transform_args,
-                hardware_params=hardware_params,
-                include_simple_tasks=include_simple_tasks,
-                # extra_config=build_option,
-            )
-        else:
-
-            tasks = autotvm_get_tuning_tasks(
-                mod=mod,
-                params=params,
-                target=target,
-                transform_args=transform_args,
-            )
-
-        # Filter extracted tasks by provided user expression
-        if tasks_filter:
-            tasks, do_list = filter_tasks(tasks, tasks_filter)
-            if do_list:
-                print_task_list(tasks, enable_autoscheduler)
-                return None
-        if len(tasks) == 0:
-            logger.info("No tasks have been selected for tuning.")
-            return None
-        else:
-            logger.info("Selected %s tasks for tuning.", len(tasks))
-
-        if enable_autoscheduler:
             # Create the autoscheduler tuning options
             # if build_option is None:
             #     build_option = {}
@@ -1297,6 +1266,19 @@ def tune_model(
                 target=target,
                 transform_args=transform_args,
             )
+
+        # Filter extracted tasks by provided user expression
+        if tasks_filter:
+            tasks, do_list = filter_tasks(tasks, tasks_filter)
+            if do_list:
+                print_task_list(tasks, enable_autoscheduler)
+                return None
+        if len(tasks) == 0:
+            logger.info("No tasks have been selected for tuning.")
+            return None
+        else:
+            logger.info("Selected %s tasks for tuning.", len(tasks))
+
 
         if enable_autoscheduler:
             # Create the autoscheduler tuning options

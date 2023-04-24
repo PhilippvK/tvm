@@ -430,4 +430,5 @@ def tune_handler(args):
         build_option={"tir.disable_vectorize": True},
         si_prefix="M",  # Display MFLOPS instead of GFLOPS
         autotvm_tuner_options=autotvm_tuner_options,
+        tasks_filter=args.tasks,
     )
