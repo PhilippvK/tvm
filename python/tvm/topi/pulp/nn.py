@@ -572,7 +572,7 @@ def schedule_conv2d_nhwc(cfg, outs):
     s = te.create_schedule([x.op for x in outs])
 
     def _callback(op):
-        if op.tag == "conv1d_nhwc":
+        if op.tag == "conv2d_nhwc":
             data, weight = op.input_tensors
             out = op.output(0)
             n, h, w, c = op.axis
