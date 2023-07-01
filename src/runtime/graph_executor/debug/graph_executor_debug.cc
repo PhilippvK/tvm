@@ -41,10 +41,12 @@ std::string GraphExecutorDebug::RunIndividual(int number, int repeat, int min_re
                                               int limit_zero_time_iterations,
                                               int cooldown_interval_ms, int repeats_to_cooldown) {
   // warmup run
+  std::cout << "warmup" << std::endl;
   GraphExecutor::Run();
   std::string tkey = module_->type_key();
   std::vector<std::vector<double>> time_sec_per_op(op_execs_.size());
   if (tkey == "rpc") {
+    std::cout << "rpc" << std::endl;
     // RPC modules rely on remote timing which implements the logic from the else branch.
     for (size_t index = 0; index < op_execs_.size(); ++index) {
       time_sec_per_op[index] =
@@ -52,6 +54,7 @@ std::string GraphExecutorDebug::RunIndividual(int number, int repeat, int min_re
                    cooldown_interval_ms, repeats_to_cooldown);
     }
   } else {
+    std::cout << "!rpc" << std::endl;
     int op = 0;
     for (size_t index = 0; index < op_execs_.size(); ++index) {
       std::string result_str =
@@ -95,7 +98,7 @@ std::string GraphExecutorDebug::RunIndividualNode(int node_index, int number, in
     LOG(FATAL) << "RPC measurements should not use RunIndividualNode!";
   }
 
-  if (!op_execs_[node_index]) {
+  if (!op_execs_[node_index] || nodes_[node_index].param.func_name == "__nop") {
     // don't return anything...
     std::ostringstream os;
     double zero = 0;
@@ -138,12 +141,17 @@ std::vector<double> GraphExecutorDebug::RunOpRPC(int index, int number, int repe
   uint32_t num_inputs = param.num_inputs;
   uint32_t num_outputs = param.num_outputs;
 
+  std::cout << "@@@" << std::endl;
+  if (name == "__nop") {
+    return results;
+  }
   PackedFunc time_eval =
       runtime::Registry::Get("runtime.RPCTimeEvaluator")
           ->
           operator()(module_, name, static_cast<int>(dev.device_type), dev.device_id, number,
                      repeat, min_repeat_ms, limit_zero_time_iterations, cooldown_interval_ms,
                      repeats_to_cooldown, "");
+  std::cout << "###" << std::endl;
 
   int num_flat_args = num_inputs + num_outputs;
   auto values = std::make_unique<TVMValue[]>(num_flat_args);
@@ -164,7 +172,9 @@ std::vector<double> GraphExecutorDebug::RunOpRPC(int index, int number, int repe
     offs++;
   }
   TVMRetValue rv;
+  std::cout << "???" << std::endl;
   time_eval.CallPacked(TVMArgs(values.get(), type_codes.get(), num_flat_args), &rv);
+  std::cout << "!!!" << std::endl;
   std::string results_str = rv.operator std::string();
   const double* blob_ptr = reinterpret_cast<const double*>(results_str.data());
   for (int i = 0; i < repeat; ++i, ++blob_ptr) {
@@ -194,6 +204,7 @@ Timer GraphExecutorDebug::RunOpHost(int index) {
  */
 PackedFunc GraphExecutorDebug::GetFunction(const String& name,
                                            const ObjectPtr<Object>& sptr_to_self) {
+  std::cout << "GetFunction" << std::endl;
   // return member functions during query.
   if (name == "debug_get_output") {
     return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {

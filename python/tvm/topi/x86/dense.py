@@ -35,6 +35,7 @@ from .tensor_intrin import (
 
 
 def _schedule_dense_pack_template(cfg, s, C, O):
+    print("_schedule_dense_pack_template")
     A, packedB = s[C].op.input_tensors
 
     CC = s.cache_write(C, "global")
@@ -81,6 +82,7 @@ def _schedule_dense_pack_template(cfg, s, C, O):
 
 
 def _schedule_dense_nopack_template(cfg, s, C):
+    print("_schedule_dense_nopack_template")
     y, x = s[C].op.axis
     (kk,) = s[C].op.reduce_axis
     yo, yi = cfg["tile_y"].apply(s, C, y)
@@ -102,6 +104,7 @@ def _schedule_dense_nopack_template(cfg, s, C):
 
 
 def _default_dense_pack_config(cfg, M, N, K):
+    print("_default_dense_pack_config")
     # Generate default schedule for dynamic shape.
     if isinstance(M, (tvm.tir.Var, tvm.tir.Any)):
         M = 16
@@ -140,6 +143,7 @@ def _default_dense_pack_config(cfg, M, N, K):
 
 
 def _default_dense_nopack_config(cfg, M, N, K):
+    print("_default_dense_nopack_config")
     # Generate default schedule for dynamic shape.
     if isinstance(M, (tvm.tir.Var, tvm.tir.Any)):
         M = 16
@@ -161,6 +165,7 @@ def _default_dense_nopack_config(cfg, M, N, K):
 
 @autotvm.register_topi_compute("dense_nopack.x86")
 def dense_nopack(cfg, data, weight, bias=None, out_dtype=None):
+    print("dense_nopack")
     """Compute dense without packing"""
     if out_dtype is None:
         out_dtype = data.dtype
@@ -198,6 +203,7 @@ def dense_nopack(cfg, data, weight, bias=None, out_dtype=None):
 
 @autotvm.register_topi_schedule("dense_nopack.x86")
 def schedule_dense_nopack(cfg, outs):
+    print("schedule_dense_nopack")
     """Create the schedule for dense_nopack"""
     s = te.create_schedule([x.op for x in outs])
 
@@ -211,6 +217,7 @@ def schedule_dense_nopack(cfg, outs):
 
 @autotvm.register_topi_compute("dense_pack.x86")
 def dense_pack(cfg, data, weight, bias=None, out_dtype=None):
+    print("dense_pack")
     """Compute dense with transformed weight."""
     if out_dtype is None:
         out_dtype = data.dtype
@@ -271,6 +278,7 @@ def dense_pack(cfg, data, weight, bias=None, out_dtype=None):
 
 @autotvm.register_topi_schedule("dense_pack.x86")
 def schedule_dense_pack(cfg, outs):
+    print("schedule_pack")
     """Create the schedule for dense_pack"""
     s = te.create_schedule([x.op for x in outs])
 
@@ -284,6 +292,7 @@ def schedule_dense_pack(cfg, outs):
 
 @autotvm.register_topi_compute("dense_int8.x86")
 def dense_int8(cfg, data, weight, bias=None, out_dtype=None):
+    print("dense_int8")
     """Compute for uint8 x int8 -> int32 dense"""
     if out_dtype is None:
         out_dtype = data.dtype
@@ -296,6 +305,7 @@ def dense_int8(cfg, data, weight, bias=None, out_dtype=None):
 
 @autotvm.register_topi_schedule("dense_int8.x86")
 def schedule_dense_int8(cfg, outs):
+    print("schedule_dense_int8")
     """Create a schedule for dense__int8"""
     s = te.create_schedule([x.op for x in outs])
     mcpu = tvm.target.Target.current().mcpu

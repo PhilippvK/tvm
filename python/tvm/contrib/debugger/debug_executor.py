@@ -214,6 +214,8 @@ class GraphModuleDebug(graph_executor.GraphModule):
         """
         output_tensors = []
         for i, node in enumerate(self.debug_datum.get_graph_nodes()):
+            print("i", i)
+            print("node", node, node["name"])
             self._execute_node(i)
             num_outputs = self.debug_datum.get_graph_node_output_num(node)
             for j in range(num_outputs):
@@ -232,15 +234,19 @@ class GraphModuleDebug(graph_executor.GraphModule):
         cooldown_interval_ms,
         repeats_to_cooldown,
     ):
+        print("_run_debug", number, repeat, min_repeat_ms, limit_zero_time_iterations)
         """Execute the node specified with index will be executed.
         Each debug output will be copied to the buffer
         Time consumed for each execution will be set as debug output.
         """
         # Get timing.
         self.debug_datum._time_list = self.run_individual(
-            number=number,
-            repeat=repeat,
-            min_repeat_ms=min_repeat_ms,
+            # number=number,
+            number=1,
+            # repeat=repeat,
+            repeat=1,
+            # min_repeat_ms=min_repeat_ms,
+            min_repeat_ms=0,
             limit_zero_time_iterations=limit_zero_time_iterations,
             cooldown_interval_ms=cooldown_interval_ms,
             repeats_to_cooldown=repeats_to_cooldown,

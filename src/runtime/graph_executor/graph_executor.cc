@@ -545,6 +545,7 @@ void GraphExecutor::SetupOpExecs() {
 
 std::pair<std::function<void()>, std::shared_ptr<GraphExecutor::OpArgs>> GraphExecutor::CreateTVMOp(
     const TVMOpParam& param, const std::vector<DLTensor>& args) {
+  std::cout << "GraphExecutor::CreateTVMOp" << std::endl;
   std::shared_ptr<GraphExecutor::OpArgs> arg_ptr = std::make_shared<GraphExecutor::OpArgs>();
   // setup address.
   arg_ptr->args = args;
