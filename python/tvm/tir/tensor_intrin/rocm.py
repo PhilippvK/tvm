@@ -24,9 +24,12 @@ from .dot_product_common import dp4a_desc
 
 @T.prim_func
 def sdot4(
-    A: T.Buffer((4,), "int8", offset_factor=1, align=4, scope="shared"),
-    B: T.Buffer((4,), "int8", offset_factor=1, align=4, scope="shared"),
-    C: T.Buffer((1,), "int32", offset_factor=1, align=4, scope="local"),
+    # A: T.Buffer((4,), "int8", offset_factor=1, align=4, scope="shared"),
+    # B: T.Buffer((4,), "int8", offset_factor=1, align=4, scope="shared"),
+    # C: T.Buffer((1,), "int32", offset_factor=1, align=4, scope="local"),
+    A: T.Buffer((4,), "int8", offset_factor=1, align=4),
+    B: T.Buffer((4,), "int8", offset_factor=1, align=4),
+    C: T.Buffer((1,), "int32", offset_factor=1, align=4),
 ) -> None:
     with T.block("root"):
         T.reads(C[0], A[0:4], B[0:4])
