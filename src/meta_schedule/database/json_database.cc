@@ -119,7 +119,7 @@ class JSONDatabaseNode : public DatabaseNode {
                        }));
   }
 
-  Array<TuningRecord> GetTopK(const Workload& workload, int top_k) {
+  Array<TuningRecord> GetTopK(const Workload& workload, const Target& target, int top_k) {
     CHECK_GE(top_k, 0) << "ValueError: top_k must be non-negative";
     if (top_k == 0) {
       return {};
@@ -133,6 +133,18 @@ class JSONDatabaseNode : public DatabaseNode {
       }
       if (record->workload.same_as(workload) ||
           WorkloadEqual(GetModuleEquality())(record->workload, workload)) {
+        if (auto target_ = record->target) {
+          if (target.defined() && target_.value().defined()) {
+            if (auto model_ = target_.value()->GetAttr<String>("model")) {
+              if (auto model = target->GetAttr<String>("model")) {
+                if(model_.value().compare(model.value())) {
+                  continue;
+                }
+              }
+            }
+            // TODO 2-level lookup via model and key
+          }
+        }
         results.push_back(record);
         if (results.size() == static_cast<size_t>(top_k)) {
           break;

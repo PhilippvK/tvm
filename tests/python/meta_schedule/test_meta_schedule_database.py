@@ -137,7 +137,8 @@ class PyMemoryDatabaseDefault(ms.database.PyDatabase):
     def get_all_tuning_records(self) -> List[TuningRecord]:
         return self.tuning_records_
 
-    def get_top_k(self, workload: ms.database.Workload, top_k: int) -> List[TuningRecord]:
+    def get_top_k(self, workload: ms.database.Workload, target: Target, top_k: int) -> List[TuningRecord]:
+        # TODO: use target?
         return sorted(
             list(
                 filter(
@@ -180,7 +181,7 @@ class PyMemoryDatabaseOverride(ms.database.PyDatabase):
     def get_all_tuning_records(self) -> List[TuningRecord]:
         return self.tuning_records_
 
-    def get_top_k(self, workload: ms.database.Workload, top_k: int) -> List[TuningRecord]:
+    def get_top_k(self, workload: ms.database.Workload, target: Target, top_k: int) -> List[TuningRecord]:
         return sorted(
             list(
                 filter(
@@ -198,7 +199,7 @@ class PyMemoryDatabaseOverride(ms.database.PyDatabase):
         self, mod: IRModule, target: Target, workload_name: Optional[str] = None
     ) -> Optional[TuningRecord]:
         if self.has_workload(mod):
-            records = self.get_top_k(self.commit_workload(mod), 2)
+            records = self.get_top_k(self.commit_workload(mod), target, 2)
             if len(records) == 1:
                 return records[0]
             elif len(records) == 2:
@@ -274,16 +275,17 @@ def test_meta_schedule_database_add_entry():
     with tempfile.TemporaryDirectory() as tmpdir:
         database = _create_tmp_database(tmpdir)
         workload = database.commit_workload(mod)
+        target = tvm.target.Target("llvm")
         record = ms.database.TuningRecord(
             _create_schedule(mod, _schedule_matmul).trace,
             workload,
             [1.5, 2.5, 1.8],
-            tvm.target.Target("llvm"),
+            target,
             ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
         )
         database.commit_tuning_record(record)
         assert len(database) == 1
-        (ret,) = database.get_top_k(workload, 3)
+        (ret,) = database.get_top_k(workload, target, 3)
         _equal_record(ret, record)
 
 
@@ -294,15 +296,16 @@ def test_meta_schedule_database_missing():
         database = _create_tmp_database(tmpdir)
         workload = database.commit_workload(mod)
         workload_2 = database.commit_workload(mod_2)
+        target = tvm.target.Target("llvm")
         record = ms.database.TuningRecord(
             _create_schedule(mod, _schedule_matmul).trace,
             workload,
             [1.5, 2.5, 1.8],
-            tvm.target.Target("llvm"),
+            target,
             ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
         )
         database.commit_tuning_record(record)
-        ret = database.get_top_k(workload_2, 3)
+        ret = database.get_top_k(workload_2, target, 3)
         assert len(ret) == 0
 
 
@@ -312,53 +315,54 @@ def test_meta_schedule_database_sorting():
         database = _create_tmp_database(tmpdir)
         token = database.commit_workload(mod)
         trace = _create_schedule(mod, _schedule_matmul).trace
+        target = tvm.target.Target("llvm")
         records = [
             ms.database.TuningRecord(
                 trace,
                 token,
                 [7.0, 8.0, 9.0],
-                tvm.target.Target("llvm"),
+                target,
                 ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
             ),
             ms.database.TuningRecord(
                 trace,
                 token,
                 [1.0, 2.0, 3.0],
-                tvm.target.Target("llvm"),
+                target,
                 ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
             ),
             ms.database.TuningRecord(
                 trace,
                 token,
                 [4.0, 5.0, 6.0],
-                tvm.target.Target("llvm"),
+                target,
                 ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
             ),
             ms.database.TuningRecord(
                 trace,
                 token,
                 [1.1, 1.2, 600.0],
-                tvm.target.Target("llvm"),
+                target,
                 ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
             ),
             ms.database.TuningRecord(
                 trace,
                 token,
                 [1.0, 100.0, 6.0],
-                tvm.target.Target("llvm"),
+                target,
                 ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
             ),
             ms.database.TuningRecord(
                 trace,
                 token,
                 [4.0, 9.0, 8.0],
-                tvm.target.Target("llvm"),
+                target,
                 ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
             ),
         ]
         for record in records:
             database.commit_tuning_record(record)
-        ret = database.get_top_k(token, 2)
+        ret = database.get_top_k(token, target, 2)
         assert len(ret) == 2
         try:
             _equal_record(ret[0], records[2])
@@ -374,26 +378,27 @@ def test_meta_schedule_database_reload():
         database = _create_tmp_database(tmpdir)
         token = database.commit_workload(mod)
         trace = _create_schedule(mod, _schedule_matmul).trace
+        target = tvm.target.Target("llvm")
         records = [
             ms.database.TuningRecord(
                 trace,
                 token,
                 [7.0, 8.0, 9.0],
-                tvm.target.Target("llvm"),
+                target,
                 ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
             ),
             ms.database.TuningRecord(
                 trace,
                 token,
                 [1.0, 2.0, 3.0],
-                tvm.target.Target("llvm"),
+                target,
                 ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
             ),
             ms.database.TuningRecord(
                 trace,
                 token,
                 [4.0, 5.0, 6.0],
-                tvm.target.Target("llvm"),
+                target,
                 ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
             ),
         ]
@@ -404,7 +409,7 @@ def test_meta_schedule_database_reload():
             path_tuning_record=database.path_tuning_record,
         )
         token = new_database.commit_workload(mod)
-        ret = new_database.get_top_k(token, 2)
+        ret = new_database.get_top_k(token, target, 2)
         assert len(ret) == 2
         try:
             _equal_record(ret[0], records[2])
@@ -540,16 +545,17 @@ def test_meta_schedule_pydatabase_current():
 def call_get_top_k(run_secs_list, database, k):
     mod: IRModule = Matmul
     workload = database.commit_workload(mod)
+    target = tvm.target.Target("llvm")
     for run_secs in run_secs_list:
         record = ms.database.TuningRecord(
             _create_schedule(mod, _schedule_matmul).trace,
             workload,
             run_secs,
-            tvm.target.Target("llvm"),
+            target,
             ms.arg_info.ArgInfo.from_prim_func(func=mod["main"]),
         )
         database.commit_tuning_record(record)
-    return [[v.value for v in record.run_secs] for record in database.get_top_k(workload, k)]
+    return [[v.value for v in record.run_secs] for record in database.get_top_k(workload, target, k)]
 
 
 @pytest.mark.parametrize(

@@ -60,7 +60,7 @@ class MemoryDatabaseNode : public DatabaseNode {
 
   void CommitTuningRecord(const TuningRecord& record) final { records.push_back(record); }
 
-  Array<TuningRecord> GetTopK(const Workload& workload, int top_k) final {
+  Array<TuningRecord> GetTopK(const Workload& workload, const Target& target, int top_k) final {
     CHECK_GE(top_k, 0) << "ValueError: top_k must be non-negative";
     if (top_k == 0) {
       return {};
@@ -73,6 +73,18 @@ class MemoryDatabaseNode : public DatabaseNode {
       }
       if (record->workload.same_as(workload) ||
           WorkloadEqual(GetModuleEquality())(record->workload, workload)) {
+        if (auto target_ = record->target) {
+          if(target.defined() && target_.value().defined()) {
+            if (auto model_ = target_.value()->GetAttr<String>("model")) {
+              if (auto model = target->GetAttr<String>("model")) {
+                if(model_.value().compare(model.value())) {
+                  continue;
+                }
+              }
+            }
+            // TODO 2-level lookup via model and key
+          }
+        }
         results.emplace_back(record);
       }
     }

@@ -75,7 +75,7 @@ class ScheduleFnDatabaseNode : public DatabaseNode {
     throw;
   }
 
-  Array<TuningRecord> GetTopK(const Workload& workload, int top_k) final {
+  Array<TuningRecord> GetTopK(const Workload& workload, const Target& target, int top_k) final {
     LOG(FATAL) << "NotImplementedError: ScheduleFnDatabase.GetTopK";
     throw;
   }
