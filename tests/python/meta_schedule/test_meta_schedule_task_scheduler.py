@@ -178,10 +178,11 @@ def test_meta_schedule_task_scheduler_single():
 def test_meta_schedule_task_scheduler_multiple():
     num_trials_per_iter = 6
     max_trials_per_task = 101
+    target = tvm.target.Target("llvm")
     tasks = [
         ms.TuneContext(
             MatmulModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_matmul,
             search_strategy=ms.search_strategy.ReplayTrace(),
             task_name="Matmul",
@@ -189,7 +190,7 @@ def test_meta_schedule_task_scheduler_multiple():
         ),
         ms.TuneContext(
             MatmulReluModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_matmul,
             search_strategy=ms.search_strategy.ReplayTrace(),
             task_name="MatmulRelu",
@@ -197,7 +198,7 @@ def test_meta_schedule_task_scheduler_multiple():
         ),
         ms.TuneContext(
             BatchMatmulModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_batch_matmul,
             search_strategy=ms.search_strategy.ReplayTrace(),
             task_name="BatchMatmul",
@@ -224,6 +225,7 @@ def test_meta_schedule_task_scheduler_multiple():
             len(
                 database.get_top_k(
                     database.commit_workload(task.mod),
+                    target,
                     100000,
                 )
             )
@@ -250,10 +252,11 @@ def test_meta_schedule_task_scheduler_avoid_cyclic():  # pylint: disable=invalid
 
 def test_meta_schedule_task_scheduler_override_next_task_id_only():  # pylint: disable=invalid-name
     max_trials_per_task = 101
+    target = tvm.target.Target("llvm")
     tasks = [
         ms.TuneContext(
             MatmulModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_matmul,
             search_strategy=ms.search_strategy.ReplayTrace(),
             task_name="Matmul",
@@ -261,7 +264,7 @@ def test_meta_schedule_task_scheduler_override_next_task_id_only():  # pylint: d
         ),
         ms.TuneContext(
             MatmulReluModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_matmul,
             search_strategy=ms.search_strategy.ReplayTrace(),
             task_name="MatmulRelu",
@@ -269,7 +272,7 @@ def test_meta_schedule_task_scheduler_override_next_task_id_only():  # pylint: d
         ),
         ms.TuneContext(
             BatchMatmulModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_batch_matmul,
             search_strategy=ms.search_strategy.ReplayTrace(),
             task_name="BatchMatmul",
@@ -296,6 +299,7 @@ def test_meta_schedule_task_scheduler_override_next_task_id_only():  # pylint: d
             len(
                 database.get_top_k(
                     database.commit_workload(task.mod),
+                    target,
                     100000,
                 )
             )
@@ -305,10 +309,11 @@ def test_meta_schedule_task_scheduler_override_next_task_id_only():  # pylint: d
 
 def test_meta_schedule_task_scheduler_multiple_gradient_based():
     max_trials_per_task = 101
+    target = tvm.target.Target("llvm")
     tasks = [
         ms.TuneContext(
             MatmulModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_matmul,
             search_strategy=ms.search_strategy.ReplayTrace(),
             task_name="Matmul",
@@ -316,7 +321,7 @@ def test_meta_schedule_task_scheduler_multiple_gradient_based():
         ),
         ms.TuneContext(
             MatmulReluModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_matmul,
             search_strategy=ms.search_strategy.ReplayTrace(),
             task_name="MatmulRelu",
@@ -324,7 +329,7 @@ def test_meta_schedule_task_scheduler_multiple_gradient_based():
         ),
         ms.TuneContext(
             BatchMatmulModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_batch_matmul,
             search_strategy=ms.search_strategy.ReplayTrace(),
             task_name="BatchMatmul",
@@ -348,7 +353,7 @@ def test_meta_schedule_task_scheduler_multiple_gradient_based():
     assert len(database) == max_trials_per_task * len(tasks)
     for task in tasks:
         assert (
-            len(database.get_top_k(database.commit_workload(task.mod), 10000))
+            len(database.get_top_k(database.commit_workload(task.mod), target, 10000))
             == max_trials_per_task
         )
 
@@ -389,10 +394,11 @@ def test_meta_schedule_task_scheduler_gradient_based_with_null_search_strategy()
         def clone(self):
             return NullSearchStrategy(n=self.n)
 
+    target = tvm.target.Target("llvm")
     tasks = [
         ms.TuneContext(
             MatmulModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_matmul,
             search_strategy=NullSearchStrategy(rounds_with_empty_candidates=5),
             task_name="Matmul",
@@ -400,7 +406,7 @@ def test_meta_schedule_task_scheduler_gradient_based_with_null_search_strategy()
         ),
         ms.TuneContext(
             BatchMatmulModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_batch_matmul,
             search_strategy=NullSearchStrategy(rounds_with_empty_candidates=0),
             task_name="BatchMatmul",
@@ -408,7 +414,7 @@ def test_meta_schedule_task_scheduler_gradient_based_with_null_search_strategy()
         ),
         ms.TuneContext(
             MatmulReluModule,
-            target=tvm.target.Target("llvm"),
+            target=target,
             space_generator=_schedule_matmul,
             search_strategy=ms.search_strategy.ReplayTrace(),
             task_name="MatmulRelu",
@@ -431,9 +437,9 @@ def test_meta_schedule_task_scheduler_gradient_based_with_null_search_strategy()
     )
 
     assert len(database) == 10
-    assert len(database.get_top_k(database.commit_workload(MatmulModule), 100)) == 0
-    assert len(database.get_top_k(database.commit_workload(BatchMatmulModule), 100)) == 0
-    assert len(database.get_top_k(database.commit_workload(MatmulReluModule), 100)) == 10
+    assert len(database.get_top_k(database.commit_workload(MatmulModule), target, 100)) == 0
+    assert len(database.get_top_k(database.commit_workload(BatchMatmulModule), target, 100)) == 0
+    assert len(database.get_top_k(database.commit_workload(MatmulReluModule), target, 100)) == 10
 
 
 if __name__ == "__main__":
