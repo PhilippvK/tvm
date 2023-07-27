@@ -690,7 +690,7 @@ def main():
         for item in workloads:
             original_mod = item.mod
             records = database.get_top_k(
-                workload=database.commit_workload(original_mod), top_k=ARGS.top_k
+                workload=database.commit_workload(original_mod), args.baseline_target, top_k=ARGS.top_k
             )
             if len(records) < ARGS.top_k:
                 total -= ARGS.top_k - len(records)

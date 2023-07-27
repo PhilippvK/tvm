@@ -179,7 +179,7 @@ Optional<TuningRecord> DatabaseNode::QueryTuningRecord(const IRModule& mod, cons
   if (!this->HasWorkload(mod)) {
     return NullOpt;
   }
-  Array<TuningRecord> records = this->GetTopK(this->CommitWorkload(mod), 1);
+  Array<TuningRecord> records = this->GetTopK(this->CommitWorkload(mod), target, 1);
   if (records.empty()) {
     return NullOpt;
   }

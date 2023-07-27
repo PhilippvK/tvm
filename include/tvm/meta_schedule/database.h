@@ -222,7 +222,7 @@ class DatabaseNode : public runtime::Object {
    * \param top_k The number of top records to be returned.
    * \return An array of top K tuning records for the given workload.
    */
-  virtual Array<TuningRecord> GetTopK(const Workload& workload, int top_k) = 0;
+  virtual Array<TuningRecord> GetTopK(const Workload& workload, const Target& target, int top_k) = 0;
   /*!
    * \brief Get all tuning records from the database.
    * \return An Array of all the tuning records in the database.
@@ -408,7 +408,7 @@ class PyDatabaseNode : public DatabaseNode {
     f_commit_tuning_record(record);
   }
 
-  Array<TuningRecord> GetTopK(const Workload& workload, int top_k) final {
+  Array<TuningRecord> GetTopK(const Workload& workload, const Target& target, int top_k) final {
     ICHECK(f_get_top_k != nullptr) << "PyDatabase's GetTopK method not implemented!";
     return f_get_top_k(workload, top_k);
   }

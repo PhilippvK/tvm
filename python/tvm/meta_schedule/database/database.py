@@ -204,7 +204,7 @@ class Database(Object):
         """
         _ffi_api.DatabaseCommitTuningRecord(self, record)  # type: ignore # pylint: disable=no-member
 
-    def get_top_k(self, workload: Workload, top_k: int) -> List[TuningRecord]:
+    def get_top_k(self, workload: Workload, target: Target, top_k: int) -> List[TuningRecord]:
         """Get the top K valid tuning records of given workload from the database.
 
         Parameters
@@ -219,7 +219,7 @@ class Database(Object):
         top_k_records : List[TuningRecord]
             The top K records.
         """
-        return _ffi_api.DatabaseGetTopK(self, workload, top_k)  # type: ignore # pylint: disable=no-member
+        return _ffi_api.DatabaseGetTopK(self, workload, target, top_k)  # type: ignore # pylint: disable=no-member
 
     def get_all_tuning_records(self) -> List[TuningRecord]:
         """Get all the tuning records from the database.

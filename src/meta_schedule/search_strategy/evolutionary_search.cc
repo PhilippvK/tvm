@@ -475,7 +475,9 @@ std::vector<Schedule> EvolutionarySearchNode::State::PickBestFromDatabase(int nu
   auto _ = Profiler::TimedScope("EvoSearch/PickBestFromDatabase");
   std::vector<tir::Trace> measured_traces;
   measured_traces.reserve(num);
-  Array<TuningRecord> top_records = this->database_->GetTopK(this->token_, num);
+  const TuneContextNode* ctx = self->ctx_;
+  Target target = ctx->target.value();
+  Array<TuningRecord> top_records = this->database_->GetTopK(this->token_, target, num);
   for (TuningRecord record : top_records) {
     measured_traces.push_back(record->trace);
   }
