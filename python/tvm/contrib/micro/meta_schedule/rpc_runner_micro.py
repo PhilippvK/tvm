@@ -21,6 +21,7 @@ from typing import Callable, List, Optional, Union
 from collections import namedtuple
 import signal
 import random
+from pathlib import Path
 
 from tvm import micro
 from tvm import nd
@@ -119,9 +120,16 @@ def _worker_func(
     device_type: str,
     args_info: T_ARG_INFO_JSON_OBJ_LIST,
 ) -> List[float]:
+    if platform not in micro.build.MicroTVMTemplateProject.list():
+        # lookup via path
+        if not Path(platform).is_dir():
+            raise ValueError(f"platform {platform} not found")
+        template_project_dir = platform
+    else:
+        template_project_dir=micro.get_microtvm_template_projects(platform)
 
     module_loader = micro.AutoTvmModuleLoader(
-        template_project_dir=micro.get_microtvm_template_projects(platform),
+        template_project_dir=template_project_dir,
         project_options=project_options,
     )
 
