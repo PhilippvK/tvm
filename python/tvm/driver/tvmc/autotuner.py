@@ -74,6 +74,12 @@ def add_tune_parser(subparsers, _, json_params):
         help="specify input model format",
     )
     parser.add_argument(
+        "--disabled-pass",
+        help="disable specific passes, comma-separated list of pass names.",
+        type=parse_pass_list_str,
+        default="",
+    )
+    parser.add_argument(
         "--number",
         default=10,
         type=int,
@@ -300,6 +306,7 @@ def drive_tune(args):
         port=rpc_port,
         trials=args.trials,
         target_host=args.target_host,
+        disabled_pass=args.disabled_pass,
         tuner=args.tuner,
         min_repeat_ms=args.min_repeat_ms,
         early_stopping=args.early_stopping,
@@ -416,6 +423,7 @@ def tune_model(
     port: Optional[Union[int, str]] = 9090,
     trials: int = 10000,
     target_host: Optional[str] = None,
+    disabled_pass: Optional[str] = None,
     tuner: str = "xgb",
     min_repeat_ms: Optional[int] = None,
     early_stopping: Optional[int] = None,
@@ -458,6 +466,9 @@ def tune_model(
         The IP address of an RPC tracker, used when benchmarking remotely.
     port : int or str, optional
         The port of the RPC tracker to connect to. Defaults to 9090.
+    disabled_pass: str, optional
+        Comma-separated list of passes which needs to be disabled
+        during compilation
     trials : int, optional
         The number of schedules to try out for the entire model. Note that the default
         value is chosen as a decent average for most models, but larger models may need
@@ -521,7 +532,7 @@ def tune_model(
     mod = deepcopy(tvmc_model.mod)
     params = tvmc_model.params
 
-    with tvm.transform.PassContext(opt_level=3):
+    with tvm.transform.PassContext(opt_level=3, disabled_pass=disabled_pass):
         if tuning_records is None:
             tuning_records = tvmc_model.default_tuning_records_path()
 
