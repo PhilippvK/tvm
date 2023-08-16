@@ -22,13 +22,18 @@
 #include <tvm/relay/expr_functor.h>
 #include <tvm/relay/function.h>
 #include <tvm/target/target.h>
+#include <tvm/relay/attrs/call.h>
+#include <tvm/relay/attrs/device_copy.h>
 
 #include <numeric>
 
 #include "../../meta_schedule/module_equality.h"
 #include "../../te/operation/create_primfunc.h"
+#include "../transforms/device_aware_visitors.h"
+#include "../op/memory/device_copy.h"
 #include "./te_compiler_cache.h"
 #include "./utils.h"
+#include "./te_compiler.h"
 
 namespace tvm {
 namespace relay {
@@ -53,6 +58,46 @@ class OpCounter : public ExprVisitor {
   size_t count{0};
 };
 
+
+class LowerTensorExprVisitor : public transform::DeviceAwareExprVisitor {
+ public:
+  LowerTensorExprVisitor(IRModule module, Target target)
+      : DeviceAwareExprVisitor(module),
+        module_(std::move(module)),
+        target_(std::move(target)),
+        constant_name_supply_(NameSupply("")) {}
+
+  void DeviceAwareVisitExpr_(const FunctionNode* function_node) override {
+    Function relay_func = GetRef<Function>(function_node);
+    DeviceAwareExprVisitor::DeviceAwareVisitExpr_(function_node);
+    if (relay_func->HasNonzeroAttr(attr::kPrimitive)) {
+      auto [f, fused_name] = tec::LowerToPrimFunc(relay_func, target_, constant_name_supply_);
+      if (f) {
+        IRModule tir_mod = PrimFuncToIRModule(f.value());
+        lower_results_.push_back(std::make_tuple(fused_name, relay_func, tir_mod));
+      }
+    }
+  }
+
+  void DeviceAwareVisitExpr_(const CallNode* call_node) override {
+
+   for (const auto& arg : call_node->args) {
+     VisitExpr(arg);
+   }
+   VisitExpr(call_node->op);
+  }
+
+  std::vector<std::tuple<std::string, Function, IRModule>> GetLoweredResults() {
+    return lower_results_;
+  }
+
+  IRModule module_;
+  Target target_;
+  std::vector<std::tuple<std::string, Function, IRModule>> lower_results_;
+  std::unordered_map<const VarNode*, BaseFunc> primitive_functions_;
+  NameSupply constant_name_supply_;
+};
+
 Array<meta_schedule::ExtractedTask> ExtractTask(IRModule mod, Target target,
                                                 Map<String, runtime::NDArray> params,
                                                 String mod_eq_name) {
@@ -73,24 +118,16 @@ Array<meta_schedule::ExtractedTask> ExtractTask(IRModule mod, Target target,
   std::unordered_map<IRModule, ExtractedTask, ModuleHash, ModuleEqual> cache(
       /*bucket_count*/ 0, ModuleHash(*mod_eq), ModuleEqual(*mod_eq));
 
-  std::vector<std::tuple<std::string, Function, IRModule>> lower_results;
 
   NameSupply constant_name_supply("");
 
-  PostOrderVisit(mod->Lookup("main"), [&](const Expr& exp) {
-    if (exp->IsInstance<FunctionNode>()) {
-      Function relay_func = Downcast<Function>(exp);
-      if (!relay_func->HasNonzeroAttr(attr::kPrimitive)) {
-        return;
-      }
 
-      auto [f, fused_name] = tec::LowerToPrimFunc(relay_func, target, constant_name_supply);
-      if (f) {
-        IRModule tir_mod = PrimFuncToIRModule(f.value());
-        lower_results.push_back(std::make_tuple(fused_name, relay_func, tir_mod));
-      }
-    }
-  });
+  // const String& module_name = "Test";
+  const IRModule& module = mod;
+  LowerTensorExprVisitor lower_te(module, target);
+  lower_te.VisitExpr(module->Lookup("main"));
+  std::vector<std::tuple<std::string, Function, IRModule>> lower_results = lower_te.GetLoweredResults();
+
 
   std::vector<int> indices(lower_results.size());
   std::iota(indices.begin(), indices.end(), 0);
@@ -128,7 +165,6 @@ Array<meta_schedule::ExtractedTask> ExtractTask(IRModule mod, Target target,
   }
 
   // Tasks are extracted via post order visit, return the reversed list.
-  std::reverse(tasks.begin(), tasks.end());
   NameSupply name_supply = NameSupply("");
   for (ExtractedTask task : tasks) {
     task->task_name = name_supply->FreshName(task->task_name);
