@@ -210,20 +210,31 @@ Optional<IRModule> DatabaseNode::QueryIRModule(const IRModule& mod, const Target
   }
 }
 
+struct pair_hash {
+    template <class T1, class T2>
+    std::size_t operator () (const std::pair<T1,T2> &p) const {
+        auto h2 = std::hash<T2>{}(p.second);
+        auto h1 = WorkloadHash()(p.first);
+
+        return h1 ^ h2;
+    }
+};
+
 void DatabaseNode::DumpPruned(Database destination) {
-  std::unordered_map<Workload, TuningRecord, ObjectPtrHash, ObjectPtrEqual> workload2record;
+  std::unordered_map<std::pair<Workload, std::string>, TuningRecord, pair_hash> workload2record;
   for (const TuningRecord& record : this->GetAllTuningRecords()) {
     if (record->IsValid()) {
-      auto it = workload2record.find(record->workload);
+      auto pair = std::make_pair(record->workload, record->target.value()->GetAttr<String>("model").value());
+      auto it = workload2record.find(pair);
       if (it == workload2record.end()) {
-        workload2record.insert({record->workload, record});
+        workload2record.insert({pair, record});
       } else if (SortTuningRecordByMeanRunSecs()(record, it->second)) {
         it->second = record;
       }
     }
   }
   for (auto& kv : workload2record) {
-    Workload workload = kv.first;
+    Workload workload = kv.first.first;
     TuningRecord record = kv.second;
     workload = destination->CommitWorkload(workload->mod);
     destination->CommitTuningRecord(TuningRecord(/*trace=*/record->trace, /*workload=*/workload,
