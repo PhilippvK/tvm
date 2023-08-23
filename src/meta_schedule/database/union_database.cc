@@ -64,14 +64,23 @@ class UnionDatabaseNode : public DatabaseNode {
     throw;
   }
 
-  Array<TuningRecord> GetAllTuningRecords() final {
-    LOG(FATAL) << "NotImplementedError: UnionDatabase.GetAllTuningRecords";
-    throw;
+  Array<TuningRecord> GetAllTuningRecords() {
+    Array<TuningRecord> results;
+    results.reserve(Size());
+    for (const Database& db : databases) {
+      for (const TuningRecord& record : db->GetAllTuningRecords()) {
+        results.push_back(record);
+      }
+    }
+    return results;
   }
 
   int64_t Size() final {
-    LOG(FATAL) << "NotImplementedError: UnionDatabase.size";
-    throw;
+    int64_t size = 0;
+    for (const Database& db : databases) {
+      size += db->Size();
+    }
+    return size;
   }
 };
 
