@@ -30,7 +30,6 @@
 #include <tvm/runtime/crt/module.h>
 #include <tvm/runtime/crt/packed_func.h>
 #include <tvm/runtime/crt/page_allocator.h>
-#include <inttypes.h>
 
 #include "crt_config.h"
 
@@ -38,9 +37,8 @@
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif  // MAX
 
-uint64_t Shape_Accumulate(int64_t* shape, uint32_t ndim) {
-  // printf("Shape_Accumulate\n");
-  uint64_t accum = 1;
+uint32_t Shape_Accumulate(int64_t* shape, uint32_t ndim) {
+  int64_t accum = 1;
   uint32_t idx;
   for (idx = 0; idx < ndim; idx++) {
     if (shape[idx] == 0) {
@@ -48,7 +46,6 @@ uint64_t Shape_Accumulate(int64_t* shape, uint32_t ndim) {
     }
     accum *= shape[idx];
   }
-  // printf("accum=%"PRIu64"\n", accum);
   return accum;
 }
 
@@ -885,9 +882,7 @@ void TVMGraphExecutor_Run(TVMGraphExecutor* executor) {
   // setup the array and requirements.
   uint32_t idx;
   for (idx = 0; idx < executor->op_execs_count; ++idx) {
-    // printf("idx=%"PRIu32"\n", idx);
     if (executor->op_execs[idx].fexec) {
-      // printf("if\n");
 #if TVM_CRT_DEBUG
       printf("calling: %s (%d)\n", executor->op_execs[idx].name, idx);
 #endif  // TVM_CRT_DEBUG
@@ -904,7 +899,6 @@ void TVMGraphExecutor_Run(TVMGraphExecutor* executor) {
 int TVMGraphExecutor_GetNumOutputs(TVMGraphExecutor* executor) { return executor->outputs_count; }
 
 int TVMGraphExecutor_GetOutput(TVMGraphExecutor* executor, const int32_t idx, DLTensor* out) {
-  // printf("GetOutput: %d\n", idx);
   int status = 0;
   uint32_t nid = executor->outputs[idx].node_id;
   uint32_t index = executor->outputs[idx].index;
@@ -912,18 +906,8 @@ int TVMGraphExecutor_GetOutput(TVMGraphExecutor* executor, const int32_t idx, DL
 
   // copy data section to allocated output tensor
   int32_t elem_bytes = out->dtype.bits / 8;
-  // printf("nid=%d\n", nid);
-  // printf("index=%d\n", index);
-  // printf("eid=%d\n", eid);
-  // printf("out->shape[0]=%"PRId64"\n", out->shape[0]);
-  // printf("out->shape[1]=%"PRId64"\n", out->shape[1]);
-  // printf("out->ndim=%u\n", out->ndim);
-  uint64_t size = Shape_Accumulate(out->shape, out->ndim);
-  // printf("size=%"PRId64"\n", size);
+  int64_t size = Shape_Accumulate(out->shape, out->ndim);
   DLTensor* tensor = &(executor->data_entry[eid].dl_tensor);
-  // printf("tensor->data=%p\n", tensor->data);
-  // printf("tensor->data[0]=%x\n", ((uint8_t*)tensor->data)[0]);
-  // printf("tensor->data[1]=%x\n", ((uint8_t*)tensor->data)[1]);
   CHECK(out->ndim == tensor->ndim);
   CHECK(out->dtype.bits == tensor->dtype.bits);
   CHECK(Shape_Accumulate(out->shape, out->ndim) == Shape_Accumulate(tensor->shape, tensor->ndim));
@@ -1087,11 +1071,6 @@ int TVMGraphExecutor_SetupOpExecs(TVMGraphExecutor* executor) {
       for (idx = 0; idx < inode->inputs_count; idx++) {
         const TVMGraphExecutorNodeEntry* entry = inode->inputs + idx;
         uint32_t eid = TVMGraphExecutor_GetEntryId(executor, entry->node_id, entry->index);
-        const TVMGraphExecutorNode* other = executor->nodes + entry->node_id;
-        if (!strcmp(other->param.func_name, "__nop")) {
-            const TVMGraphExecutorNodeEntry* other_entry = other->inputs + idx;
-            eid = TVMGraphExecutor_GetEntryId(executor, other_entry->node_id, other_entry->index);
-        }
         args[idx] = &(executor->data_entry[eid].dl_tensor);
         args_count++;
       }
@@ -1115,12 +1094,8 @@ int TVMGraphExecutor_SetupOpExecs(TVMGraphExecutor* executor) {
       printf("tvm_op: creating %s with node_id=%d\n", inode->param.func_name, nid);
 #endif  // TVM_CRT_DEBUG
       TVMPackedFunc pf;
-      int ret = TVMGraphExecutor_CreateTVMOp(executor, &(inode->param), args, args_count, &pf);
-      if (ret) {
-        pf.fexec = 0;
-      } else {
-        executor->op_execs[nid] = pf;
-      }
+      TVMGraphExecutor_CreateTVMOp(executor, &(inode->param), args, args_count, &pf);
+      executor->op_execs[nid] = pf;
     } else {
       memset(&executor->op_execs[nid], 0, sizeof(TVMPackedFunc));
     }
@@ -1167,8 +1142,8 @@ int32_t TVMGraphExecutor_CreateTVMOp(TVMGraphExecutor* executor, const TVMOpPara
     }
   }
   if (!strcmp(param->func_name, "__nop") || !strcmp(param->func_name, "__copy")) {
-    fprintf(stderr, "%s function is not yet supported.\n", param->func_name);
-    return -1;
+    fprintf(stderr, "%s function is not yet supported.", param->func_name);
+    status = -1;
   }
 
   TVMArgs targs = TVMArgs_Create(arg_ptr.arg_values, arg_ptr.arg_tcodes, arg_ptr.arg_values_count);
