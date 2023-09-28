@@ -322,7 +322,7 @@ def add_tune_args(parser, micro=False):
         )
         auto_scheduler_group.add_argument(
             "--autoscheduler-model",
-            choices=["xgb", "mlp", "random"],
+            choices=["xgb", "random"],
             default="xgb",
             type=str,
             help="",
@@ -365,7 +365,7 @@ def add_tune_args(parser, micro=False):
         )
         meta_scheduler_group.add_argument(
             "--metascheduler-model",
-            choices=["xgb", "mlp", "random"],
+            choices=["xgb", "mlp", "random", "none"],
             default="xgb",
             help="",
         )
@@ -400,134 +400,7 @@ def add_tune_args(parser, micro=False):
             help="",
         )
         meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-num-warmup_samples",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-verbose-equal",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-average-peak-n",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-adaptive-training",
-            help="",
-        )
-        # meta_scheduler_group.add_argument(
-        #     "--metascheduler-model-mlp-",
-        #     help="",
-        # )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-random-max-range",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy",
-            choices=["evolutionaly_search", "replay_trace", "replay_func"],
-            default="evolutionaly_search",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-population-size",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-init-measured-ratio",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-init-min-unmeasured",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-genetic-num-iters",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-genetic-mutate-prob",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-genetic-max-fail-count",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-evolutionaly-search-eps-greedy",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-strategy-replay-trace-max-fail-count",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-space-post-order-apply-",
-            help="",
-        )
-        meta_scheduler_group = parser.add_argument_group(
-            "MetaScheduler options",
-            "MetaScheduler options, used when --enable-metascheduler is provided",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-space",
-            choices=["post-order-apply"],  # union is not really useful here
-            default="post-order-apply",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-rules",
-            default="from-target",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-postprocs",
-            default="from-target",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-mutator-probs",
-            default="from-target",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model",
-            choices=["xgb", "mlp", "random"],
-            default="xgb",
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-max-depth",
-            default=10,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-gamma",
-            default=0.001,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-min-child-weight",
-            default=0,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-eta",
-            default=0.2,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-seed",
-            default=43,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-nthread",
-            default=None,
-            help="",
-        )
-        meta_scheduler_group.add_argument(
-            "--metascheduler-model-xgb-num-warmup_samples",
+            "--metascheduler-model-xgb-num-warmup-samples",
             help="",
         )
         meta_scheduler_group.add_argument(
@@ -1188,6 +1061,9 @@ def tune_model(
                 "builder": builder,  # TODO
                 # "runner": "local",  # TODO
                 "runner": runner,  # TODO
+                "cost_model": "xgb",  # TODO
+                "callbacks": "default",  # TODO
+                "scheduler": "gradient",  # TODO
             }
             logger.info("Metascheduling with configuration: %s", tuning_options)
             with tempfile.TemporaryDirectory() as work_dir:
@@ -1462,7 +1338,9 @@ def schedule_tasks_ms(
     database="json",  # TODO
     builder = "local",  # TODO
     runner = "local",  # TODO
-
+    cost_model = "xgb",
+    callbacks = "default",  # TODO
+    scheduler = "gradient",  # TODO
 ):
     """TODO
 
@@ -1483,11 +1361,6 @@ def schedule_tasks_ms(
     TODO
     """
 
-    # space = "post-order-apply"  # TODO
-    # strategy = "evolutionary"  # TODO
-    callbacks = "default"  # TODO
-    scheduler = "gradient"  # TODO
-    cost_model = "xgb"  # TODO
 
     tasks, task_weights = ms.relay_integration.extracted_tasks_to_tune_contexts(
         tasks,
