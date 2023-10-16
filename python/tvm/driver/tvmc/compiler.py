@@ -438,14 +438,14 @@ def compile_model(
                 #      formats (@leandron).
                 dumps[source_type] = lib.get_source(source_type)
 
+
+        # Write dumps to file.
+        if dumps:
+            save_dumps(str(package_path), dumps)
         # Create a new tvmc model package object from the graph definition.
         package_path = tvmc_model.export_package(
             graph_module, package_path, cross, cross_options, output_format
         )
-
-        # Write dumps to file.
-        if dumps:
-            save_dumps(package_path, dumps)
 
         return TVMCPackage(package_path)
 
