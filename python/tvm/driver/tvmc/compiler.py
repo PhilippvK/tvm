@@ -479,6 +479,10 @@ def compile_model(
                 for smod in lib.imported_modules:
                     dumps[smod.type_key] = smod.get_source()
 
+
+        # Write dumps to file.
+        if dumps:
+            save_dumps(str(package_path), dumps)
         # Create a new tvmc model package object from the graph definition.
         package_path = tvmc_model.export_package(
             graph_module, package_path, cross, cross_options, output_format
