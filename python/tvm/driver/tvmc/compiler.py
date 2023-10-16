@@ -587,19 +587,9 @@ def compile_model(
                 mod_name=mod_name,
                 workspace_pools=workspace_pools,
             )
-        # print("graph_module", type(graph_module), dir(graph_module))
-        # print("graph_module.module", type(graph_module.module), dir(graph_module.module))
-        # print("graph_module.module", type(graph_module.get_lib()), dir(graph_module.get_lib()))
-        # print("src", graph_module.get_lib().get_source())
         dso_modules = graph_module.get_lib()._collect_dso_modules()
-        # print("dso_modules", dso_modules)
         for dso in dso_modules:
-            # print("dso", dso)
             dso_src = dso.get_source()
-            # print("dso_src", dso_src)
-        # non_dso_modules = graph_module.get_lib()._collect_from_import_tree(lambda m: m not in dso_modules)
-        # print("non_dso_modules", non_dso_modules)
-        # input("!")
 
         # Generate output dump files with sources
         for source_type in dump_code:
@@ -609,6 +599,11 @@ def compile_model(
                 dumps[source_type] = str(mod)
             elif "tir" in source_type:
                 dumps[source_type] = "\n".join(dumps[source_type])
+            elif source_type == "dso":
+                dso_modules = graph_module.get_lib()._collect_dso_modules()
+                for i, dso in enumerate(dso_modules):
+                    dso_src = dso.get_source()
+                    dumps[f"dso{i}"] = dso_src
             else:
                 lib = graph_module.lib if use_vm else graph_module.get_lib()
                 # TODO lib.get_source call have inconsistent behavior for unsupported
