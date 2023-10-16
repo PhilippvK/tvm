@@ -427,6 +427,11 @@ def compile_model(
                 dumps[source_type] = str(mod)
             elif source_type == "tir":
                 dumps[source_type] = "\n".join(dumps[source_type])
+            elif source_type == "dso":
+                dso_modules = graph_module.get_lib()._collect_dso_modules()
+                for i, dso in enumerate(dso_modules):
+                    dso_src = dso.get_source()
+                    dumps[f"dso{i}"] = dso_src
             else:
                 lib = graph_module.lib if use_vm else graph_module.get_lib()
                 # TODO lib.get_source call have inconsistent behavior for unsupported
