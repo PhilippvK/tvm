@@ -257,3 +257,82 @@ def visualize_progress(
             plt.pause(0.05)
 
     return _callback
+
+
+def wandb_callback(idx, project_name="TVM", config={}):
+
+    import wandb
+
+    class _Context(object):
+        """Context to store local variables"""
+
+        def __init__(self):
+            self.best_flops = 0
+            self.cur_flops = 0
+            self.ct = 0
+            self.last_tic = 0
+            self.num_invalid = 0
+
+            wandb.init(
+                project=project_name,
+                config=config,
+            )
+            wandb.log(
+                {
+                    f"task{idx}.trials": 0,
+                    f"task{idx}.invalid": 0,
+                    f"task{idx}.cur_flops": 0,
+                    f"task{idx}.best_flops": 0,
+                    f"task{idx}.time.total": 0,
+                    f"task{idx}.time.trial": 0,
+                    f"task{idx}.time.trial.mean": 0,
+                }
+            )
+
+        def __del__(self):
+            # wandb.save(TODO)
+            wandb.finish()
+
+    ctx = _Context()
+    tic = time.time()
+    ctx.last_tic = tic
+
+    def _callback(tuner, inputs, results):
+
+        flops = 0
+        l = len(inputs)
+        i = 0
+        for inp, res in zip(inputs, results):
+            if res.error_no == 0:
+                flops = inp.task.flop / np.mean(res.costs)
+            else:
+                ctx.num_invalid += 1
+            i += 1
+            if i < l:
+                wandb.log(
+                    {
+                        f"task{idx}.trials": ctx.ct + i,
+                        f"task{idx}.invalid": ctx.num_invalid,
+                        f"task{idx}.cur_flops": flops,
+                        f"task{idx}.best_flops": tuner.best_flops,
+                    }
+                )
+
+        ctx.ct += len(inputs)
+        ctx.cur_flops = flops
+        ctx.best_flops = tuner.best_flops
+        wandb.log(
+            {
+                f"task{idx}.trials": ctx.ct,
+                f"task{idx}.invalid": ctx.num_invalid,
+                f"task{idx}.cur_flops": ctx.cur_flops,
+                f"task{idx}.best_flops": ctx.best_flops,
+                f"task{idx}.time.total": time.time() - tic,
+                f"task{idx}.time.trial": (time.time() - ctx.last_tic) / ctx.ct,
+                f"task{idx}.time.trial.mean": (time.time() - tic) / ctx.ct,
+            }
+        )
+
+        ctx.last_tic = time.time()
+
+    return _callback
