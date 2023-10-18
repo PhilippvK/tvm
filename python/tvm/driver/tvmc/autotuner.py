@@ -240,6 +240,11 @@ def add_tune_args(parser, micro=False):
         default="xgb",
         help="type of tuner to use when tuning with autotvm.",
     )
+    autotvm_group.add_argument(
+        "--wandb-callback",
+        help="Log tuning progress via wandb callback",
+        action="store_true",
+    )
     # TODO (@leandron) This is a path to a physical file, but
     #     can be improved in future to add integration with a modelzoo
     #     or URL, for example.
@@ -357,6 +362,7 @@ def drive_tune(args):
         visualize_mode=visualize_mode,
         visualize_path=visualize_path,
         tasks_filter=args.tasks,
+        enable_wandb=args.wandb_callback,
         **transform_args,
     )
 
@@ -486,6 +492,7 @@ def tune_model(
     si_prefix: str = "G",
     visualize_mode: str = "none",
     visualize_path: Optional[str] = None,
+    enable_wandb: bool = False,
 ):
     """Use tuning to automatically optimize the functions in a model.
 
@@ -586,6 +593,9 @@ def tune_model(
     # model is fixed. For now, creating a clone avoids the issue.
     mod = deepcopy(tvmc_model.mod)
     params = tvmc_model.params
+
+    if enable_wandb:
+        assert not enable_autoscheduler, "WANDB callback is not supported by AutoScheduler"
 
     config = {}
     if extra_config:
@@ -740,6 +750,7 @@ def tune_model(
                 **tuning_options,
                 visualize_mode=visualize_mode,
                 visualize_path=visualize_path,
+                enable_wandb=enable_wandb,
             )
 
         return tuning_records
@@ -894,6 +905,7 @@ def tune_tasks(
     si_prefix: str = "G",
     visualize_mode: str = "none",
     visualize_path: Optional[str] = None,
+    enable_wandb: bool = False,
 ):
     """Tune a list of tasks and output the history to a log file.
 
@@ -977,6 +989,21 @@ def tune_tasks(
             autotvm.callback.progress_bar(min(trials, len(tsk.config_space)), prefix=prefix, si_prefix=si_prefix),
             autotvm.callback.log_to_file(log_file),
         ]
+        if enable_wandb:
+            wandb_config = {
+                "task.name": tsk.name,
+                "task.target": tsk.target,
+                "task.target_host": tsk.target_host,
+                "task.flop": tsk.flop,
+                "task.args": tsk.args,
+                "task.kwargs": tsk.kwargs,
+                "task.config_space_len": len(tsk.config_space),
+                "task_idx": i,
+                "tuner.name": tuner,
+                "tuner.trials": trials,
+                "tuner.early_stopping": early_stopping,
+            }
+            callbacks.append(autotvm.callback.wandb_callback(i, project_name="TVM", config=wandb_config))
 
         if visualize_mode != "none":
             assert visualize_mode in ["both", "live", "file"]

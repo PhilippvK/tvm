@@ -399,5 +399,6 @@ def tune_handler(args):
         tasks_filter=args.tasks,
         visualize_mode=visualize_mode,
         visualize_path=visualize_path,
+        enable_wandb=args.wandb_callback,
         **transform_args,
     )
