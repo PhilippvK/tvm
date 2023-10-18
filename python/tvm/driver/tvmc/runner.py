@@ -246,11 +246,7 @@ def drive_run(args):
                 "i.e. when '--device micro'."
             )
 
-        if args.profile:
-            raise TVMCException("--profile is not currently supported for micro devices.")
 
-        if args.print_time:
-            raise TVMCException("--print-time is not currently supported for micro devices.")
 
         # Get and check options for micro targets.
         options = get_and_check_options(args.project_option, args.valid_options)
@@ -648,16 +644,37 @@ def run_module(
                 outputs[output_name] = val.numpy()
         else:
             # TODO(gromero): Adjust for micro targets.
+            fallback = False
             if profile:
-                logger.debug("Creating runtime with profiling enabled.")
-                module = debug_executor.create(tvmc_package.graph, lib, dev, dump_root="./prof")
+                if device == "micro":
+                    logger.debug("Creating runtime (micro) with profiling enabled.")
+                    assert tvmc_package.executor_type == "graph", "MicroTVM profiling is only available on host-driven graph executor"
+                    module = tvm.micro.create_local_debug_executor(
+                        tvmc_package.graph, lib, dev
+                    )
+                else:
+                    logger.debug("Creating runtime with profiling enabled.")
+                    module = debug_executor.create(tvmc_package.graph, lib, dev, dump_root="./prof")
             else:
                 if device == "micro":
                     logger.debug("Creating runtime (micro) with profiling disabled.")
                     if tvmc_package.executor_type == "aot":
                         module = tvm.micro.create_local_aot_executor(session)
                     else:
-                        module = tvm.micro.create_local_graph_executor(tvmc_package.graph, lib, dev)
+                        if benchmark:
+                            try:
+                                # MicroTVM on-device graph executor if available
+                                module = executor.create(tvmc_package.graph, lib, dev)
+                            except AttributeError:
+                                logger.debug("Falling back to host-driven MicroTVM session.")
+                                fallback = True
+                        else:
+                            fallback = True
+
+                        if fallback:
+                            module = tvm.micro.create_local_graph_executor(
+                                tvmc_package.graph, lib, dev
+                            )
                 else:
                     logger.debug("Creating runtime with profiling disabled.")
                     module = executor.create(tvmc_package.graph, lib, dev)
@@ -668,10 +685,18 @@ def run_module(
 
             logger.debug("Collecting graph input shape and type:")
 
-            if isinstance(session, tvm.rpc.client.RPCSession):
+            if isinstance(session, tvm.rpc.client.RPCSession) or (device == "micro" and not fallback):
                 # RPC does not support datatypes such as Array and Map,
                 # fallback to obtaining input information from graph json.
-                shape_dict, dtype_dict = get_input_info(tvmc_package.graph, tvmc_package.params)
+                if tvmc_package.executor_type == "aot":
+                    # TODO: via cmdline args?
+                    input_name = "input_1"
+                    input_shape = (1, 640)
+                    input_dtype = "int8"
+                    shape_dict = {input_name: input_shape}
+                    dtype_dict = {input_name: input_dtype}
+                else:
+                    shape_dict, dtype_dict = get_input_info(tvmc_package.graph, tvmc_package.params)
             else:
                 shape_dict, dtype_dict = module.get_input_info()
 
@@ -690,18 +715,12 @@ def run_module(
                 # This print is intentional
                 print(report)
 
-            if not benchmark or device == "micro":
-                # TODO(gromero): Fix time_evaluator() for micro targets. Once it's
-                # fixed module.benchmark() can be used instead and this if/else can
-                # be removed.
+            if not benchmark:
                 module.run()
                 times = []
             else:
-                # Call the benchmarking function of the executor.
-                # Optionally measure e2e data transfers from the
-                # CPU to device memory overheads (e.g. PCIE
-                # overheads if the device is a discrete GPU).
                 if end_to_end:
+                    assert device != "micro", "End-to-end benchmark not supported by MicroTVM device"
                     dev = session.cpu()
                 times = module.benchmark(dev, number=number, repeat=repeat, end_to_end=end_to_end)
 
