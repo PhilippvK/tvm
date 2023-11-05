@@ -229,9 +229,10 @@ void BufferInfoExtractor::VisitStmt(const Stmt& n) {
 
 void BufferInfoExtractor::RecordAllocateNodeInfo(const AllocateNode* op) {
   auto size_bytes = CalculateExtentsSize(op);
+  auto storage_scope = Downcast<PointerType>(op->buffer_var->type_annotation)->storage_scope;
   // We only statically memory plan only allocates with known
   // compile time sizes.
-  if (size_bytes.defined()) {
+  if (size_bytes.defined() && !(size_bytes.IntValue() < 1024 && storage_scope == "global")) {
     if (allocate_infos.find(op->buffer_var) == allocate_infos.end()) {
       // By default, the core compiler is assumed to attach the a default pool to each allocate.
       ICHECK(op->annotations.count(kPoolCandidatesAllocateAttr))
