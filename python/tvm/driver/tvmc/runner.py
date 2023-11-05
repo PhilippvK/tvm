@@ -82,7 +82,7 @@ def add_run_parser(subparsers, main_parser, json_params):
     )
     parser.add_argument(
         "--fill-mode",
-        choices=["zeros", "ones", "random"],
+        choices=["zeros", "ones", "random", "none"],
         default="random",
         help="fill all input tensors with values. In case --inputs/-i is provided, "
         "they will take precedence over --fill-mode. Any remaining inputs will be "
@@ -685,28 +685,35 @@ def run_module(
 
             logger.debug("Collecting graph input shape and type:")
 
-            if isinstance(session, tvm.rpc.client.RPCSession) or (device == "micro" and not fallback):
-                # RPC does not support datatypes such as Array and Map,
-                # fallback to obtaining input information from graph json.
-                if tvmc_package.executor_type == "aot":
-                    # TODO: via cmdline args?
-                    input_name = "input_1"
-                    input_shape = (1, 640)
-                    input_dtype = "int8"
-                    shape_dict = {input_name: input_shape}
-                    dtype_dict = {input_name: input_dtype}
-                else:
-                    shape_dict, dtype_dict = get_input_info(tvmc_package.graph, tvmc_package.params)
+            if fill_mode == "none":
+                logger.info("Skipped stetting inputs to the module.")
             else:
-                shape_dict, dtype_dict = module.get_input_info()
+                if isinstance(session, tvm.rpc.client.RPCSession) or (device == "micro" and not fallback):
+                    # RPC does not support datatypes such as Array and Map,
+                    # fallback to obtaining input information from graph json.
+                    if tvmc_package.executor_type == "aot":
+                        assert inputs is not None, "MicroTVM AoT Executor needs --inputs or --fill-mode none"
+                        # assert input_shapes is not None, "TODO"
+                        # print("input_shapes", input_shapes)
+                        # TODO: via cmdline args?
+                        # input_name = "input_1"
+                        # input_shape = (1, 640)
+                        # input_dtype = "int8"
+                        # shape_dict = {input_name: input_shape}
+                        # dtype_dict = {input_name: input_dtype}
+                    else:
+                        shape_dict, dtype_dict = get_input_info(tvmc_package.graph, tvmc_package.params)
+                else:
+                    shape_dict, dtype_dict = module.get_input_info()
 
-            logger.debug("Graph input shape: %s", shape_dict)
-            logger.debug("Graph input type: %s", dtype_dict)
+                logger.debug("Graph input shape: %s", shape_dict)
+                logger.debug("Graph input type: %s", dtype_dict)
 
-            inputs_dict = make_inputs_dict(shape_dict, dtype_dict, inputs, fill_mode)
+                inputs_dict = make_inputs_dict(shape_dict, dtype_dict, inputs, fill_mode)
 
-            logger.debug("Setting inputs to the module.")
-            module.set_input(**inputs_dict)
+                logger.debug("Setting inputs to the module.")
+                # module.set_input(**inputs_dict)
+                module.set_input(**inputs_dict)
 
             # Run must be called explicitly if profiling
             if profile:
