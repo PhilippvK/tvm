@@ -716,7 +716,7 @@ def run_module(
                 module.set_input(**inputs_dict)
 
             # Run must be called explicitly if profiling
-            if profile:
+            if profile and device != "micro":
                 logger.info("Running the module with profiling enabled.")
                 report = module.profile()
                 # This print is intentional
