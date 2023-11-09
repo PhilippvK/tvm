@@ -69,6 +69,13 @@ class Handler(server.ProjectAPIHandler):
                     help="Run make with verbose output",
                 ),
                 server.ProjectOption(
+                    "cmsis_path",
+                    optional=["build"],
+                    type="str",
+                    default=None,
+                    help="Compile with CMSIS-NN libraries located at path",
+                ),
+                server.ProjectOption(
                     "workspace_size_bytes",
                     optional=["generate_project"],
                     type="int",
@@ -163,7 +170,11 @@ class Handler(server.ProjectAPIHandler):
     def build(self, options):
         build_dir = PROJECT_DIR / "build"
         build_dir.mkdir()
-        subprocess.check_call(["cmake", ".."], cwd=build_dir)
+        extra_args = []
+        cmsis_path = options.get("cmsis_path", None)
+        if cmsis_path:
+            extra_args.append(f"-DCMSIS_PATH={cmsis_path}")
+        subprocess.check_call(["cmake", *extra_args, ".."], cwd=build_dir)
         subprocess.check_call(["make"], cwd=build_dir)
 
     def flash(self, options):
