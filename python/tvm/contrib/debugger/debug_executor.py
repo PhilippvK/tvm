@@ -35,6 +35,7 @@ _DUMP_PATH_PREFIX = "_tvmdbg_"
 
 
 def create(graph_json_str, libmod, device, dump_root=None):
+    print("de.create", libmod, device)
     """Create a runtime executor module given a graph and module.
 
     Parameters
@@ -111,6 +112,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
     """
 
     def __init__(self, module, device, graph_json_str, dump_root):
+        print("GMD.__init__", module, device)
         self._dump_root = dump_root
         self._dump_path = None
         self._run_individual = module["run_individual"]
@@ -208,19 +210,26 @@ class GraphModuleDebug(graph_executor.GraphModule):
         return output_tensors
 
     def _run_per_layer(self):
+        print("GMD._run_perf_layer")
         """Execute up to each node and each debug output will be
         copied to the buffer.
 
         """
         output_tensors = []
         for i, node in enumerate(self.debug_datum.get_graph_nodes()):
+            print("% i", i)
+            print("node", node)
             self._execute_node(i)
             num_outputs = self.debug_datum.get_graph_node_output_num(node)
             for j in range(num_outputs):
+                print("% j", j)
+                name = node["name"]
+                print(f"running node={i}, output_ind={j}, with node_name: {name}")
                 logging.info(
                     "running node=%d, output_ind=%d, with node_name: %s", i, j, node["name"]
                 )
                 output_tensors.append(self._get_node_output(i, j))
+        print("% s d d u o t", j)
         self.debug_datum.update_output_tensors(output_tensors)
 
     def _run_debug(
@@ -232,11 +241,13 @@ class GraphModuleDebug(graph_executor.GraphModule):
         cooldown_interval_ms,
         repeats_to_cooldown,
     ):
+        print("GMD._run_debug")
         """Execute the node specified with index will be executed.
         Each debug output will be copied to the buffer
         Time consumed for each execution will be set as debug output.
         """
         # Get timing.
+        print("poi")
         self.debug_datum._time_list = self.run_individual(
             number=number,
             repeat=repeat,
@@ -245,6 +256,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
             cooldown_interval_ms=cooldown_interval_ms,
             repeats_to_cooldown=repeats_to_cooldown,
         )
+        print("iop")
 
         # Get outputs.
         self._run_per_layer()
@@ -289,6 +301,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         sort_by_time=True,
         **input_dict,
     ):
+        print("GMD.run")
         """Run forward execution of the graph with debug
 
         Parameters
@@ -357,6 +370,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         cooldown_interval_ms=0,
         repeats_to_cooldown=1,
     ):
+        print("GMD.run_individual")
         """Run each operation in the graph and get the time per op for all ops.
 
         number: int
@@ -394,6 +408,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         A 2-dimensional array where the dimensions are: the index of the operation and
         the repeat of the measurement.
         """
+        print("tgb")
         res = self._run_individual(
             number,
             repeat,
@@ -402,6 +417,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
             cooldown_interval_ms,
             repeats_to_cooldown,
         )
+        print("bgt")
         results = []
         offset = 0
         format_size = "@q"
@@ -424,6 +440,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         cooldown_interval_ms=0,
         repeats_to_cooldown=1,
     ):
+        print("GMD.run_individual_node", index)
         """Benchmark a single node in the serialized graph.
 
         This does not do any data transfers and uses arrays already on the device.
@@ -482,6 +499,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         return BenchmarkResult(list(results))
 
     def profile(self, collectors=None, **input_dict):
+        print("GMD.profile")
         """Run forward execution of the graph and collect overall and per-op
         performance metrics.
 
