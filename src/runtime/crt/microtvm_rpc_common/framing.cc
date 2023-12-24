@@ -23,6 +23,7 @@
  */
 
 #include <checksum.h>
+#include <iostream>
 #include <string.h>
 #include <tvm/runtime/crt/logging.h>
 #include <tvm/runtime/crt/rpc_common/framing.h>
@@ -88,12 +89,14 @@ size_t Unframer::BytesNeeded() {
 
 tvm_crt_error_t Unframer::Write(const uint8_t* data, size_t data_size_bytes,
                                 size_t* bytes_consumed) {
+  // std::cout << "Unframer::Write(... , " << data_size_bytes << ")" << std::endl;
   tvm_crt_error_t return_code = kTvmErrorNoError;
   input_ = data;
   input_size_bytes_ = data_size_bytes;
 
   while (return_code == kTvmErrorNoError && input_size_bytes_ > 0) {
     TVM_UNFRAMER_DEBUG_LOG("state: %02x size 0x%02zx", to_integral(state_), input_size_bytes_);
+    // std::cout << "state:" << to_integral(state_) << " size: " << input_size_bytes_ << std::endl;
     switch (state_) {
       case State::kFindPacketStart:
         return_code = FindPacketStart();
@@ -111,6 +114,7 @@ tvm_crt_error_t Unframer::Write(const uint8_t* data, size_t data_size_bytes,
         return_code = kTvmErrorFramingInvalidState;
         break;
     }
+    // std::cout << "return_code:" << return_code << std::endl;
   }
 
   *bytes_consumed = data_size_bytes - input_size_bytes_;
