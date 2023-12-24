@@ -279,24 +279,31 @@ def build(
     annotated_mods, target_host = Target.canon_target_map_and_host(annotated_mods, target_host)
 
     rt_mod_host = _driver_ffi.tir_to_runtime(annotated_mods, target_host)
+    print("[rt_mod_host]", rt_mod_host)
 
     annotated_mods, target_host = Target.canon_target_map_and_host(annotated_mods, target_host)
+    # print("annotated_mods", annotated_mods)
 
     if not isinstance(target_host, Target):
         target_host = Target(target_host)
 
     if str(runtime) == "crt" and runtime["system-lib"]:
+        print("if")
+        print("target_host.kind.name", target_host.kind.name)
         if target_host.kind.name == "c":
+            print("ifif")
             create_csource_crt_metadata_module = tvm._ffi.get_global_func(
                 "runtime.CreateCSourceCrtMetadataModule"
             )
             to_return = create_csource_crt_metadata_module([rt_mod_host], target_host, runtime)
         elif target_host.kind.name == "llvm":
+            print("ifelif")
             create_llvm_crt_metadata_module = tvm._ffi.get_global_func(
                 "runtime.CreateLLVMCrtMetadataModule"
             )
             to_return = create_llvm_crt_metadata_module([rt_mod_host], target_host, runtime)
     else:
+        print("else")
         to_return = rt_mod_host
 
     return OperatorModule.from_module(to_return, ir_module_by_target=annotated_mods, name=name)
