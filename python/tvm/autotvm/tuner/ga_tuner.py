@@ -52,42 +52,68 @@ class GATuner(Tuner):
         self.pop_size = min(self.pop_size, len(self.space))
         self.elite_num = min(self.pop_size, self.elite_num)
         self.visited = set(self.space.sample_ints(self.pop_size))
+        print("self.visited", self.visited, len(self.visited))
 
         # current generation
-        self.genes = [self.space.point2knob(idx) for idx in self.visited]
-        self.scores = []
+        self.new_genes = [self.space.point2knob(idx) for idx in self.visited]
+        self.known_genes = []
+        print("self.new_genes", self.new_genes, len(self.new_genes))
+        print("self.known_genes", self.known_genes, len(self.known_genes))
+        self.new_scores = []
+        self.known_scores = []
+        self.all_scores = {}
         self.elites = []
         self.elite_scores = []
         self.trial_pt = 0
+        self.idxs = [idx for idx in self.visited]
 
     def next_batch(self, batch_size):
+        print("next_batch", batch_size)
         ret = []
-        while len(ret) < batch_size and self.has_next():
-            gene = self.genes[self.trial_pt % self.pop_size]
+        while len(ret) < batch_size and self.has_next() and self.trial_pt < len(self.new_genes):
+            gene = self.new_genes[self.trial_pt]
             self.trial_pt += 1
             ret.append(self.space.get(self.space.knob2point(gene)))
+        print("->", ret, len(ret))
         return ret
 
     def update(self, inputs, results):
+        print("update", len(inputs), len(results))
         for inp, res in zip(inputs, results):
+            print("self.idxs", self.idxs, len(self.idxs))
+            idx = self.idxs[0]
             if res.error_no == 0:
                 y = inp.task.flop / np.mean(res.costs)
-                self.scores.append(y)
+                self.new_scores.append(y)
+                self.all_scores[idx] = y
             else:
-                self.scores.append(0.0)
+                self.new_scores.append(0.0)
+                self.all_scores[idx] = 0.0
+            del self.idxs[0]
 
-        if len(self.scores) >= len(self.genes) and len(self.visited) < len(self.space):
-            next_genes = []
+        if (len(self.new_scores) + len(self.known_scores)) >= (len(self.new_genes) + len(self.known_genes)) and len(self.visited) < len(self.space):
+            print("yes")
+            new_genes = []
+            known_genes = []
+            known_scores = []
+            idxs = []
             # There is no reason to crossover or mutate since the size of the unvisited
             # is no larger than the size of the population.
             if len(self.space) - len(self.visited) <= self.pop_size:
+                print("no crossover")
                 for idx in range(self.space.range_length):
+                    print("idx", idx)
                     if self.space.is_index_valid(idx) and idx not in self.visited:
-                        next_genes.append(self.space.point2knob(idx))
+                        print("valid and not visited")
+                        new_genes.append(self.space.point2knob(idx))
+                        idxs.append(idx)
                         self.visited.add(idx)
+                    else:
+                        print("invalid or visited")
+                print("self.visited", self.visited, len(self.visited))
             else:
-                genes = self.genes + self.elites
-                scores = np.array(self.scores[: len(self.genes)] + self.elite_scores)
+                genes = self.known_genes + self.new_genes + self.elites
+                scores = np.array(self.known_scores + self.new_scores + self.elite_scores)
 
                 # reserve elite
                 self.elites, self.elite_scores = [], []
@@ -100,26 +126,54 @@ class GATuner(Tuner):
                 scores += 1e-8
                 scores /= np.max(scores)
                 probs = scores / np.sum(scores)
-                while len(next_genes) < self.pop_size:
+                print("elite")
+                while (len(new_genes) + len(known_genes)) < self.pop_size:
+                    print("crossover")
                     # cross over
                     p1, p2 = np.random.choice(indices, size=2, replace=False, p=probs)
                     p1, p2 = genes[p1], genes[p2]
                     point = np.random.randint(len(self.space.dims))
                     tmp_gene = p1[:point] + p2[point:]
                     # mutation
+                    print("mutation")
                     for j, dim in enumerate(self.space.dims):
                         if np.random.random() < self.mutation_prob:
                             tmp_gene[j] = np.random.randint(dim)
 
-                    if self.space.is_index_valid(self.space.knob2point(tmp_gene)):
-                        next_genes.append(tmp_gene)
-                        self.visited.add(self.space.knob2point(tmp_gene))
-            self.genes = next_genes
+                    idx = self.space.knob2point(tmp_gene)
+                    print("idx")
+                    if self.space.is_index_valid(idx):
+                        print("valid")
+                        if idx in idxs:
+                            print("continue")
+                            continue
+                        if idx not in self.visited:
+                            print("not visited")
+                            new_genes.append(tmp_gene)
+                            self.visited.add(idx)
+                            idxs.append(idx)
+                        else:
+                            print("visited")
+                            if tmp_gene in known_genes:
+                                print("cont2")
+                                continue
+                            known_genes.append(tmp_gene)
+                            known_scores.append(self.all_scores[idx])
+                    else:
+                        print("invalid")
+                    print("self.visited", self.visited, len(self.visited))
+            self.new_genes = new_genes
+            self.known_genes = known_genes
+            self.idxs = idxs
             self.trial_pt = 0
-            self.scores = []
+            self.new_scores = []
+            self.known_scores = known_scores
+            print("update done")
 
     def has_next(self):
-        return len(self.visited) - (len(self.genes) - self.trial_pt) < len(self.space)
+        print("has_next?")
+        # return len(self.visited) - (len(self.genes) - self.trial_pt) < len(self.space)
+        return len(self.visited) - (len(self.new_genes) - self.trial_pt) < len(self.space)
 
     def load_history(self, data_set, min_seed_records=500):
         pass
