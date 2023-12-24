@@ -117,16 +117,20 @@ class DebugResult(object):
         return self._dtype_list
 
     def get_output_tensors(self):
+        print("get_output_tensors")
         """Get the output tensors of each operation in numpy format"""
         eid = 0
         output_tensors = {}
         for i, node in enumerate(self._nodes_list):
+            print("i:", i)
             num_outputs = self.get_graph_node_output_num(node)
             for j in range(num_outputs):
+                print("j:", j)
 
                 # the node name is not unique, so we need a consistent
                 # indexing based on the list ordering in the nodes
                 key = f"{node['name']}____topo-index:{i}____output-num:{j}"
+                print("key", key)
                 output_tensors[key] = self._output_tensor_list[eid]
                 eid += 1
         return output_tensors
