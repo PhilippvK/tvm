@@ -32,6 +32,7 @@
 #include <cmath>
 #include <numeric>
 #include <sstream>
+#include <iostream>
 
 #include "../../rpc/rpc_session.h"
 
@@ -40,19 +41,27 @@ namespace runtime {
 std::string GraphExecutorDebug::RunIndividual(int number, int repeat, int min_repeat_ms,
                                               int limit_zero_time_iterations,
                                               int cooldown_interval_ms, int repeats_to_cooldown) {
+  std::cout << "RunIndividual" << std::endl;
   // warmup run
   GraphExecutor::Run();
+  std::cout << "AAA" << std::endl;
   std::string tkey = module_->type_key();
   std::vector<std::vector<double>> time_sec_per_op(op_execs_.size());
+  std::cout << "tkey=" << tkey << std::endl;
   if (tkey == "rpc") {
     // RPC modules rely on remote timing which implements the logic from the else branch.
+    std::cout << "BBB1" << std::endl;
     for (size_t index = 0; index < op_execs_.size(); ++index) {
+      std::cout << "index=" << index << std::endl;
       time_sec_per_op[index] =
           RunOpRPC(index, number, repeat, min_repeat_ms, limit_zero_time_iterations,
                    cooldown_interval_ms, repeats_to_cooldown);
+      std::cout << "qaz" << std::endl;
     }
+    std::cout << "zqa" << std::endl;
   } else {
     int op = 0;
+    std::cout << "BBB2" << std::endl;
     for (size_t index = 0; index < op_execs_.size(); ++index) {
       std::string result_str =
           RunIndividualNode(index, number, repeat, min_repeat_ms, limit_zero_time_iterations,
@@ -71,6 +80,7 @@ std::string GraphExecutorDebug::RunIndividual(int number, int repeat, int min_re
       }
     }
   }
+  std::cout << "lll" << std::endl;
 
   std::ostringstream os;
   int64_t size = time_sec_per_op.size();
@@ -82,6 +92,7 @@ std::string GraphExecutorDebug::RunIndividual(int number, int repeat, int min_re
       os.write(reinterpret_cast<char*>(&data), sizeof(double));
     }
   }
+  std::cout << "kkk" << std::endl;
   return os.str();
 }
 
@@ -117,6 +128,7 @@ std::vector<double> GraphExecutorDebug::RunOpRPC(int index, int number, int repe
                                                  int min_repeat_ms, int limit_zero_time_iterations,
                                                  int cooldown_interval_ms,
                                                  int repeats_to_cooldown) {
+  std::cout << "RunOpRPC" << std::endl;
   std::vector<double> results(repeat, 0);
   // Right now we expect either "tvm_op" for nodes which run PackedFunc or "null" for nodes
   // which represent inputs/parameters to the graph. Other types may be supported in the
@@ -138,18 +150,26 @@ std::vector<double> GraphExecutorDebug::RunOpRPC(int index, int number, int repe
   uint32_t num_inputs = param.num_inputs;
   uint32_t num_outputs = param.num_outputs;
 
+  std::cout << "QQQ" << std::endl;
+  std::cout << "name=" << name << std::endl;
+  if (name == "__nop") {
+    LOG(INFO) << "Skipping __nop operator... ";
+    return results;
+  }
   PackedFunc time_eval =
       runtime::Registry::Get("runtime.RPCTimeEvaluator")
           ->
           operator()(module_, name, static_cast<int>(dev.device_type), dev.device_id, number,
                      repeat, min_repeat_ms, limit_zero_time_iterations, cooldown_interval_ms,
                      repeats_to_cooldown, /*cache_flush_bytes=*/0, "");
+  std::cout << "WWW" << std::endl;
 
   int num_flat_args = num_inputs + num_outputs;
   auto values = std::make_unique<TVMValue[]>(num_flat_args);
   auto type_codes = std::make_unique<int[]>(num_flat_args);
   TVMArgsSetter setter(values.get(), type_codes.get());
   int offs = 0;
+  std::cout << "EEE" << std::endl;
   const auto& inode = nodes_[index];
   for (const auto& e : inode.inputs) {
     uint32_t eid = this->entry_id(e);
@@ -157,6 +177,7 @@ std::vector<double> GraphExecutorDebug::RunOpRPC(int index, int number, int repe
     setter(offs, arg);
     offs++;
   }
+  std::cout << "RRR" << std::endl;
   for (uint32_t i = 0; i < num_outputs; ++i) {
     uint32_t eid = this->entry_id(index, i);
     DLTensor* arg = const_cast<DLTensor*>(data_entry_[eid].operator->());
@@ -164,17 +185,20 @@ std::vector<double> GraphExecutorDebug::RunOpRPC(int index, int number, int repe
     offs++;
   }
   TVMRetValue rv;
+  std::cout << "TTT" << std::endl;
   time_eval.CallPacked(TVMArgs(values.get(), type_codes.get(), num_flat_args), &rv);
   std::string results_str = rv.operator std::string();
   const double* blob_ptr = reinterpret_cast<const double*>(results_str.data());
   for (int i = 0; i < repeat; ++i, ++blob_ptr) {
     results[i] = *blob_ptr;
   }
+  std::cout << "YYY" << std::endl;
 
   std::ostringstream os;
   for (auto& repeat_data : results) {
     os << std::to_string(repeat_data) << ", ";
   }
+  std::cout << "UUU" << std::endl;
   LOG(INFO) << "Got op timing: " << os.str();
   return results;
 }
@@ -234,9 +258,12 @@ PackedFunc GraphExecutorDebug::GetFunction(const String& name,
       std::string blob =
           this->RunIndividual(number, repeat, min_repeat_ms, limit_zero_time_iterations,
                               cooldown_interval_ms, repeats_to_cooldown);
+      // std::cout << "blob=" << blob << std::endl;
+      std::cout << "blob0" << std::endl;
       TVMByteArray arr;
       arr.size = blob.length();
       arr.data = blob.data();
+      std::cout << "blob1" << std::endl;
       *rv = arr;
     });
   } else if (name == "run_individual_node") {
@@ -345,6 +372,7 @@ NDArray GraphExecutorDebug::DebugGetNodeOutput(int index) {
 }
 
 NDArray GraphExecutorDebug::GetNodeOutput(int node, int out_ind) {
+  std::cout << "GraphExecutorDebug::GetNodeOutput node=" << node << " out_ind=" << out_ind << std::endl;
   ICHECK_EQ(node, last_executed_node_);
   ICHECK_LT(entry_id(node, out_ind), data_entry_.size());
   return data_entry_[entry_id(node, out_ind)].CopyTo({kDLCPU, 0});
