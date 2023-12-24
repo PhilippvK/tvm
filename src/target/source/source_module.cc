@@ -945,6 +945,7 @@ runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& mod
   }
 
   for (runtime::Module mod : final_modules) {
+    std::cout << "mod=" << mod << std::endl;
     auto pf_funcs = mod.GetFunction("get_func_names");
     if (pf_funcs != nullptr) {
       Array<String> func_names_ = pf_funcs();
