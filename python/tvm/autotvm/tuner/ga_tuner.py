@@ -39,6 +39,7 @@ class GATuner(Tuner):
     """
 
     def __init__(self, task, pop_size=100, elite_num=3, mutation_prob=0.1):
+        print("__init__")
         super(GATuner, self).__init__(task)
 
         # algorithm configurations
