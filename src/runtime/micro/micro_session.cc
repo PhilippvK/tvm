@@ -320,6 +320,7 @@ class MicroTransportChannel : public RPCChannel {
       size_t bytes_consumed = 0;
       int unframer_error = unframer_.Write((const uint8_t*)pending_chunk_.data(),
                                            pending_chunk_.size(), &bytes_consumed);
+      // std::cout << "bytes_consumed=" << bytes_consumed << std::endl;
 
       ICHECK(bytes_consumed <= pending_chunk_.size())
           << "consumed " << bytes_consumed << " want <= " << pending_chunk_.size();
