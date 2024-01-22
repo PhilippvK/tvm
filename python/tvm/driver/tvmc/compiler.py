@@ -15,6 +15,38 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=unused-argument
+import tempfile
+import subprocess
+
+from anytree import Node
+from anytree import RenderTree
+
+class Context:
+    def __init__(self) -> None:
+        self.nodes = [Node("Tree", start=-1, stop=-1, handle=None, global_vars=[])]
+        self.parent_stack = [0]
+        self.layer = 0
+
+    @property
+    def parent(self):
+        return self.nodes[self.parent_stack[-1]]
+
+    @property
+    def tree(self):
+        return self.nodes[0]
+
+    def push(self, node):
+        self.layer += 1
+        self.parent_stack.append(len(self.nodes))
+        self.nodes.append(node)
+
+    def pop(self):
+        self.layer -= 1
+        return self.parent_stack.pop()
+
+
+context = Context()
+
 """
 Provides support to compile networks both AOT and JIT.
 """
@@ -31,7 +63,7 @@ import tvm
 from tvm import autotvm, auto_scheduler
 from tvm import relay
 from tvm.driver.tvmc.registry import generate_registry_args, reconstruct_registry_entity
-from tvm.ir.instrument import PassInstrument, PassTimingInstrument, PassPrintingInstrument
+from tvm.ir.instrument import PassInstrument, PassTimingInstrument, PassPrintingInstrument, pass_instrument
 from tvm.ir.memory_pools import WorkspaceMemoryPools
 from tvm.target import Target
 from tvm.relay.backend import Executor, Runtime
@@ -163,6 +195,16 @@ def add_compile_parser(subparsers, _, json_params):
         help="TODO",
     )
     parser.add_argument(
+        "--print-pass-tree",
+        action="store_true",
+        help="TODO",
+    )
+    parser.add_argument(
+        "--dump-pass-diff",
+        action="store_true",
+        help="TODO",
+    )
+    parser.add_argument(
         "--print-pass-times",
         action="store_true",
         help="print compilation time per pass",
@@ -201,6 +243,55 @@ def OptionallyDisableLegalize(disable_legalize):
     with TempOpAttr("qnn.dense", "FTVMQnnLegalize", do_not_legalize) as denseCtx:
         with TempOpAttr("qnn.conv2d", "FTVMQnnLegalize", do_not_legalize) as convCtx:
             yield (denseCtx, convCtx)
+
+
+@pass_instrument
+class PassTreeInstrument:
+    def __init__(self):
+        self.dumps = {}
+        self.count_before = {}
+        self.count_after = {}
+        self.count_total = 0
+
+    def run_before_pass(self, mod, info):
+        handle = mod.handle
+        g = dict(mod.global_var_map_)
+        g_ = list(g.keys())
+        if info.name in self.count_before:
+            self.count_before[info.name] += 1
+        else:
+            self.count_before[info.name] = 1
+        self.count_total += 1
+        s = str(mod)
+        key = f"pass_{self.count_total-1}_{info.name}_x"
+        assert key not in self.dumps
+        self.dumps[key] = s
+        context.push(
+            Node(info.name, parent=context.parent, key=key, start=self.count_total - 1, handle=handle, global_vars=g_)
+        )
+
+    def run_after_pass(self, mod, info):
+        if info.name in self.count_after:
+            self.count_after[info.name] += 1
+        else:
+            self.count_after[info.name] = 1
+        self.count_total += 1
+        s = str(mod)
+        key = f"pass_{self.count_total-1}_{info.name}_y"
+        key_ = context.parent.key
+        context.parent.stop = self.count_total - 1
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            tmpdirname = Path(tmpdirname)
+            with open(tmpdirname / key_, "w") as f:
+                f.write(self.dumps[key_])
+            with open(tmpdirname / key, "w") as f:
+                f.write(s)
+            args = ["git", "diff", "--no-index", key_, key]
+            out = subprocess.run(args, check=False, stdout=subprocess.PIPE, cwd=tmpdirname).stdout
+            self.dumps[key + ".diff"] = out.decode("utf-8")
+        assert key not in self.dumps
+        self.dumps[key] = s
+        context.pop()
 
 
 def drive_compile(args):
@@ -255,6 +346,8 @@ def drive_compile(args):
             workspace_pools=(
                 workspace_pools_recombobulate(args, [workspace_pools_target], extra_targets)
             ),
+            print_pass_tree=args.print_pass_tree,
+            dump_pass_diff=args.dump_pass_diff,
             print_pass_times=args.print_pass_times,
             print_ir_before=args.print_ir_before,
             print_ir_after=args.print_ir_after,
@@ -284,6 +377,8 @@ def compile_model(
     use_vm: bool = False,
     mod_name: Optional[str] = "default",
     workspace_pools: Optional[WorkspaceMemoryPools] = None,
+    print_pass_tree: bool = False,
+    dump_pass_diff: bool = False,
     print_pass_times: bool = False,
     print_ir_before: Optional[List[str]] = None,
     print_ir_after: Optional[List[str]] = None,
@@ -348,6 +443,10 @@ def compile_model(
     workspace_pools: WorkspaceMemoryPools, optional
         Specification of WorkspacePoolInfo objects to be used as workspace memory in the
         compilation.
+    print_pass_tree: bool
+        TODO
+    dump_pass_diff: bool
+        TODO
     print_pass_times: bool
         To enable printing a breakdown of compilation times by pass. Disabled by default.
     print_ir_before: list[str], optional
@@ -387,8 +486,8 @@ def compile_model(
     dumps = {}
 
     config = parse_configs(pass_context_configs)
-    if "tir" in dump_code:
-        config, dumps = add_tir_to_dumps(config, dumps)
+    if any(f"tir{i}" in dump_code for i in range(4)) or "tir" in dump_code:
+        config, dumps = add_tir_to_dumps(config, dumps, dump_code)
 
     initial_relay = None
     if dump_offloads != "":
@@ -408,6 +507,10 @@ def compile_model(
         partition_opts.append(codegen_from_cli["opts"])
         if codegen["config_key"] is not None:
             config[codegen["config_key"]] = codegen_from_cli["opts"]
+
+    if print_pass_tree or dump_pass_diff:
+        pass_tree_inst = PassTreeInstrument()
+        instruments = [pass_tree_inst] if instruments is None else [pass_tree_inst] + instruments
 
     if print_pass_times:
         timing_inst = PassTimingInstrument()
@@ -484,12 +587,27 @@ def compile_model(
                 mod_name=mod_name,
                 workspace_pools=workspace_pools,
             )
+        # print("graph_module", type(graph_module), dir(graph_module))
+        # print("graph_module.module", type(graph_module.module), dir(graph_module.module))
+        # print("graph_module.module", type(graph_module.get_lib()), dir(graph_module.get_lib()))
+        # print("src", graph_module.get_lib().get_source())
+        dso_modules = graph_module.get_lib()._collect_dso_modules()
+        # print("dso_modules", dso_modules)
+        for dso in dso_modules:
+            # print("dso", dso)
+            dso_src = dso.get_source()
+            # print("dso_src", dso_src)
+        # non_dso_modules = graph_module.get_lib()._collect_from_import_tree(lambda m: m not in dso_modules)
+        # print("non_dso_modules", non_dso_modules)
+        # input("!")
 
         # Generate output dump files with sources
         for source_type in dump_code:
-            if source_type == "relay":
+            if source_type == "relay0":
+                dumps[source_type] = str(initial_relay)
+            elif source_type == "relay":
                 dumps[source_type] = str(mod)
-            elif source_type == "tir":
+            elif "tir" in source_type:
                 dumps[source_type] = "\n".join(dumps[source_type])
             else:
                 lib = graph_module.lib if use_vm else graph_module.get_lib()
@@ -498,6 +616,28 @@ def compile_model(
                 dumps[source_type] = lib.get_source(source_type)
                 for smod in lib.imported_modules:
                     dumps[smod.type_key] = smod.get_source()
+
+        if dump_pass_diff:
+            new_dumps = instruments[0].dumps
+            dumps.update(new_dumps)
+
+        # Write dumps to file.
+        if dumps:
+            save_dumps(str(package_path), dumps)
+
+        if print_pass_tree:
+            print("============================")
+            text = ""
+            for pre, fill, node in RenderTree(context.tree):
+                gvars = ",".join(node.global_vars)
+                LIMIT = 40
+                gvars = gvars.replace("tvmgen_default_", "")
+                if len(gvars) > LIMIT:
+                    gvars = gvars[: LIMIT - 3] + "..."
+                if len(node.global_vars) > 0:
+                    gvars = gvars + f" (#={len(node.global_vars)})"
+                print("%s%s [%d..%d] %s" % (pre, node.name, node.start, node.stop, gvars))
+            print("============================")
 
         # Create a new tvmc model package object from the graph definition.
         package_path = tvmc_model.export_package(
@@ -563,21 +703,38 @@ def build(
     )
 
 
-def add_tir_to_dumps(config, dumps):
+
+def add_tir_to_dumps(config, dumps, dump_code):
     """
     Creates a debug pass that dumps TIR functions as a list of strings.
     """
-    key = "tir"
-    phase = 3  # final TIR phase before codegen
-    dumps[key] = []
+    def get_dump_tir_pass(phase):
+        @tvm.tir.transform.prim_func_pass(opt_level=0)
+        def _dump_tir_pass(tir_func, _, __):
+            if phase is None:
+                key = "tir"
+                phase = 3
+            else:
+                key = "tir" + str(phase)
+            if key in dumps:
+                dumps[key].append(str(tir_func))
+            else:
+                dumps[key] = [str(tir_func)]
+            return tir_func
 
-    @tvm.tir.transform.prim_func_pass(opt_level=0)
-    def _dump_tir_pass(tir_func, _, __):
-        dumps[key].append(str(tir_func))
-        return tir_func
+        return [phase, _dump_tir_pass]
 
     tir_lower_passes = config.get("tir.add_lower_pass", [])
-    tir_lower_passes.append((phase, _dump_tir_pass))
+    if "tir0" in dump_code:
+        tir_lower_passes.append(get_dump_tir_pass(0))
+    if "tir1" in dump_code:
+        tir_lower_passes.append(get_dump_tir_pass(1))
+    if "tir2" in dump_code:
+        tir_lower_passes.append(get_dump_tir_pass(2))
+    if "tir3" in dump_code:
+        tir_lower_passes.append(get_dump_tir_pass(3))
+    if "tir" in dump_code:
+        tir_lower_passes.append(get_dump_tir_pass(None))
     config["tir.add_lower_pass"] = tir_lower_passes
 
     return config, dumps
@@ -599,7 +756,7 @@ def save_dumps(module_name: str, dumps: Dict[str, str], dump_root: str = "."):
     """
 
     for dump_format in dumps:
-        dump_name = module_name + "." + dump_format
+        dump_name = str(module_name) + "." + dump_format
         with open(Path(dump_root, dump_name), "w") as f:
             f.write(dumps[dump_format])
 
