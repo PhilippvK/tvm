@@ -16,7 +16,6 @@
 # under the License.
 # pylint: disable=redefined-builtin, invalid-name
 """Operators used in TIR expression."""
-import warnings
 from typing import Any, Optional
 
 import tvm._ffi
@@ -251,7 +250,7 @@ def call_llvm_intrin(dtype, name, *args, span=None):
        The name of the llvm intrinsic function.
 
     args : list
-       Poistional arguments.
+       Positional arguments.
 
     span : Optional[Span]
         The location of this operator in the source code.
@@ -271,7 +270,7 @@ def call_llvm_intrin(dtype, name, *args, span=None):
     else:
         llvm_id = name
     if llvm_id == 0:
-        warnings.warn(f"Unknown llvm intrinsic function {name}, falling back to 0")
+        raise ValueError(f"Unknown llvm intrinsic function {name}")
     return call_intrin(
         dtype,
         Op.get("tir.call_llvm_intrin"),
@@ -293,7 +292,7 @@ def call_llvm_pure_intrin(dtype, name, *args, span=None):
        The name of the llvm intrinsic function.
 
     args : list
-       Poistional arguments.
+       Positional arguments.
 
     span : Optional[Span]
         The location of this operator in the source code.
@@ -313,7 +312,7 @@ def call_llvm_pure_intrin(dtype, name, *args, span=None):
     else:
         llvm_id = name
     if llvm_id == 0:
-        warnings.warn(f"Unknown llvm intrinsic function {name}, falling back to 0")
+        raise ValueError(f"Unknown llvm intrinsic function {name}")
     return call_intrin(
         dtype,
         Op.get("tir.call_llvm_pure_intrin"),
@@ -601,6 +600,23 @@ def tvm_thread_allreduce(*freduce_args):
         The call expression.
     """
     return call_intrin("handle", "tir.tvm_thread_allreduce", *freduce_args)
+
+
+def tvm_thread_invariant(cond):
+    """Mark condition as thread invariant.
+
+    Parameters
+    ----------
+    cond : Expr
+        The condition.
+
+    Returns
+    -------
+    call : PrimExpr
+        The call expression.
+    """
+    assert isinstance(cond, PrimExpr)
+    return call_intrin(cond.dtype, "tir.tvm_thread_invariant", cond)
 
 
 def tvm_storage_sync(storage_scope):
@@ -1062,7 +1078,6 @@ def ptx_mma(
 
     saturate : bool
         The optional saturation at the output.
-
 
     operator : Optional[Literal["xor", "and"]]
         The 1-bit operator.
@@ -3253,6 +3268,74 @@ def TVMBackendFreeWorkspace(device_type, device_id, ptr):
         The call expression.
     """
     return call_intrin("int32", "tir.TVMBackendFreeWorkspace", device_type, device_id, ptr)
+
+
+def anylist_getitem(list_handle, index):
+    """Returns an item from any list.
+    list_handle: Var
+        The handle to anylist
+    index : int
+        The index
+    Returns
+    -------
+    call : PrimExpr
+        The call expression.
+    """
+    return call_intrin("handle", "tir.anylist_getitem", list_handle, index)
+
+
+def anylist_resetitem(list_handle, index):
+    """Reset an item from any list.
+    list_handle: Var
+        The handle to anylist
+    index : int
+        The index
+    Returns
+    -------
+    call : PrimExpr
+        The call expression.
+    """
+    return call_intrin("int", "tir.anylist_resetitem", list_handle, index)
+
+
+def anylist_setitem_call_packed(list_handle, index, func_name, *args):
+    """Set anylist item by result of packed call.
+    list_handle: Var
+        The handle to anylist
+    index : int
+        The index
+    func_name: str
+        The name of the function to be called.
+    args:
+        Extra arguments
+    Returns
+    -------
+    call : PrimExpr
+        The call expression.
+    """
+    return call_intrin(
+        "int", "tir.anylist_setitem_call_packed", list_handle, index, func_name, *args
+    )
+
+
+def anylist_setitem_call_cpacked(list_handle, index, func_name, *args):
+    """Set anylist item by result of packed call.
+    list_handle: Var
+        The handle to anylist
+    index : int
+        The index
+    func_name: str
+        The name of the function to be called.
+    args:
+        Extra arguments
+    Returns
+    -------
+    call : PrimExpr
+        The call expression.
+    """
+    return call_intrin(
+        "int", "tir.anylist_setitem_call_cpacked", list_handle, index, func_name, *args
+    )
 
 
 # pylint: disable=unnecessary-lambda

@@ -35,6 +35,7 @@
 
 #include "../../tir/transforms/ir_utils.h"
 #include "literal/cuda_half_t.h"
+#include "literal/cuda_int8_t.h"
 #include "ptx.h"
 
 namespace tvm {
@@ -130,6 +131,7 @@ std::string CodeGenCUDA::Finish() {
   if (enable_int8_) {
     decl_stream << "#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 610)\n";
     decl_stream << "#include <sm_61_intrinsics.h>\n";
+    decl_stream << _cuda_int8_t_def;
     decl_stream << "#endif\n";
   }
 
@@ -435,6 +437,11 @@ void CodeGenCUDA::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
     }
   }
   LOG(FATAL) << "Cannot convert type " << t << " to CUDA type";
+}
+
+void CodeGenCUDA::PrintVecConstructor(DataType t, std::ostream& os) {
+  os << "make_";
+  PrintType(t, os);
 }
 
 void CodeGenCUDA::PrintVecBinaryOp(const std::string& op, DataType t, PrimExpr lhs, PrimExpr rhs,
@@ -1156,15 +1163,14 @@ void CodeGenCUDA::VisitStmt_(const EvaluateNode* op) {
 
 void CodeGenCUDA::VisitExpr_(const RampNode* op, std::ostream& os) {
   CHECK_LE(op->lanes, 4) << "ValueError: Ramp of more than 4 lanes is not allowed.";
-  os << "(make_";
-  PrintType(op->dtype, os);
+  PrintVecConstructor(op->dtype, os);
   os << "(";
   for (int i = 0; i < op->lanes; i++) {
     os << "(" << PrintExpr(op->base) << ")"
        << "+(" << PrintExpr(op->stride) << "*" << i << ")";
     if (i != op->lanes - 1) os << ", ";
   }
-  os << "))";
+  os << ")";
 }
 
 void CodeGenCUDA::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // NOLINT(*)
@@ -1184,8 +1190,7 @@ void CodeGenCUDA::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // NO
 
   if (op->dtype.is_float16()) {
     std::string v = PrintExpr(op->value);
-    os << "make_";
-    PrintType(op->dtype, os);
+    PrintVecConstructor(op->dtype, os);
     os << '(';
     for (int i = 0; i < op->lanes / 2; ++i) {
       if (i != 0) os << ", ";
@@ -1197,8 +1202,7 @@ void CodeGenCUDA::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // NO
 
   if (op->dtype.is_bfloat16()) {
     std::string v = PrintExpr(op->value);
-    os << "make_";
-    PrintType(op->dtype, os);
+    PrintVecConstructor(op->dtype, os);
     os << '(';
     for (int i = 0; i < op->lanes / 2; ++i) {
       if (i != 0) os << ", ";
@@ -1230,8 +1234,7 @@ void CodeGenCUDA::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // NO
           os << "(int)" << v;
         }
       } else if (op->lanes == 16 || op->lanes == 32) {
-        os << "make_";
-        PrintType(op->dtype, os);
+        PrintVecConstructor(op->dtype, os);
         os << '(';
         for (int i = 0; i < op->lanes / 8; ++i) {
           if (i != 0) os << ", ";
@@ -1253,30 +1256,11 @@ void CodeGenCUDA::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // NO
   }
 
   std::string v = PrintExpr(op->value);
-  os << "make_";
-  PrintType(op->dtype, os);
+  PrintVecConstructor(op->dtype, os);
   os << '(';
   for (int i = 0; i < op->lanes; ++i) {
     if (i != 0) os << ", ";
     os << v;
-  }
-  os << ')';
-}
-
-void CodeGenCUDA::VisitExpr_(const ShuffleNode* op, std::ostream& os) {
-  std::vector<std::string> to_shuffle(op->vectors.size());
-  for (int i = 0, e = op->vectors.size(); i < e; ++i) {
-    ICHECK(op->vectors[i].dtype().lanes() == 1) << "Only scalars can be shuffled in CUDA!";
-    to_shuffle[i] = PrintExpr(op->vectors[i]);
-  }
-  os << "make_";
-  PrintType(op->dtype, os);
-  os << '(';
-  for (int i = 0, e = op->indices.size(); i < e; ++i) {
-    const int64_t* val = as_const_int(op->indices[i]);
-    ICHECK(val && *val >= 0 && (int)*val < (int)to_shuffle.size());
-    if (i != 0) os << ", ";
-    os << to_shuffle[*val];
   }
   os << ')';
 }
@@ -1459,8 +1443,7 @@ void CodeGenCUDA::PrintVecElemLoadExpr(DataType t, int i, const std::string& val
 
   if (t.is_float16()) {
     if (i == 0) {
-      os << "make_";
-      PrintType(t, os);
+      PrintVecConstructor(t, os);
       os << '(';
     }
     if (i % 2 == 0) {
@@ -1478,8 +1461,7 @@ void CodeGenCUDA::PrintVecElemLoadExpr(DataType t, int i, const std::string& val
 
   if (t.is_bfloat16()) {
     if (i == 0) {
-      os << "make_";
-      PrintType(t, os);
+      PrintVecConstructor(t, os);
       os << '(';
     }
     if (i % 2 == 0) {
@@ -1496,8 +1478,7 @@ void CodeGenCUDA::PrintVecElemLoadExpr(DataType t, int i, const std::string& val
   }
 
   if (i == 0) {
-    os << "make_";
-    PrintType(t, os);
+    PrintVecConstructor(t, os);
     os << "(";
   }
   os << value;

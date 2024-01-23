@@ -77,6 +77,13 @@ struct CuBlasThreadEntry {
   static CuBlasThreadEntry* ThreadLocal();
 };  // CuBlasThreadEntry
 
+struct CuBlasLtThreadEntry {
+  CuBlasLtThreadEntry();
+  ~CuBlasLtThreadEntry();
+  cublasLtHandle_t handle{nullptr};
+  static CuBlasLtThreadEntry* ThreadLocal();
+};  // CuBlasLtThreadEntry
+
 inline cudaDataType_t GetCudaDataType(DLDataType type) {
   if (type.code == kDLInt) {
     switch (type.bits) {
@@ -104,6 +111,12 @@ inline cudaDataType_t GetCudaDataType(DLDataType type) {
   }
   LOG(FATAL) << "Unsupported cuda type";
 }
+
+/*! \brief Execute matrix multiply followed by the specified epilogue, using cuBLASLt. */
+void CallCublasLt(cublasLtHandle_t hdl, cudaStream_t stream, const DLTensor* A, const DLTensor* B,
+                  const DLTensor* bias, const DLTensor* C, bool transa, bool transb,
+                  cublasLtEpilogue_t epilogue = CUBLASLT_EPILOGUE_DEFAULT);
+
 }  // namespace contrib
 }  // namespace tvm
 
