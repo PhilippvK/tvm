@@ -163,6 +163,24 @@ def add_compile_parser(subparsers, _, json_params):
     generate_workspace_pools_args(parser)
 
 
+from contextlib import contextmanager, nullcontext
+
+
+@contextmanager
+def OptionallyDisableLegalize(disableLegalize):
+    if not disableLegalize:
+        yield nullcontext()
+        return
+    from tvm.relay.testing.temp_op_attr import TempOpAttr
+
+    def do_not_legalize(attrs, inputs, types):
+        return None
+
+    with TempOpAttr("qnn.dense", "FTVMQnnLegalize", do_not_legalize) as denseCtx:
+        with TempOpAttr("qnn.conv2d", "FTVMQnnLegalize", do_not_legalize) as convCtx:
+            yield (denseCtx, convCtx)
+
+
 def drive_compile(args):
     """Invoke tvmc.compiler module with command line arguments
 
@@ -193,29 +211,30 @@ def drive_compile(args):
     workspace_pools_target, extra_targets = target_from_cli(args.target, additional_targets)
     transform_args = parse_graph_transform_args(args)
 
-    compile_model(
-        tvmc_model,
-        args.target,
-        opt_level=args.opt_level,
-        executor=reconstruct_registry_entity(args, Executor),
-        runtime=reconstruct_registry_entity(args, Runtime),
-        tuning_records=args.tuning_records,
-        package_path=args.output,
-        cross=args.cross_compiler,
-        cross_options=args.cross_compiler_options,
-        output_format=args.output_format,
-        dump_code=dump_code,
-        dump_offloads=dump_offloads,
-        target_host=None,
-        disabled_pass=args.disabled_pass,
-        pass_context_configs=args.pass_config,
-        mod_name=args.module_name,
-        additional_target_options=additional_targets,
-        workspace_pools=(
-            workspace_pools_recombobulate(args, [workspace_pools_target], extra_targets)
-        ),
-        **transform_args,
-    )
+    with OptionallyDisableLegalize(False):
+        compile_model(
+            tvmc_model,
+            args.target,
+            opt_level=args.opt_level,
+            executor=reconstruct_registry_entity(args, Executor),
+            runtime=reconstruct_registry_entity(args, Runtime),
+            tuning_records=args.tuning_records,
+            package_path=args.output,
+            cross=args.cross_compiler,
+            cross_options=args.cross_compiler_options,
+            output_format=args.output_format,
+            dump_code=dump_code,
+            dump_offloads=dump_offloads,
+            target_host=None,
+            disabled_pass=args.disabled_pass,
+            pass_context_configs=args.pass_config,
+            mod_name=args.module_name,
+            additional_target_options=additional_targets,
+            workspace_pools=(
+                workspace_pools_recombobulate(args, [workspace_pools_target], extra_targets)
+            ),
+            **transform_args,
+        )
 
     return 0
 
