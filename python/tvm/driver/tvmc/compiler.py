@@ -158,6 +158,11 @@ def add_compile_parser(subparsers, _, json_params):
         help="The output module name. Defaults to 'default'.",
     )
     parser.add_argument(
+        "--disable_legalize",
+        action="store_true",
+        help="TODO",
+    )
+    parser.add_argument(
         "--print-pass-times",
         action="store_true",
         help="print compilation time per pass",
@@ -178,6 +183,24 @@ def add_compile_parser(subparsers, _, json_params):
         parser.set_defaults(**one_entry)
 
     generate_workspace_pools_args(parser)
+
+
+from contextlib import contextmanager, nullcontext
+
+
+@contextmanager
+def OptionallyDisableLegalize(disable_legalize):
+    if not disable_legalize:
+        yield nullcontext()
+        return
+    from tvm.relay.testing.temp_op_attr import TempOpAttr
+
+    def do_not_legalize(attrs, inputs, types):
+        return None
+
+    with TempOpAttr("qnn.dense", "FTVMQnnLegalize", do_not_legalize) as denseCtx:
+        with TempOpAttr("qnn.conv2d", "FTVMQnnLegalize", do_not_legalize) as convCtx:
+            yield (denseCtx, convCtx)
 
 
 def drive_compile(args):
@@ -210,32 +233,33 @@ def drive_compile(args):
     workspace_pools_target, extra_targets = target_from_cli(args.target, additional_targets)
     transform_args = parse_graph_transform_args(args)
 
-    compile_model(
-        tvmc_model,
-        args.target,
-        opt_level=args.opt_level,
-        executor=reconstruct_registry_entity(args, Executor),
-        runtime=reconstruct_registry_entity(args, Runtime),
-        tuning_records=args.tuning_records,
-        package_path=args.output,
-        cross=args.cross_compiler,
-        cross_options=args.cross_compiler_options,
-        output_format=args.output_format,
-        dump_code=dump_code,
-        dump_offloads=dump_offloads,
-        target_host=None,
-        disabled_pass=args.disabled_pass,
-        pass_context_configs=args.pass_config,
-        mod_name=args.module_name,
-        additional_target_options=additional_targets,
-        workspace_pools=(
-            workspace_pools_recombobulate(args, [workspace_pools_target], extra_targets)
-        ),
-        print_pass_times=args.print_pass_times,
-        print_ir_before=args.print_ir_before,
-        print_ir_after=args.print_ir_after,
-        **transform_args,
-    )
+    with OptionallyDisableLegalize(args.disable_legalize):
+        compile_model(
+            tvmc_model,
+            args.target,
+            opt_level=args.opt_level,
+            executor=reconstruct_registry_entity(args, Executor),
+            runtime=reconstruct_registry_entity(args, Runtime),
+            tuning_records=args.tuning_records,
+            package_path=args.output,
+            cross=args.cross_compiler,
+            cross_options=args.cross_compiler_options,
+            output_format=args.output_format,
+            dump_code=dump_code,
+            dump_offloads=dump_offloads,
+            target_host=None,
+            disabled_pass=args.disabled_pass,
+            pass_context_configs=args.pass_config,
+            mod_name=args.module_name,
+            additional_target_options=additional_targets,
+            workspace_pools=(
+                workspace_pools_recombobulate(args, [workspace_pools_target], extra_targets)
+            ),
+            print_pass_times=args.print_pass_times,
+            print_ir_before=args.print_ir_before,
+            print_ir_after=args.print_ir_after,
+            **transform_args,
+        )
 
     return 0
 
