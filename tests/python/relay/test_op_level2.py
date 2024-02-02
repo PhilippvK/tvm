@@ -823,6 +823,30 @@ def test_conv3d_transpose_ncdhw_run():
         tvm.testing.assert_allclose(op_res1.numpy(), ref_res, rtol=1e-5, atol=1e-5)
 
 
+def test_compile_depthwise_conv3d():
+    dshape = [1, 16, 10, 10, 10]
+    wshape = [16, 2, 1, 1, 1]
+    params = {}
+    data = relay.var("data", shape=dshape, dtype="float32")
+    kernel = relay.const(tvm.nd.array(np.ones(shape=wshape).astype(dtype="float32")))
+    mod = tvm.IRModule()
+    res = relay.nn.conv3d(
+        data,
+        kernel,
+        kernel_size=[1, 1, 1],
+        padding=[0] * 3,
+        channels=32,
+        groups=16,
+        data_layout="NCDHW",
+        kernel_layout="OIDHW",
+    )
+    func = relay.Function([data], res)
+    mod = tvm.IRModule.from_expr(func)
+
+    target = "llvm"
+    _ = relay.build(mod, tvm.target.Target(target, host=target))
+
+
 @tvm.testing.uses_gpu
 def test_conv2d_transpose_infer_type():
     # symbolic in batch dimension
@@ -1444,6 +1468,25 @@ def test_pad_run_dynamic_pad_value():
     _test_run("int32")
 
 
+def test_pad_value_in_array():
+    A = relay.var("A", shape=(32, 32), dtype="int8")
+
+    # Extract pad value from an array
+    p0 = relay.Constant(tvm.nd.array(np.array([2], dtype="int8")))
+    p1 = relay.nn.pad(A, pad_value=p0, pad_width=((1, 1), (1, 1)))
+
+    func = relay.Function(relay.analysis.free_vars(p1), p1)
+    mod = tvm.IRModule.from_expr(func)
+
+    target = "llvm"
+    lib = relay.build(
+        mod,
+        tvm.target.Target(target, host=target),
+        runtime=relay.backend.Runtime("cpp"),
+        executor=relay.backend.Executor("aot", {"unpacked-api": False, "interface-api": "packed"}),
+    )
+
+
 @tvm.testing.uses_gpu
 @pytest.mark.parametrize("dtype", ["float32", "float16"])
 def test_lrn(executor_kind, dtype):
@@ -1818,7 +1861,10 @@ def test_depthwise_conv2d_int8():
     wdata = np.random.rand(*kernel_shape) * 10
     parameters = {"weight": tvm.nd.array(wdata.astype(weight_dtype))}
 
-    targets = ["llvm -mcpu=skylake-avx512", "llvm -mcpu=cascadelake"]
+    targets = [
+        "llvm -mtriple=x86_64-linux-gnu -mcpu=skylake-avx512",
+        "llvm -mtriple=x86_64-linux-gnu -mcpu=cascadelake",
+    ]
     llvm_version = tvm.target.codegen.llvm_version_major()
     for target in targets:
         if llvm_version >= 8:
@@ -2215,12 +2261,12 @@ def test_conv2d_int8_alter_dtype_arm():
     )
 
 
-@tvm.testing.requires_cascadelake
+@tvm.testing.requires_x86_vnni
 def test_conv2d_int8_alter_dtype_vnni():
     _test_conv2d_int8_alter_dtype("int8", "llvm -mcpu=cascadelake", ["vpdpbusd"])
 
 
-@tvm.testing.requires_skylake_avx512
+@tvm.testing.requires_x86_avx512
 def test_conv2d_int8_alter_dtype_avx512():
     _test_conv2d_int8_alter_dtype(
         "int8", "llvm -mcpu=skylake-avx512", ["pmaddubs", "pmaddw", "vpaddd"]

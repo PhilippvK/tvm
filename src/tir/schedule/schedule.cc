@@ -131,6 +131,8 @@ TVM_REGISTER_GLOBAL("tir.schedule.ScheduleSampleCategorical")
     .set_body_method<Schedule>(&ScheduleNode::SampleCategorical);
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleSamplePerfectTile")
     .set_body_method<Schedule>(&ScheduleNode::SamplePerfectTile);
+TVM_REGISTER_GLOBAL("tir.schedule.ScheduleSamplePartitionedTile")
+    .set_body_method<Schedule>(&ScheduleNode::SamplePartitionedTile);
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleSampleComputeLocation")
     .set_body_method<Schedule>(&ScheduleNode::SampleComputeLocation);
 /******** (FFI) Get blocks & loops ********/
@@ -160,6 +162,8 @@ TVM_REGISTER_GLOBAL("tir.schedule.ScheduleGetOutputBlocks")
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleMerge").set_body_method<Schedule>(&ScheduleNode::Merge);
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleFuse").set_body_method<Schedule>(&ScheduleNode::Fuse);
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleSplit").set_body_method<Schedule>(&ScheduleNode::Split);
+TVM_REGISTER_GLOBAL("tir.schedule.ScheduleLoopPartition")
+    .set_body_method<Schedule>(&ScheduleNode::LoopPartition);
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleReorder")
     .set_body_method<Schedule>(&ScheduleNode::Reorder);
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleReorderBlockIterVar")
@@ -228,7 +232,14 @@ TVM_REGISTER_GLOBAL("tir.schedule.ScheduleUnsafeSetDType")
     .set_body_method<Schedule>(&ScheduleNode::UnsafeSetDType);
 /******** (FFI) Blockize & Tensorize ********/
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleBlockize")
-    .set_body_method<Schedule>(&ScheduleNode::Blockize);
+    .set_body_typed([](Schedule self, ObjectRef target, bool preserve_unit_iters) {
+      if (auto loop_rv = target.as<LoopRV>()) {
+        return self->Blockize(loop_rv.value(), preserve_unit_iters);
+      } else if (auto blocks = target.as<Array<BlockRV>>()) {
+        return self->Blockize(blocks.value(), preserve_unit_iters);
+      }
+      LOG(FATAL) << "Unsupported target type: " << target->GetTypeKey();
+    });
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleTensorize")
     .set_body_typed([](Schedule self, ObjectRef rv, String intrin, bool preserve_unit_iters) {
       if (auto block_rv = rv.as<BlockRV>()) {
@@ -297,6 +308,8 @@ TVM_REGISTER_GLOBAL("tir.schedule.ScheduleRollingBuffer")
 /******** (FFI) Misc ********/
 TVM_REGISTER_GLOBAL("tir.schedule.ScheduleEnterPostproc")
     .set_body_method<Schedule>(&ScheduleNode::EnterPostproc);
+TVM_REGISTER_GLOBAL("tir.schedule.ScheduleUnsafeHideBufferAccess")
+    .set_body_method<Schedule>(&ScheduleNode::UnsafeHideBufferAccess);
 
 }  // namespace tir
 }  // namespace tvm

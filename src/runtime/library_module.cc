@@ -47,7 +47,7 @@ class LibraryModuleNode final : public ModuleNode {
     return ModulePropertyMask::kBinarySerializable | ModulePropertyMask::kRunnable;
   };
 
-  PackedFunc GetFunction(const std::string& name, const ObjectPtr<Object>& sptr_to_self) final {
+  PackedFunc GetFunction(const String& name, const ObjectPtr<Object>& sptr_to_self) final {
     TVMBackendPackedCFunc faddr;
     if (name == runtime::symbol::tvm_module_main) {
       const char* entry_name =
@@ -67,22 +67,16 @@ class LibraryModuleNode final : public ModuleNode {
   PackedFuncWrapper packed_func_wrapper_;
 };
 
-/*!
- * \brief Helper classes to get into internal of a module.
- */
-class ModuleInternal {
- public:
-  // Get mutable reference of imports.
-  static std::vector<Module>* GetImportsAddr(ModuleNode* node) { return &(node->imports_); }
-};
-
 PackedFunc WrapPackedFunc(TVMBackendPackedCFunc faddr, const ObjectPtr<Object>& sptr_to_self) {
   return PackedFunc([faddr, sptr_to_self](TVMArgs args, TVMRetValue* rv) {
     TVMValue ret_value;
     int ret_type_code = kTVMNullptr;
     int ret = (*faddr)(const_cast<TVMValue*>(args.values), const_cast<int*>(args.type_codes),
                        args.num_args, &ret_value, &ret_type_code, nullptr);
-    ICHECK_EQ(ret, 0) << TVMGetLastError();
+    // NOTE: important to keep the original error message.
+    if (ret != 0) {
+      LOG(FATAL) << TVMGetLastError();
+    }
     if (ret_type_code != kTVMNullptr) {
       *rv = TVMRetValue::MoveFromCHost(ret_value, ret_type_code);
     }
@@ -112,7 +106,8 @@ Module LoadModuleFromBinary(const std::string& type_key, dmlc::Stream* stream) {
   const PackedFunc* f = Registry::Get(fkey);
   if (f == nullptr) {
     std::string loaders = "";
-    for (auto name : Registry::ListNames()) {
+    for (auto reg_name : Registry::ListNames()) {
+      std::string name = reg_name;
       if (name.find(loadkey, 0) == 0) {
         if (loaders.size() > 0) {
           loaders += ", ";

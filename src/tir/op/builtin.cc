@@ -211,6 +211,10 @@ TIR_DEFINE_BUILTIN_FUNC(tvm_thread_context)
     .set_num_inputs(1)
     .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
 
+TIR_DEFINE_BUILTIN_FUNC(tvm_thread_invariant)
+    .set_num_inputs(1)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kPure));
+
 TIR_DEFINE_BUILTIN_FUNC(tvm_call_packed_lowered)
     .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque))
     .set_attr<TScriptPrinterName>("TScriptPrinterName", String("call_packed_lowered"),
@@ -284,10 +288,33 @@ TIR_DEFINE_BUILTIN_FUNC(ptx_cp_async)
     .set_attr<TScriptDtypePrintLocation>("TScriptDtypePrintLocation",
                                          Integer(ScriptDtypePrintLocation::kFirst));
 
+TIR_DEFINE_BUILTIN_FUNC(ptx_cp_async_bulk)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque))
+    .set_attr<TScriptDtypePrintLocation>("TScriptDtypePrintLocation",
+                                         Integer(ScriptDtypePrintLocation::kFirst));
+
 TIR_DEFINE_BUILTIN_FUNC(ptx_commit_group)
     .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
 
 TIR_DEFINE_BUILTIN_FUNC(ptx_wait_group)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
+
+TIR_DEFINE_BUILTIN_FUNC(ptx_cp_async_barrier)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
+
+TIR_DEFINE_BUILTIN_FUNC(ptx_init_barrier_thread_count)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
+
+TIR_DEFINE_BUILTIN_FUNC(ptx_arrive_barrier)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
+
+TIR_DEFINE_BUILTIN_FUNC(ptx_arrive_barrier_expect_tx)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
+
+TIR_DEFINE_BUILTIN_FUNC(ptx_wait_barrier)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
+
+TIR_DEFINE_BUILTIN_FUNC(create_barriers)
     .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
 
 TIR_DEFINE_BUILTIN_FUNC(mma_store)
@@ -355,6 +382,21 @@ TIR_DEFINE_BUILTIN_FUNC(start_profile_intrinsic)
 TIR_DEFINE_BUILTIN_FUNC(end_profile_intrinsic)
     .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kPure));
 
+TIR_DEFINE_BUILTIN_FUNC(anylist_getitem)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kReadState));
+
+TIR_DEFINE_BUILTIN_FUNC(anylist_resetitem)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque))
+    .set_attr<TGlobalSymbol>("TGlobalSymbol", "TVMBackendAnyListResetItem");
+
+TIR_DEFINE_BUILTIN_FUNC(anylist_setitem_call_packed)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
+
+TIR_DEFINE_BUILTIN_FUNC(anylist_setitem_call_cpacked)
+    .set_attr<TCallEffectKind>("TCallEffectKind", Integer(CallEffectKind::kOpaque));
+
+TIR_DEFINE_BUILTIN_FUNC(vscale).set_attr<TCallEffectKind>("TCallEffectKind",
+                                                          Integer(CallEffectKind::kPure));
 }  // namespace builtin
 }  // namespace tir
 }  // namespace tvm

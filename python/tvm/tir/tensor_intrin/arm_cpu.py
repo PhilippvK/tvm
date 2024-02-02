@@ -14,11 +14,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-# pylint: disable=invalid-name,missing-function-docstring
+# pylint: disable=invalid-name,missing-function-docstring,unused-import
 """Intrinsics for ARM tensorization."""
 from tvm.script import tir as T
 from .. import TensorIntrin
-from .dot_product_common import DP4A_INTRIN  # pylint: disable=unused-import
+from .dot_product_common import (
+    DP4A_S8S8S32_INTRIN,
+    DP4A_S8U8S32_INTRIN,
+    DP4A_U8S8S32_INTRIN,
+    DP4A_U8U8U32_INTRIN,
+)
 
 
 # TODO(masahi): Parametrize the TVMScript description of dot product by
@@ -108,9 +113,9 @@ def get_dotprod_intrin(in_dtype, out_dtype):
     else:  # if in_dtype == "int8"
         instr = "sdot.v4i32.v16i8"
 
-    in_dtype_x4 = "{TYPE}x4".format(TYPE=in_dtype)
-    out_dtype_x4 = "{TYPE}x4".format(TYPE=out_dtype)
-    in_dtype_x16 = "{TYPE}x16".format(TYPE=in_dtype)
+    in_dtype_x4 = f"{in_dtype}x4"
+    out_dtype_x4 = f"{out_dtype}x4"
+    in_dtype_x16 = f"{in_dtype}x16"
 
     @T.prim_func
     def dot_prod_desc(a: T.handle, b: T.handle, c: T.handle) -> None:
@@ -147,7 +152,7 @@ def get_dotprod_intrin(in_dtype, out_dtype):
             vec_c = C.vload([0], dtype=out_dtype_x4)
 
             C[T.ramp(T.int32(0), 1, 4)] = T.call_llvm_pure_intrin(
-                T.llvm_lookup_intrinsic_id("llvm.aarch64.neon.{INSTR}".format(INSTR=instr)),
+                T.llvm_lookup_intrinsic_id(f"llvm.aarch64.neon.{instr}"),
                 T.uint32(3),
                 vec_c,
                 vec_a,

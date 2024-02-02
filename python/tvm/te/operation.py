@@ -19,7 +19,7 @@ import inspect
 
 # pylint: disable=invalid-name
 from numbers import Integral as _Integral
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import tvm._ffi
 import tvm.arith._ffi_api
@@ -100,7 +100,7 @@ def compute(shape, fcompute, name="compute", tag="", attrs=None, varargs_names=N
 
     argspec = inspect.getfullargspec(fcompute)
     if len(argspec.args) == 0 and argspec.varargs is None:
-        arg_names = ["i%d" % i for i in range(out_ndim)]
+        arg_names = [f"i{i}" for i in range(out_ndim)]
     elif argspec.varargs is not None:
         # if there is a varargs, it takes the remaining dimensions of out_ndim
         num_remaining_args = out_ndim - len(argspec.args)
@@ -125,7 +125,7 @@ def compute(shape, fcompute, name="compute", tag="", attrs=None, varargs_names=N
     if out_ndim != len(arg_names):
         raise ValueError(
             "Number of args to fcompute does not match dimension, "
-            "args=%d, dimension=%d" % (len(arg_names), out_ndim)
+            f"args={len(arg_names)}, dimension={out_ndim}"
         )
 
     dim_var = [tvm.tir.IterVar((0, s), x, 0) for x, s in zip(arg_names, shape[:out_ndim])]
@@ -218,7 +218,7 @@ def scan(init, update, state_placeholder, inputs=None, name="scan", tag="", attr
         inputs = []
     if len(init) != len(update) or len(init) != len(state_placeholder):
         raise ValueError("init, update, state_placeholder must have same length")
-    axis = tvm.tir.IterVar((init[0].shape[0], update[0].shape[0]), "%s.idx" % name, 3)
+    axis = tvm.tir.IterVar((init[0].shape[0], update[0].shape[0]), f"{name}.idx", 3)
     op = _ffi_api.ScanOp(name, tag, attrs, axis, init, update, state_placeholder, inputs)
     res = [op.output(i) for i in range(len(update))]
     return res[0] if len(res) == 1 else res
@@ -351,9 +351,8 @@ def extern(
         body = tvm.tir.Evaluate(body)
     if not isinstance(body, tvm.tir.Stmt):
         raise ValueError(
-            "Function '{}' should return PrimExpr or Stmt, but it returned '{}'".format(
-                fcompute.__name__, type(body)
-            )
+            f"Function '{fcompute.__name__}' should return PrimExpr or Stmt, but it returned "
+            f"'{type(body)}'"
         )
 
     op = _ffi_api.ExternOp(name, tag, attrs, inputs, input_placeholders, output_placeholders, body)
@@ -568,13 +567,13 @@ def reduce_axis(dom, name="rv", thread_tag="", span=None):
 
 
 def create_prim_func(
-    ops: List[_tensor.Tensor], index_dtype_override: Optional[str] = None
+    ops: List[Union[_tensor.Tensor, tvm.tir.Var]], index_dtype_override: Optional[str] = None
 ) -> tvm.tir.PrimFunc:
     """Create a TensorIR PrimFunc from tensor expression
 
     Parameters
     ----------
-    ops : List[Tensor]
+    ops : List[Union[_tensor.Tensor, tvm.tir.Var]]
         The source expression.
 
     Example
@@ -607,7 +606,7 @@ def create_prim_func(
             B = T.match_buffer(b, (128, 128))
             C = T.match_buffer(c, (128, 128))
 
-            for i, j, k in T.grip(128, 128, 128):
+            for i, j, k in T.grid(128, 128, 128):
                 with T.block():
                     vi, vj, vk = T.axis.remap("SSR", [i, j, k])
                     with T.init():

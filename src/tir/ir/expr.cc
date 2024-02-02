@@ -80,7 +80,7 @@ Var::Var(String name_hint, Type type_annotation, Span span) {
   data_ = std::move(n);
 }
 
-Var Var::copy_with_suffix(const String& suffix) const {
+Var Var::copy_with_name(const String& name) const {
   const VarNode* node = get();
   ObjectPtr<VarNode> new_ptr;
   if (auto* ptr = this->as<SizeVarNode>()) {
@@ -88,8 +88,12 @@ Var Var::copy_with_suffix(const String& suffix) const {
   } else {
     new_ptr = make_object<VarNode>(*node);
   }
-  new_ptr->name_hint = new_ptr->name_hint + suffix;
+  new_ptr->name_hint = name;
   return Var(new_ptr);
+}
+
+Var Var::copy_with_suffix(const String& suffix) const {
+  return this->copy_with_name(get()->name_hint + suffix);
 }
 
 Var Var::copy_with_dtype(DataType dtype) const {
@@ -429,7 +433,9 @@ Ramp::Ramp(PrimExpr base, PrimExpr stride, int lanes, Span span) {
   ICHECK(base.dtype().is_scalar());
   ICHECK(stride.dtype().is_scalar());
   ICHECK_GT(lanes, 1);
-  ICHECK_EQ(stride.dtype(), base.dtype());
+  if (stride.dtype() != base.dtype()) {
+    stride = cast(base.dtype(), stride);
+  }
 
   ObjectPtr<RampNode> node = make_object<RampNode>();
   node->dtype = base.dtype().with_lanes(lanes);

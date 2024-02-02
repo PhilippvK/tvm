@@ -21,7 +21,7 @@ set -u
 set -o pipefail
 
 if [ -z ${1+x} ]; then
-    version=3.18.4
+    version=3.24.0
 else
     version=$1
 fi

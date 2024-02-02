@@ -161,10 +161,12 @@ class VerifyGPUCodeNode : public PostprocNode {
           pass_list.push_back(tir::transform::LowerInitBlock());
           pass_list.push_back(tir::transform::PlanAndUpdateBufferAllocationLocation());
           pass_list.push_back(tir::transform::ConvertBlocksToOpaque());
-          pass_list.push_back(tir::transform::UnifyThreadBinding());
+          pass_list.push_back(tir::transform::LiftThreadBinding());
           pass_list.push_back(tir::transform::ManifestSharedMemoryLocalStage());
           pass_list.push_back(tir::transform::CompactBufferAllocation());
+          pass_list.push_back(tir::transform::Simplify());
           pass_list.push_back(tir::transform::LowerAutoCopy());
+          pass_list.push_back(tir::transform::UnifyThreadBinding());
           pass_list.push_back(tir::transform::LowerMatchBuffer());
           pass_list.push_back(tir::transform::InjectSoftwarePipeline());
           pass_list.push_back(tir::transform::LowerOpaqueBlock());
@@ -177,7 +179,7 @@ class VerifyGPUCodeNode : public PostprocNode {
           pass_list.push_back(tir::transform::InjectVirtualThread());
           pass_list.push_back(tir::transform::InjectDoubleBuffer());
           pass_list.push_back(tir::transform::StorageRewrite());
-          pass_list.push_back(tir::transform::MergeDynamicSharedMemoryAllocations());
+          pass_list.push_back(tir::transform::MergeSharedMemoryAllocations());
           pass_list.push_back(tir::transform::LowerIntrin());
           // Convert Function to IRModule
           transform::PassContext pass_ctx = transform::PassContext::Current();

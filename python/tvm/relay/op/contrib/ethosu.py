@@ -101,6 +101,23 @@ def check_strides(strides: List[int], stride_range=None) -> bool:
     return True
 
 
+def check_same_ifm_and_kernel_shape(padding, ifm_shape, pool_shape):
+    """
+    This function checks whether AvgPool2D or MaxPool2D could be legalized as ethosu_pooling
+    supported by the NPU.
+    We consider only specific case: when there is no AvgPool2D padding, the spatial
+    dimensions of ifm and the shape of pooling are equal, but stride size exceed 3
+    by any of dimensions, e.g:
+    ifm: (1, 8, 8, _), strides: (8, 8), pool_shape: (8, 8)
+    ifm: (1, 25, 5, _), strides: (25, 5), pool_shape: (25, 5)
+    """
+    if list(padding) != [0, 0, 0, 0]:
+        return False
+    if [ifm_shape[1], ifm_shape[2]] != list(pool_shape):
+        return False
+    return True
+
+
 def check_valid_dtypes(tensor_params: List[TensorParams], supported_dtypes: List[type]) -> bool:
     """This function checks whether dtypes are supported by the NPU"""
     for tep in tensor_params:
@@ -595,7 +612,9 @@ class MaxPool2DParams:
             return False
         if self.ifm.dtype != self.ofm.dtype:
             return False
-        if not check_strides(self.strides):
+        if not check_strides(self.strides) and not check_same_ifm_and_kernel_shape(
+            self.padding, self.ifm.shape, self.pool_shape
+        ):
             return False
         if not check_batch_size(self.ifm):
             return False
@@ -655,7 +674,9 @@ class AvgPool2DParams:
             return False
         if self.ifm.dtype != self.ofm.dtype:
             return False
-        if not check_strides(self.strides):
+        if not check_strides(self.strides) and not check_same_ifm_and_kernel_shape(
+            self.padding, self.ifm.shape, self.pool_shape
+        ):
             return False
         if not check_batch_size(self.ifm):
             return False
@@ -665,7 +686,7 @@ class AvgPool2DParams:
             return False
         if not check_pool_shape(self.pool_shape):
             return False
-        # Averge pool with padding only supports 1 <= pool_shape <= 8
+        # Average pool with padding only supports 1 <= pool_shape <= 8
         if list(self.padding) != [0, 0, 0, 0] and (
             self.pool_shape[0] > 8 or self.pool_shape[1] > 8
         ):
@@ -1846,7 +1867,7 @@ class FullyConnectedParams:
             weights.values = weights.values - weights.q_params.zero_point
             axis = 1
             sum_weights = np.amax(np.sum(np.absolute(weights.values), axis=axis))
-            if not sum_weights <= weights_limit:
+            if sum_weights > weights_limit:
                 return False
             return True
 
@@ -1875,6 +1896,44 @@ def qnn_fc_pattern():
     req = is_op("qnn.requantize")(
         dense | optional_bias_add, is_constant(), is_constant(), is_constant(), is_constant()
     )
+    optional_clip = req.optional(is_op("clip"))
+    return optional_clip
+
+
+class MatMulParams(FullyConnectedParams):
+    """
+    This class will parse a call to an ethos-u.matmul composite
+    function and extract the parameter information.
+    """
+
+    composite_name = "ethos-u.matmul"
+
+    @requires_vela
+    def __init__(self, func_body):
+        FullyConnectedParams.__init__(self, func_body)
+
+    def is_valid(self) -> bool:
+        """
+        Checks whether matrix multiplication has compatible attributes with HW
+        """
+
+        if not check_valid_dtypes([self.ifm, self.ofm], supported_dtypes=[np.int8]):
+            return False
+        if not len(self.ifm.shape) == 2:
+            return False
+        if not len(self.ofm.shape) == 2:
+            return False
+        # The weights must be transposed
+        if self.ifm.shape[1] != self.weights.shape[1]:
+            return False
+        return True
+
+
+def matmul_pattern():
+    dense = is_op("qnn.dense")(
+        wildcard(), wildcard(), is_constant(), is_constant(), is_constant(), is_constant()
+    )
+    req = is_op("qnn.requantize")(dense, is_constant(), is_constant(), is_constant(), is_constant())
     optional_clip = req.optional(is_op("clip"))
     return optional_clip
 
@@ -1940,15 +1999,15 @@ class PadParams:
     padding_bounds = [31, 31, 32, 32]
 
     def __init__(self, func_body: Call):
-        from tvm.relay.backend.contrib.ethosu.util import QPad2DArgs
+        from tvm.relay.backend.contrib.ethosu.util import QPadArgs
 
         # there is no 'layout' attribute in nn.pad
         layout = "NHWC"
         self.ifm = TensorParams(
-            tensor=func_body.args[QPad2DArgs.IFM.value],
+            tensor=func_body.args[QPadArgs.IFM.value],
             layout=layout,
             scale=tvm.relay.Constant(tvm.nd.array(np.array(1.0, dtype="float32"))),
-            zero_point=func_body.args[QPad2DArgs.IFM_ZERO_POINT.value],
+            zero_point=func_body.args[QPadArgs.IFM_ZERO_POINT.value],
         )
 
         self.padding = self.extract_padding(func_body)
@@ -1956,7 +2015,7 @@ class PadParams:
             tensor=func_body,
             layout=layout,
             scale=tvm.relay.Constant(tvm.nd.array(np.array(1.0, dtype="float32"))),
-            zero_point=func_body.args[QPad2DArgs.IFM_ZERO_POINT.value],
+            zero_point=func_body.args[QPadArgs.IFM_ZERO_POINT.value],
         )
 
     @staticmethod
@@ -1964,8 +2023,8 @@ class PadParams:
         padding: relay.Call,
     ) -> Optional[Tuple[int, int, int, int]]:
         """
-        Here we check whether a separate padding operation can be rewritten
-        as NPU depthwise convolution. If the padding specified by the
+        Here we check whether a separate spatial-dimension padding operation can be
+        rewritten as NPU depthwise convolution. If the padding specified by the
         separate nn.pad operation is not supported by NPU depthwise convolution,
         None will be returned. This will cause the nn.pad not to be offloaded to NPU.
         """
@@ -2000,15 +2059,150 @@ class PadParams:
         return True
 
 
+class ChannelPadParams:
+    """
+    This class will parse a call to a ethos-u.channel-pad composite function
+    and extract the parameter information.
+    """
+
+    composite_name = "ethos-u.channel-pad"
+    # The ethos-u.channel-pad composite function will be transformed
+    # to the Relay concatenate operation.
+
+    def __init__(self, func_body: Call):
+        from tvm.relay.backend.contrib.ethosu.util import QPadArgs
+
+        # there is no 'layout' attribute in nn.pad
+        layout = "NHWC"
+        self.ifm = TensorParams(
+            tensor=func_body.args[QPadArgs.IFM.value],
+            layout=layout,
+            scale=tvm.relay.Constant(tvm.nd.array(np.array(1.0, dtype="float32"))),
+            zero_point=func_body.args[QPadArgs.IFM_ZERO_POINT.value],
+        )
+
+        self.ch_padding = self.extract_ch_padding(func_body)
+        self.ofm = TensorParams(
+            tensor=func_body,
+            layout=layout,
+            scale=tvm.relay.Constant(tvm.nd.array(np.array(1.0, dtype="float32"))),
+            zero_point=func_body.args[QPadArgs.IFM_ZERO_POINT.value],
+        )
+
+    @staticmethod
+    def extract_ch_padding(
+        padding: relay.Call,
+    ) -> Optional[Tuple[int, int]]:
+        """
+        Here we check whether a separate channel-dimension padding operation can be
+        rewritten as Relay concatenate operation. If the padding specified by the
+        separate nn.pad operation is not supported by NPU, None will be returned.
+        This will cause the nn.pad not to be offloaded to NPU.
+        """
+        pad_width = padding.attrs["pad_width"]
+        if len(pad_width) != 4:
+            return None
+        if (
+            list(pad_width[0]) != [0, 0]
+            or list(pad_width[1]) != [0, 0]
+            or list(pad_width[2]) != [0, 0]
+        ):
+            return None
+        return [
+            pad_width[3][0],
+            pad_width[3][1],
+        ]
+
+    def is_valid(self):
+        """
+        This function checks whether pad has compatible attributes
+        with the Relay concatenate operation
+        """
+        tensor_params = [self.ifm, self.ofm]
+        if not check_valid_dtypes(tensor_params, supported_dtypes=[np.uint8, np.int8]):
+            return False
+        if self.ifm.dtype != self.ofm.dtype:
+            return False
+        if not check_batch_size(self.ifm):
+            return False
+        if not self.ch_padding:
+            return False
+        if not check_dimensions(self.ifm) or not check_dimensions(self.ofm):
+            return False
+        return True
+
+
 def pad_pattern():
     """Create pattern for pad"""
     pattern = is_op("nn.pad")(wildcard(), is_constant())
     return pattern
 
 
+class SoftMaxParams:
+    """
+    This class will parse a call to a ethos-u.softmax composite function
+    and extract the parameter information.
+    """
+
+    composite_name = "ethos-u.softmax"
+
+    def __init__(self, func_body: Call):
+        from tvm.relay.backend.contrib.ethosu.util import QuantizeArgs
+        from tvm.relay.backend.contrib.ethosu.util import DequantizeArgs
+
+        quantize = func_body
+        softmax_op = quantize.args[0]
+        dequantize = softmax_op.args[0]
+
+        layout = "NHWC"
+
+        self.ifm = TensorParams(
+            dequantize.args[DequantizeArgs.IFM.value],
+            layout,
+            dequantize.args[DequantizeArgs.IFM_SCALE.value],
+            dequantize.args[DequantizeArgs.IFM_ZERO_POINT.value],
+        )
+        self.ofm = TensorParams(
+            quantize,
+            layout,
+            quantize.args[QuantizeArgs.OFM_SCALE.value],
+            quantize.args[QuantizeArgs.OFM_ZERO_POINT.value],
+        )
+
+        self.operator_type = "SOFTMAX"
+
+    def is_valid(self):
+        """Checks whether Softmax has compatible attributes with HW"""
+        tensor_params = [self.ifm, self.ofm]
+        if not check_valid_dtypes(tensor_params, supported_dtypes=[np.int8]):
+            return False
+        if self.ifm.dtype != self.ofm.dtype:
+            return False
+        if not check_dimensions(self.ifm):
+            return False
+        if self.ifm.shape != self.ofm.shape:
+            return False
+        return True
+
+
+def softmax_pattern() -> tvm.relay.dataflow_pattern.DFPattern:
+    """
+    This function creates the pattern for Softmax.
+    """
+    pattern = is_op("qnn.dequantize")(wildcard(), is_constant(), is_constant())
+    pattern = is_op("nn.softmax")(pattern)
+    pattern = is_op("qnn.quantize")(pattern, is_constant(), is_constant())
+    return pattern
+
+
 @register_pattern_table("ethos-u")
 def pattern_table() -> List[Tuple[str, tvm.relay.dataflow_pattern.DFPattern, Callable]]:
     return [
+        (
+            ChannelPadParams.composite_name,
+            pad_pattern(),
+            lambda pat: ChannelPadParams(pat).is_valid(),
+        ),
         (
             QnnConv2DParams.composite_name,
             qnn_conv2d_pattern(),
@@ -2028,6 +2222,11 @@ def pattern_table() -> List[Tuple[str, tvm.relay.dataflow_pattern.DFPattern, Cal
             FullyConnectedParams.composite_name,
             qnn_fc_pattern(),
             lambda pat: FullyConnectedParams(pat).is_valid(),
+        ),
+        (
+            MatMulParams.composite_name,
+            matmul_pattern(),
+            lambda pat: MatMulParams(pat).is_valid(),
         ),
         (
             MaxPool2DParams.composite_name,
@@ -2111,6 +2310,11 @@ def pattern_table() -> List[Tuple[str, tvm.relay.dataflow_pattern.DFPattern, Cal
             lambda pat: SumParams(pat).is_valid(),
         ),
         (
+            SoftMaxParams.composite_name,
+            softmax_pattern(),
+            lambda pat: SoftMaxParams(pat).is_valid(),
+        ),
+        (
             LeakyReLUParams.composite_name,
             leaky_relu_pattern(),
             lambda pat: LeakyReLUParams(pat).is_valid(),
@@ -2180,12 +2384,14 @@ def partition_for_ethosu(
     mod : IRModule
         The partitioned IRModule with external global functions
     """
-    from tvm.relay.backend.contrib.ethosu import preprocess
+    from tvm.relay.backend.contrib.ethosu import preprocess, codegen
 
     if params:
         mod["main"] = bind_params_by_name(mod["main"], params)
 
     pattern = relay.op.contrib.get_pattern_table("ethos-u")
+    mod = relay.transform.InferType()(mod)
+    mod = codegen.replicate_pads(mod)
     mod = relay.transform.InferType()(mod)
     mod = relay.transform.MergeComposite(pattern)(mod)
     mod = relay.transform.AnnotateTarget("ethos-u")(mod)

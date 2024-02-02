@@ -24,11 +24,22 @@ export GITHUB_TOKEN=<github oauth token>
 python release/gather_prs.py --from-commit $(git rev-parse v0.9.0) --to-commit $(git merge-base origin/main v0.8.0)
 ```
 
-You can then import this CSV into a collaborative spreadsheet editor to distribute the work of categorizing PRs for the notes. Once done, you can download the resulting CSV and convert it to readable release notes.
+After running the commands above, you will get a csv file named `out_pr_gathered.csv`. You can then import this CSV into a collaborative spreadsheet editor to distribute the work of categorizing PRs for the notes, **especially check the `pr_title_tags` column for each row and correct it if it's wrong**.
+
+Once done, you can download the csv file assuming with name `out_pr_gathered_corrected.csv` and convert it to readable release notes using commands below:
 
 ```bash
-# example: use a csv of cateogrized PRs to create a markdown file
-python make_notes.py --notes-csv categorized_prs.csv > out.md
+# example: use a csv of tags-corrected PRs to create a markdown file
+
+# Export monthly report on forum:
+python make_notes.py --notes out_pr_gathered_corrected.csv --is-pr-with-link true > monthly_report.md
+
+# Export release report on Github:
+python make_notes.py --notes out_pr_gathered_corrected.csv --is-pr-with-link true > release_report.md
+
+# If release report exported but forget set `--is-pr-with-link true`,
+# you can append arg `--convert-with-link true`.
+python3 make_notes.py --notes ./release_report.md --convert-with-link true
 ```
 
 You can also create a list of RFCs
