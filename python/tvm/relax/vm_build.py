@@ -177,6 +177,8 @@ def _vmcodegen(
         return _ffi_api.VMCodeGen(builder, mod)  # type:ignore
     if exec_mode == "compiled":
         return _ffi_api.VMTIRCodeGen(builder, mod)  # type: ignore
+    if exec_mode == "crt":
+        return _ffi_api.CRTTIRCodeGen(builder, mod)  # type: ignore
     raise ValueError(f"Unknown exec_mode {exec_mode}")
 
 
