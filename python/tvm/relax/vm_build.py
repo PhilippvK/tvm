@@ -153,6 +153,7 @@ def _vmcodegen(
     mod: tvm.IRModule,
     exec_mode: str = "bytecode",
 ) -> tvm.IRModule:
+    print("_vmcodegen")
     """Running VM codegen.
 
     Parameters
@@ -205,6 +206,7 @@ def _vmlink(
     *,
     system_lib: Optional[bool] = None,
 ):
+    print("_vmlink")
     """
     Internal codegen function to make executable.
 
@@ -261,6 +263,7 @@ def build(
     *,
     system_lib: Optional[bool] = None,
 ) -> Executable:
+    print("build")
     """
     Build an IRModule to VM executable.
 
