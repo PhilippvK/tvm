@@ -195,7 +195,8 @@ def _autodetect_system_lib_req(
 
     if system_lib:
         # use packed-func to avoid relay dep.
-        return tvm.get_global_func("relay.backend.CreateRuntime")("cpp", {"system-lib": system_lib})
+        # return tvm.get_global_func("relay.backend.CreateRuntime")("cpp", {"system-lib": system_lib})
+        return tvm.get_global_func("relay.backend.CreateRuntime")("crt", {"system-lib": system_lib})
     return None
 
 
