@@ -132,11 +132,41 @@ def micro_build_pipeline():
     return _pipeline
 
 
+def micro2_build_pipeline():
+    """The default compilation pipeline used in relax.build"""
+
+    @tvm.transform.module_pass(opt_level=0)
+    def _pipeline(mod: tvm.ir.IRModule, _ctx: tvm.transform.PassContext) -> tvm.ir.IRModule:
+        seq = tvm.transform.Sequential(
+            [
+                backend.DispatchSortScan(),
+                transform.LegalizeOps(),
+                transform.RewriteDataflowReshape(),
+                transform.ToNonDataflow(),
+                transform.RemovePurityChecking(),
+                transform.CallTIRRewrite(),
+                # transform.StaticPlanBlockMemory(),
+                # transform.RewriteCUDAGraph(),
+                # transform.LowerAllocTensor(),
+                # transform.KillAfterLastUse(),
+                # transform.VMBuiltinLower(),
+                transform.ComputePrimValue(),
+                # transform.VMShapeLower(),
+                transform.AttachGlobalSymbol(),
+            ],
+        )
+        mod = seq(mod)
+        return mod
+
+    return _pipeline
+
+
 # global map of pre-built pipelines
 PIPELINE_MAP = {
     "zero": zero_pipeline,
     "default_build": default_build_pipeline,
     "micro_build": micro_build_pipeline,
+    "micro2_build": micro2_build_pipeline,
 }
 
 
