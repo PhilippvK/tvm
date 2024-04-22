@@ -474,9 +474,13 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   Optional<PrimExpr> VisitExpr_(const SeqExprNode* op) final {
     LOG(INFO) << "VisitExpr_(const SeqExprNode* op)" << "\n";
     for (auto block : op->blocks) {
+      LOG(INFO) << "block=" << block << "\n";
       for (Binding binding : block->bindings) {
+        LOG(INFO) << "binding=" << binding << "\n";
         Expr expr = GetBoundValue(binding);
+        LOG(INFO) << "expr=" << expr << "\n";
         Optional<PrimExpr> value = VisitExpr(expr);
+        LOG(INFO) << "value=" << value << "\n";
 
         if (expr.as<Var>() && value.defined()) {
           // For a normalized relax module, there should be one
