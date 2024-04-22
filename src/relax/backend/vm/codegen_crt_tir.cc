@@ -951,6 +951,9 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   std::unordered_map<int, tir::Var> sids_table_;
   /*! \brief the list of return sids (note that the function might return more then one output */
   std::vector<int> return_sid_;
+  /*! \brief mapping between expression and parameters */
+  // Map<PrimExpr, String> params_by_expr_;
+  Map<Expr, String> params_by_expr_;
     /*!
    * \brief Create tir::Var for input/output while updating the buffer_maps.
    *
