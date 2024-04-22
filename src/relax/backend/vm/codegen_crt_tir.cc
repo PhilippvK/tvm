@@ -211,6 +211,75 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     stmt_stack_.back().emplace_back(stmt);
   }
 
+  tir::Call AddCheckReturn(tir::Call existing_call) {
+    Array<PrimExpr> args = {tir::make_const(DataType::Int(32, 1), 0, Span()),
+                            tir::make_const(DataType::Int(32, 1), -1, Span()), existing_call};
+    return tir::Call(DataType::Int(32), tir::builtin::tvm_check_return(), args);
+  }
+
+  // void PushArgs(const Expr& expr, const std::vector<tir::Var>& sids, Array<PrimExpr>* args) {
+  //   const TupleNode* t = expr.as<TupleNode>();
+  //   if (t != nullptr) {
+  //     CHECK_EQ(sids.size(), t->fields.size()) << "Relay tuple does not map 1:1 into TIR; AOT can't "
+  //                                                "handle this type of Relay Expr in a CallNode.";
+  //   }
+
+  //   args->insert(args->end(), sids.begin(), sids.end());
+  // }
+
+  void EmitCallPacked2(String name, const Array<Expr>& args, const Expr& result_expr) {
+    tvm::Array<PrimExpr> all_args{tvm::tir::StringImm(name)};
+    std::vector<tir::Stmt> create_func_call_stmts;
+
+    // Pack the inputs
+    // for (const PrimExpr& arg : args) {
+    for (const Expr& arg : args) {
+      if (const ShapeExprNode* shape_expr = arg.as<ShapeExprNode>()) {
+        auto tir_arg = VisitExpr(arg);
+        // TODO: assert defined
+        all_args.push_back(tir_arg.value());
+      } else if (const PrimValueNode* prim_value = arg.as<PrimValueNode>()) {
+        auto tir_arg = VisitExpr(arg);
+        // TODO: assert defined
+        all_args.push_back(tir_arg.value());
+      } else if (const StringImmNode* string_imm = arg.as<StringImmNode>()) {
+        auto tir_arg = VisitExpr(arg);
+        // TODO: assert defined
+        all_args.push_back(tir_arg.value());
+      } else if (const DataTypeImmNode* dtype_imm = arg.as<DataTypeImmNode>()) {
+        auto tir_arg = VisitExpr(arg);
+        // TODO: assert defined
+        all_args.push_back(tir_arg.value());
+      } else if (const ConstantNode* constant = arg.as<ConstantNode>()) {
+        auto tir_arg = VisitExpr(arg);
+        // TODO: assert defined
+        all_args.push_back(tir_arg.value());
+      } else if (params_by_expr_.find(arg) != params_by_expr_.end()) {
+        auto param_handle = tvm::tir::Call(DataType::Handle(), tvm::tir::builtin::lookup_param(),
+                                           {tir::StringImm(params_by_expr_[arg])});
+        all_args.push_back(tvm::tir::Cast(DataType::Handle(32, 1), param_handle));
+      } else {
+        auto sids = FindExpr(arg);
+        all_args.insert(all_args.end(), sids.begin(), sids.end());
+      }
+    }
+
+     // Pack the return(s) value. A call node can produce multiple outputs
+    // auto result_expr_sid = PackSid(result_expr);
+    // all_args.insert(all_args.end(), result_expr_sid.begin(), result_expr_sid.end());
+
+    tir::Stmt func_call;
+
+    func_call = tir::Evaluate(AddCheckReturn(
+            tvm::tir::Call(DataType::Int(32), tvm::tir::builtin::tvm_call_packed(), all_args)));
+        create_func_call_stmts.push_back(func_call);
+            ICHECK(func_call.defined()) << "Must define func_call";
+
+    // tir::Stmt body = tir::SeqStmt::Flatten(func_call);
+    this->EmitStmt(func_call);
+
+  }
+
   void EmitCallPacked(String name, const Array<PrimExpr>& args, int64_t dst_anylist_slot = -1) {
     Array<PrimExpr> all_args;
     // negative index indicate return value can be discarded, emit call_packed
@@ -228,6 +297,65 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
       this->EmitStmt(
           tir::Evaluate(tir::Call(DataType::Int(32), tir::builtin::tvm_call_packed(), all_args)));
     }
+  }
+
+  void EmitCallCPacked2(const tir::PrimFunc& prim_func, const Array<Expr>& args, const Expr& result_expr) {
+    Optional<String> gsymbol = prim_func->GetAttr<String>(tvm::attr::kGlobalSymbol);
+    ICHECK(gsymbol.defined()) << "All functions must have global symbol at this phase";
+    Array<PrimExpr> all_args;
+    std::vector<tir::Stmt> create_func_call_stmts;
+    // negative index indicate return value can be discarded, emit call_packed
+    all_args.push_back(tir::StringImm(gsymbol.value()));
+    // Pack the inputs
+    // for (const PrimExpr& arg : args) {
+    for (const Expr& arg : args) {
+      if (const ShapeExprNode* shape_expr = arg.as<ShapeExprNode>()) {
+        auto tir_arg = VisitExpr(arg);
+        // TODO: assert defined
+        all_args.push_back(tir_arg.value());
+      } else if (const PrimValueNode* prim_value = arg.as<PrimValueNode>()) {
+        auto tir_arg = VisitExpr(arg);
+        // TODO: assert defined
+        all_args.push_back(tir_arg.value());
+      } else if (const StringImmNode* string_imm = arg.as<StringImmNode>()) {
+        auto tir_arg = VisitExpr(arg);
+        // TODO: assert defined
+        all_args.push_back(tir_arg.value());
+      } else if (const DataTypeImmNode* dtype_imm = arg.as<DataTypeImmNode>()) {
+        auto tir_arg = VisitExpr(arg);
+        // TODO: assert defined
+        all_args.push_back(tir_arg.value());
+      } else if (const ConstantNode* constant = arg.as<ConstantNode>()) {
+        auto tir_arg = VisitExpr(arg);
+        // TODO: assert defined
+        all_args.push_back(tir_arg.value());
+      } else if (params_by_expr_.find(arg) != params_by_expr_.end()) {
+        auto param_handle = tvm::tir::Call(DataType::Handle(), tvm::tir::builtin::lookup_param(),
+                                           {tir::StringImm(params_by_expr_[arg])});
+        all_args.push_back(tvm::tir::Cast(DataType::Handle(32, 1), param_handle));
+      } else {
+        auto sids = FindExpr(arg);
+        all_args.insert(all_args.end(), sids.begin(), sids.end());
+      }
+    }
+
+     // Pack the return(s) value. A call node can produce multiple outputs
+    // auto result_expr_sid = PackSid(result_expr);
+    // all_args.insert(all_args.end(), result_expr_sid.begin(), result_expr_sid.end());
+
+    // push an empty handle to be compatible with current cpacked convention
+    // TODO(tqchen): revisit C Packed convention
+    all_args.push_back(tir::make_zero(DataType::Handle()));
+
+    tir::Stmt func_call;
+
+    func_call = tir::Evaluate(
+            tvm::tir::Call(DataType::Int(32), tvm::tir::builtin::tvm_call_cpacked(), all_args));
+        create_func_call_stmts.push_back(func_call);
+            ICHECK(func_call.defined()) << "Must define func_call";
+
+    // tir::Stmt body = tir::SeqStmt::Flatten(func_call);
+    this->EmitStmt(func_call);
   }
 
   void EmitCallCPacked(const tir::PrimFunc& prim_func, const Array<PrimExpr>& args,
@@ -372,40 +500,47 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     Call call = GetRef<Call>(call_node);
 
     if (call_node->op == null_value_op_) {
+      LOG(INFO) << "null_value_op" << "\n";
       return tir::Call(DataType::Handle(), tir::builtin::reinterpret(),
                        {IntImm(DataType::Int(64), 0)});
     }
     int64_t dst_reg = HasVoidStructInfo(call) ? -1 : NewRegister();
     if (call->op.as<OpNode>()) {
-      return tir::Call(DataType::Handle(), tir::builtin::reinterpret(),
-                       {IntImm(DataType::Int(64), 0)});
-      // if (call_node->op == call_builtin_with_ctx_op_) {
-      //   EmitCallBuiltinWithCtx(call, dst_reg);
-      // } else if (call_node->op == alloc_storage_op_) {
-      //   EmitAllocStorage(call, dst_reg);
-      // } else if (call_node->op == alloc_tensor_op_) {
-      //   EmitAllocTensor(call, dst_reg);
-      // // } else if (call_node->op == kill_object_op_) {
-      // //   dst_reg = EmitKillObject(call);
-      // } else if (call_node->op == kill_storage_op_) {
+      LOG(INFO) << "OpNode" << "\n";
+      // return tir::Call(DataType::Handle(), tir::builtin::reinterpret(),
+      //                  {IntImm(DataType::Int(64), 0)});
+      if (call_node->op == call_builtin_with_ctx_op_) {
+        EmitCallBuiltinWithCtx(call, dst_reg);
+      } else if (call_node->op == alloc_storage_op_) {
+        // EmitAllocStorage(call, dst_reg);
+        // EmitAllocStorage2(call_node);
+      } else if (call_node->op == alloc_tensor_op_) {
+        // EmitAllocTensor(call, dst_reg);
+        // EmitAllocTensor2(call_node);
+        EmitAllocTensor3(call_node);
+      // } else if (call_node->op == kill_object_op_) {
       //   dst_reg = EmitKillObject(call);
-      // } else if (call_node->op == kill_tensor_op_) {
-      //   dst_reg = EmitKillObject(call);
-      // } else if (call_node->op == reshape_op_) {
-      //   // TODO: implement!
-      //   // dst_reg = EmitReshape(call, dst_reg);
-      //   EmitReshape(call, dst_reg);
-      // } else {
-      //   // every "normal" operator is lowered to a global var in the IRModule. The Attrs for those
-      //   // ops are handled in a pass when lowering them to TIR.
-      //   LOG(FATAL) << "CodeGenVMTIR cannot handle this intrinsic now:\n" << call_node->op;
-      // }
+      } else if (call_node->op == kill_storage_op_) {
+        // dst_reg = EmitKillObject(call);
+      } else if (call_node->op == kill_tensor_op_) {
+        dst_reg = EmitKillObject(call);
+      } else if (call_node->op == reshape_op_) {
+        // TODO: implement!
+        // dst_reg = EmitReshape(call, dst_reg);
+        EmitReshape(call, dst_reg);
+      } else {
+        // every "normal" operator is lowered to a global var in the IRModule. The Attrs for those
+        // ops are handled in a pass when lowering them to TIR.
+        LOG(FATAL) << "CodeGenVMTIR cannot handle this intrinsic now:\n" << call_node->op;
+      }
     } else {
       EmitNormalCall(call, dst_reg);
     }
     if (dst_reg >= 0) {
+      LOG(INFO) << "dst_reg >= 0" << "\n";
       return RegListGet(dst_reg);
     } else {
+      LOG(INFO) << "dst_reg < 0" << "\n";
       return NullOpt;
     }
   }
@@ -576,6 +711,18 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     }
     this->EmitCallPacked("vm.builtin.alloc_storage", args, dst_reg);
   }
+  // void EmitAllocStorage2(const Call& call_node) {
+  void EmitAllocStorage2(const CallNode* call_node) {
+    Call call = GetRef<Call>(call_node);
+    // Handle args of the call
+    // Array<PrimExpr> args;
+    // args.push_back(ctx_ptr_);
+    for (Expr arg : call->args) {
+      // args.push_back(this->VisitExpr(arg).value());
+      this->VisitExpr(arg).value();
+    }
+    this->EmitCallPacked2("vm.builtin.alloc_storage", call->args, call);
+  }
 
   void EmitAllocTensor(const Call& call_node, int64_t dst_reg) {
     ICHECK_EQ(call_node->args.size(), 4);
@@ -585,6 +732,50 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
       args.push_back(this->VisitExpr(arg).value());
     }
     this->EmitCallPacked("vm.builtin.alloc_tensor", args, dst_reg);
+  }
+
+  // void EmitAllocTensor2(const Call& call_node) {
+  void EmitAllocTensor2(const CallNode* call_node) {
+    Call call = GetRef<Call>(call_node);
+    // ICHECK_EQ(call_node->args.size(), 4);
+    // Array<PrimExpr> args;
+    // args.reserve(4);
+    // for (Expr arg : call_node->args) {
+    //   args.push_back(this->VisitExpr(arg).value());
+    // }
+    // this->EmitCallPacked("vm.builtin.alloc_tensor", args, dst_reg);
+    this->EmitCallPacked2("vm.builtin.alloc_tensor", call->args, call);
+  }
+
+  template <typename... Args>
+  std::string MakeString(Args const&... args) {
+    std::ostringstream ss;
+    using List = int[];
+    (void)List{0, ((void)(ss << args), 0)...};
+
+    return ss.str();
+  }
+
+  void EmitAllocTensor3(const CallNode* call_node) {
+    Call call = GetRef<Call>(call_node);
+    // ICHECK_EQ(call_node->args.size(), 4);
+    Array<PrimExpr> args;
+    // args.reserve(4);
+    // for (Expr arg : call_node->args) {
+    //   args.push_back(this->VisitExpr(arg).value());
+    // }
+    // this->EmitCallPacked("vm.builtin.alloc_tensor", args, dst_reg);
+    // this->EmitCallPacked2("vm.builtin.alloc_tensor", call->args, call);
+    // return tir::Allocate(sids_table_[sid], element_type, {size}, tir::const_true(), body);
+    int sid = 0;
+    size_t storage_size_in_bytes = 31360;
+    PrimExpr storage_size_in_bytes_ = tir::make_const(DataType::Int(32, 1), storage_size_in_bytes, Span());
+    te::Var buffer_var(MakeString("sid_", sid), PointerType(PrimType(DataType::Int(8)), "global.workspace"));
+    // tir::Stmt body = tir::SeqStmt(Array<tir::Stmt>({}));
+    tir::Stmt body = tir::Evaluate(0);
+    PointerType ptype = Downcast<PointerType>(buffer_var->type_annotation);
+    DataType element_type = Downcast<PrimType>(ptype->element_type)->dtype;
+    this->EmitStmt(tir::Allocate(buffer_var, element_type, {storage_size_in_bytes_}, tir::const_true(), body));
   }
 
   int64_t EmitKillObject(const Call& call_node) {
@@ -605,6 +796,25 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     this->EmitCallPacked("vm.builtin.null_value", {}, dst_reg);
     return dst_reg;
   }
+
+  // int64_t EmitKillObject2(const Call& call_node) {
+  //   ICHECK_EQ(call_node->args.size(), 1);
+  //   PrimExpr arg = this->VisitExpr(call_node->args[0]).value();
+
+  //   // Check the arg is a register.
+  //   const auto* tir_call = arg.as<tir::CallNode>();
+  //   ICHECK(tir_call != nullptr);
+  //   ICHECK(tir_call->op == tir::builtin::anylist_getitem());
+  //   ICHECK(tir_call->args.size() == 2);
+  //   ICHECK(tir_call->args[0].same_as(reg_anylist_handle_));
+  //   const auto* p_dst_reg = tir_call->args[1].as<tir::IntImmNode>();
+  //   ICHECK(p_dst_reg != nullptr);
+  //   ICHECK(p_dst_reg->dtype == DataType::Int(32));
+
+  //   int64_t dst_reg = p_dst_reg->value;
+  //   this->EmitCallPacked("vm.builtin.null_value", {}, dst_reg);
+  //   return dst_reg;
+  // }
 
   void EmitReshape(const Call& call_node, int64_t dst_reg) {
     // Handle args of the call
@@ -641,14 +851,19 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     auto symbol = LookupFunction(call_node->op, &kind);
 
     if (symbol.defined() && kind == VMFuncInfo::FuncKind::kPackedFunc) {
+      LOG(INFO) << "defined && kPackedFunc" << "\n";
       // primfunc in the same module.
       // use cpacked to directly invoke without named based lookup
       if (Optional<tir::PrimFunc> prim_func = LookupPrimFunc(symbol.value())) {
         this->EmitCallCPacked(prim_func.value(), args, dst_reg);
+        // this->EmitCallCPacked2(prim_func.value(), call_node->args, call_node);
       } else {
-        this->EmitCallPacked(symbol.value(), args, dst_reg);
+        // this->EmitCallPacked(symbol.value(), args, dst_reg);
+        // this->EmitCallPacked2(symbol.value(), call->args, call);
+        this->EmitCallPacked2(symbol.value(), call_node->args, call_node);
       }
     } else {
+      LOG(INFO) << "!(defined && kPackedFunc)" << "\n";
       // Default path, leverage function table and invoke as closure
       Array<PrimExpr> all_args;
       all_args.push_back(ctx_ptr_);
