@@ -926,7 +926,8 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   // const Op& alloc_storage_op_ = Op::Get("relax.vm.alloc_storage");
   const Op& alloc_storage_op_ = Op::Get("relax.memory.alloc_storage");
   // const Op& alloc_tensor_op_ = Op::Get("relax.vm.alloc_tensor");
-  const Op& alloc_tensor_op_ = Op::Get("relax.memory.alloc_tensor");
+  // const Op& alloc_tensor_op_ = Op::Get("relax.memory.alloc_tensor");
+  const Op& alloc_tensor_op_ = Op::Get("relax.builtin.alloc_tensor");
   // const Op& kill_object_op_ = Op::Get("relax.vm.kill_object");
   const Op& kill_storage_op_ = Op::Get("relax.memory.kill_storage");
   const Op& kill_tensor_op_ = Op::Get("relax.memory.kill_tensor");
