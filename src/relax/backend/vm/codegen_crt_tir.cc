@@ -1036,10 +1036,12 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
    * \brief Return a vector of variables that represents the sids for the given Relay Expr
    */
   std::vector<tir::Var> PackSid(Expr expr) {
+  // std::vector<tir::Var> PackSid(PrimExpr expr) {
     std::vector<tir::Var> buffer_vars;
 
     ICHECK(storage_device_map_.find(expr) != storage_device_map_.end())
-        << "Storage map did not contain constant expr";
+        // << "Storage map did not contain constant expr";
+        << "Storage map did not contain constant expr " << expr;
         // << "Storage map did not contain constant expr " << PrettyPrint(expr);
     tvm::relay::backend::StorageInfo& sinfo = storage_device_map_[expr];
 
@@ -1063,7 +1065,8 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
  /*!
    * brief Given an expression return the variable(s) associated with that expression
    */
-  std::vector<te::Var> FindExpr(Expr arg) {
+  // std::vector<te::Var> FindExpr(Expr arg) {
+  std::vector<tir::Var> FindExpr(Expr arg) {
     auto input_iter = std::find(input_vars_.begin(), input_vars_.end(), arg);
     if (input_iter != input_vars_.end()) {
       // Input variable
