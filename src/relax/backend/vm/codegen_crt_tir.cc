@@ -48,6 +48,106 @@ using vm::VMFuncInfo;
 
 using StorageMap =
     std::unordered_map<Expr, tvm::relay::backend::StorageInfo, runtime::ObjectPtrHash, runtime::ObjectPtrEqual>;
+    // std::unordered_map<PrimExpr, tvm::relay::backend::StorageInfo, runtime::ObjectPtrHash, runtime::ObjectPtrEqual>;
+
+class CRTOnDemandAllocator : public ExprVisitor {
+ public:
+  // CRTOnDemandAllocator() : transform::ExprVisitor(Otpional<IRModule>()) {}
+
+  void Run(const Function& func) { VisitExpr(func); }
+
+  std::vector<int> GetReturnIds() const { return return_ids_; }
+
+  std::vector<TensorType> GetReturnTtypes() const { return return_ttypes_; }
+
+  StorageMap GetStorageMap() const { return storage_device_map_; }
+
+  using ExprVisitor::VisitExpr_;
+
+
+  // void VisitExpr_(const ConstantNode* op) final {
+  //   CreateStorage(op);
+  //   AssignReturnSid(GetRef<Expr>(op));
+  // }
+ private:
+
+// static void FlattenTupleTypeAux(const Type& type, std::vector<TensorType>* out) {
+//   if (auto tt = type.as<TensorType>()) {
+//     out->push_back(tt.value());
+//   } else if (auto tuple_ty = type.as<TupleTypeNode>()) {
+//     for (auto field : tuple_ty->fields) {
+//       FlattenTupleTypeAux(field, out);
+//     }
+//   } else {
+//     LOG(FATAL) << "unsupported " << type;
+//   }
+// }
+//
+// std::vector<TensorType> FlattenTupleType(const Type& type) {
+//   std::vector<TensorType> out;
+//   FlattenTupleTypeAux(type, &out);
+//   return out;
+// }
+//
+//    void AssignReturnSid(Expr e) {
+//      if (storage_device_map_.find(e) != storage_device_map_.end()) {
+//        relay::backend::StorageInfo& sinfo = storage_device_map_[e];
+//        return_ids_.clear();
+//        for (auto sid : sinfo->storage_ids) {
+//          return_ids_.push_back(sid);
+//        }
+//        return_ttypes_.clear();
+//        return_ttypes_ = FlattenTupleType(e->checked_type());
+//      }
+//    }
+//
+//   /*!
+//    * \brief Get the memory requirement.
+//    * \param prototype The prototype token.
+//    * \return The required memory size.
+//    *
+//    * TODO(mbs): Cf CalculateRelayExprSizeBytes in utils.cc, GetMemorySize is graph_plan_memory.cc
+//    */
+//   size_t GetMemorySizeBytes(const TensorType& ttype) {
+//     size_t size = 1;
+//     for (IndexExpr dim : ttype->shape) {
+//       const int64_t* pval = tir::as_const_int(dim);
+//       ICHECK(pval != nullptr) << "Cannot allocate memory symbolic tensor shape " << ttype->shape;
+//       ICHECK_GE(*pval, 0) << "Cannot allocate memory for tensor with negative shape" << *pval;
+//       size *= static_cast<size_t>(pval[0]);
+//     }
+//     size *= DivRoundUp(ttype->dtype.bits() * ttype->dtype.lanes(), 8);
+//     return size;
+//   }
+//    /*!
+//    * \brief Create storage for the expression.
+//    */
+//    void CreateStorage(const ExprNode* op) {
+//      Expr expr = GetRef<Expr>(op);
+//      // return CreateStorage(expr, GetVirtualDevice(expr));
+//      return CreateStorage(expr, VirtualDevice::FullyUnconstrained());
+//    }
+//
+//   /*!
+//   * \brief Create storage to hold the result of evaluating \p expr in \p virtual_device.
+//   */                                                                                                   void CreateStorage(const Expr& expr, const VirtualDevice& virtual_device) {
+//     // ICHECK(!virtual_device->IsFullyUnconstrained())
+//     //       << "invalid virtual device for expr: " << expr << std::endl;
+//     std::vector<int64_t> storage_ids;
+//     std::vector<VirtualDevice> virtual_devices;
+//     std::vector<int64_t> storage_sizes_in_bytes;
+//     for (const auto& ttype : FlattenTupleType(expr->checked_type())) {
+//       storage_ids.push_back(next_available_sid_++);
+//       virtual_devices.push_back(virtual_device);
+//       storage_sizes_in_bytes.push_back(tvm::relay::backend::GetMemorySizeBytes(ttype));
+//     }
+//     storage_device_map_[expr] = tvm::relay::backend::StorageInfo(std::move(storage_ids), std::move(virtual_devices),
+//                                             std::move(storage_sizes_in_bytes));                       }
+  StorageMap storage_device_map_;
+  int next_available_sid_{0};
+  std::vector<int> return_ids_;
+  std::vector<TensorType> return_ttypes_;
+};
 
 /*!
  * \brief TODO
@@ -160,6 +260,9 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     Optional<String> gsymbol = func->GetAttr<String>(tvm::attr::kGlobalSymbol);
     ICHECK(gsymbol.defined()) << "there should be no local functions in Relax VM codegen phase. "
                                  "Did you forget to apply LambdaLift or AttachGlobalSymbol Pass?";
+    CRTOnDemandAllocator final_crt_allocator;
+    final_crt_allocator.Run(func);
+    storage_device_map_ = final_crt_allocator.GetStorageMap();
     // initialize the state
     // stmt_stack_ = {};
     // registers_num_ = 0;
