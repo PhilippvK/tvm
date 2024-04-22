@@ -485,7 +485,9 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
           // "del" operator.  These bindings may be removable by using
           // relax.transform.CanonicalizeBindings earlier in lowering.
           auto new_reg = NewRegister();
+          LOG(INFO) << "new_reg=" << new_reg << "\n";
           EmitCallPacked("vm.builtin.copy", {value.value()}, new_reg);
+          ICHECK(false) << "TODO 1";
           value = RegListGet(new_reg);
         }
 
@@ -844,6 +846,8 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   void EmitNormalCall(const Call& call_node, int64_t dst_reg) {
+    LOG(INFO) << "EmitNormalCall" << "\n";
+    // Call call = GetRef<Call>(call_node);
     Array<PrimExpr> args = VisitArray(call_node->args);
     // A function can be a closure that comes from parent
     // Do call closure to be safe.
@@ -953,9 +957,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
                    bool use_unique_name = true) {
     Array<PrimExpr> shape;
     if (const auto* tinfo = GetStructInfoAs<TensorStructInfoNode>(expr)) {
-      LOG(INFO) << "if1" << "\n";
       if (const ShapeExprNode* shape_expr = tinfo->shape.as<ShapeExprNode>()) {
-        LOG(INFO) << "if2" << "\n";
         shape = shape_expr->values;
       }
     }
