@@ -766,11 +766,15 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
           // semantics of R.vm.kill_* operate the same as the Python
           // "del" operator.  These bindings may be removable by using
           // relax.transform.CanonicalizeBindings earlier in lowering.
-          auto new_reg = NewRegister();
-          LOG(INFO) << "new_reg=" << new_reg << "\n";
-          EmitCallPacked("vm.builtin.copy", {value.value()}, new_reg);
-          ICHECK(false) << "TODO 1";
-          value = RegListGet(new_reg);
+          // auto new_reg = NewRegister();
+          // LOG(INFO) << "new_reg=" << new_reg << "\n";
+          // EmitCallPacked("vm.builtin.copy", {value.value()}, new_reg);
+          // ICHECK(false) << "TODO 1";
+          // value = RegListGet(new_reg);
+          // SInfo& sinfo = storage_device_map_[expr];
+          // auto var_expr = FindExpr(expr);
+          // ICHECK(var_expr.size() == 1) << "TODO: multi_sid vars";
+          // TODO
         }
 
         this->var_map_.insert({binding->var, value});
@@ -788,81 +792,82 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
       return tir::Call(DataType::Handle(), tir::builtin::reinterpret(),
                        {IntImm(DataType::Int(64), 0)});
     }
-    int64_t dst_reg = HasVoidStructInfo(call) ? -1 : NewRegister();
+    // int64_t dst_reg = HasVoidStructInfo(call) ? -1 : NewRegister();
+    int64_t dst_reg = -1;
     if (call->op.as<OpNode>()) {
       LOG(INFO) << "OpNode" << "\n";
       // return tir::Call(DataType::Handle(), tir::builtin::reinterpret(),
       //                  {IntImm(DataType::Int(64), 0)});
-      if (call_node->op == call_builtin_with_ctx_op_) {
-        EmitCallBuiltinWithCtx(call, dst_reg);
-      } else if (call_node->op == alloc_storage_op_) {
-        // EmitAllocStorage(call, dst_reg);
-        // EmitAllocStorage2(call_node);
-      } else if (call_node->op == alloc_tensor_op_) {
+      // if (call_node->op == call_builtin_with_ctx_op_) {
+      //   EmitCallBuiltinWithCtx(call, dst_reg);
+      // } else
+      if (call_node->op == alloc_tensor_op_) {
         // EmitAllocTensor(call, dst_reg);
         // EmitAllocTensor2(call_node);
-        EmitAllocTensor3(call_node);
-      // } else if (call_node->op == kill_object_op_) {
-      //   dst_reg = EmitKillObject(call);
-      } else if (call_node->op == kill_storage_op_) {
-        // dst_reg = EmitKillObject(call);
-      } else if (call_node->op == kill_tensor_op_) {
-        dst_reg = EmitKillObject(call);
-      } else if (call_node->op == reshape_op_) {
-        // TODO: implement!
-        // dst_reg = EmitReshape(call, dst_reg);
-        EmitReshape(call, dst_reg);
+        // EmitAllocTensor3(call_node);
+      // } else if (call_node->op == reshape_op_) {
+      //   // TODO: implement!
+      //   // dst_reg = EmitReshape(call, dst_reg);
+      //   EmitReshape(call, dst_reg);
       } else {
         // every "normal" operator is lowered to a global var in the IRModule. The Attrs for those
         // ops are handled in a pass when lowering them to TIR.
         LOG(FATAL) << "CodeGenVMTIR cannot handle this intrinsic now:\n" << call_node->op;
       }
     } else {
+      ICHECK(HasVoidStructInfo(call)) << "TODO: call return";
       EmitNormalCall(call, dst_reg);
     }
-    if (dst_reg >= 0) {
-      LOG(INFO) << "dst_reg >= 0" << "\n";
-      return RegListGet(dst_reg);
-    } else {
+    // if (dst_reg >= 0) {
+    //   LOG(INFO) << "dst_reg >= 0" << "\n";
+    //   return RegListGet(dst_reg);
+    // } else {
       LOG(INFO) << "dst_reg < 0" << "\n";
       return NullOpt;
-    }
+    // }
   }
 
   Optional<PrimExpr> VisitExpr_(const IfNode* op) final {
     LOG(INFO) << "VisitExpr_(const IfNode* op)" << "\n";
     // Reserve a register for return
-    size_t merge_register = NewRegister();
-    PrimExpr cond_value = this->VisitExpr(op->cond).value();
+    // size_t merge_register = NewRegister();
+    // PrimExpr cond_value = this->VisitExpr(op->cond).value();
 
-    // turn ndarray cond value into scalar.
-    cond_value = tir::Cast(DataType::Bool(),
-                           tir::Call(DataType::Int(32), tir::builtin::tvm_call_packed(),
-                                     {tir::StringImm("vm.builtin.read_if_cond"), cond_value}));
+    // // turn ndarray cond value into scalar.
+    // cond_value = tir::Cast(DataType::Bool(),
+    //                        tir::Call(DataType::Int(32), tir::builtin::tvm_call_packed(),
+    //                                  {tir::StringImm("vm.builtin.read_if_cond"), cond_value}));
 
-    tir::Stmt true_branch = WithNewScope([&]() {
-      PrimExpr true_value = this->VisitExpr(op->true_branch).value();
-      this->EmitCallPacked("vm.builtin.copy", {true_value}, merge_register);
-    });
-    tir::Stmt false_branch = WithNewScope([&]() {
-      PrimExpr false_value = this->VisitExpr(op->false_branch).value();
-      this->EmitCallPacked("vm.builtin.copy", {false_value}, merge_register);
-    });
-    this->EmitStmt(tir::IfThenElse(cond_value, true_branch, false_branch));
-    return RegListGet(merge_register);
+    // tir::Stmt true_branch = WithNewScope([&]() {
+    //   PrimExpr true_value = this->VisitExpr(op->true_branch).value();
+    //   this->EmitCallPacked("vm.builtin.copy", {true_value}, merge_register);
+    // });
+    // tir::Stmt false_branch = WithNewScope([&]() {
+    //   PrimExpr false_value = this->VisitExpr(op->false_branch).value();
+    //   this->EmitCallPacked("vm.builtin.copy", {false_value}, merge_register);
+    // });
+    // this->EmitStmt(tir::IfThenElse(cond_value, true_branch, false_branch));
+    // return RegListGet(merge_register);
   }
 
   Optional<PrimExpr> VisitExpr_(const VarNode* op) final {
     LOG(INFO) << "VisitExpr_(const VarNode* op)" << "\n";
-    Var var = GetRef<Var>(op);
-    auto it = this->var_map_.find(var);
-    ICHECK(it != this->var_map_.end()) << "Var " << var << " is not defined";
-    return it->second;
-    // Expr expr = GetRef<Expr>(op);
-    // auto var_expr = FindExpr(expr);
+    // Var var = GetRef<Var>(op);
+    // auto it = this->var_map_.find(var);
+    // ICHECK(it != this->var_map_.end()) << "Var " << var << " is not defined";
+    // return it->second;
+    Expr expr = GetRef<Expr>(op);
+    // SInfo& sinfo = storage_device_map_[expr];
+    auto var_expr = FindExpr(expr);
+    // auto output_iter = std::find(return_sid_.begin(), return_sid_.end(), sinfo->storage_ids[0]);
+    // if (output_iter != return_sid_.end()) {
+    //     // TODO: copy?
+    // }
     // CopyToOutput(GetBufferVarForIO(input_vars_.size() + output_index), var_expr[0],
     //              /*pack_input*/ false, sinfo->storage_sizes_in_bytes[0]);
     // return GetBufferVarForIO(input_vars_.size() + output_index);
+    ICHECK(var_expr.size() == 1) << "TODO: multi_sid vars";
+    return var_expr[0];
   }
 
   Optional<PrimExpr> VisitExpr_(const ConstantNode* op) final {
@@ -900,14 +905,15 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
 
   Optional<PrimExpr> VisitExpr_(const TupleNode* op) final {
     LOG(INFO) << "VisitExpr_(const TupleNode* op)" << "\n";
-    Tuple tuple = GetRef<Tuple>(op);
-    Array<PrimExpr> args;
-    for (auto arg : tuple->fields) {
-      args.push_back(this->VisitExpr(arg).value());
-    }
-    int32_t dst_register = NewRegister();
-    this->EmitCallPacked("vm.builtin.make_tuple", args, dst_register);
-    return RegListGet(dst_register);
+    ICHECK(false) << "TODO: TupleNode";
+    // Tuple tuple = GetRef<Tuple>(op);
+    // Array<PrimExpr> args;
+    // for (auto arg : tuple->fields) {
+    //   args.push_back(this->VisitExpr(arg).value());
+    // }
+    // int32_t dst_register = NewRegister();
+    // this->EmitCallPacked("vm.builtin.make_tuple", args, dst_register);
+    // return RegListGet(dst_register);
   }
 
   Optional<PrimExpr> VisitExpr_(const TupleGetItemNode* op) final {
@@ -915,11 +921,11 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     TupleGetItem expr = GetRef<TupleGetItem>(op);
     Array<PrimExpr> args = {this->VisitExpr(expr->tuple).value()};
 
-    args.push_back(ConstInt64(expr->index));
+    // args.push_back(ConstInt64(expr->index));
 
-    int64_t dst_register = NewRegister();
-    this->EmitCallPacked("vm.builtin.tuple_getitem", args, dst_register);
-    return RegListGet(dst_register);
+    // int64_t dst_register = NewRegister();
+    // this->EmitCallPacked("vm.builtin.tuple_getitem", args, dst_register);
+    // return RegListGet(dst_register);
   }
 
   // Lookup the function and see if it matches
@@ -986,50 +992,28 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     return FuncListGet(builder_->GetFunction(op->global_symbol).value());
   }
 
-  void EmitAllocStorage(const Call& call_node, int64_t dst_reg) {
-    // Handle args of the call
-    Array<PrimExpr> args;
-    args.push_back(ctx_ptr_);
-    for (Expr arg : call_node->args) {
-      args.push_back(this->VisitExpr(arg).value());
-    }
-    this->EmitCallPacked("vm.builtin.alloc_storage", args, dst_reg);
-  }
-  // void EmitAllocStorage2(const Call& call_node) {
-  void EmitAllocStorage2(const CallNode* call_node) {
-    Call call = GetRef<Call>(call_node);
-    // Handle args of the call
-    // Array<PrimExpr> args;
-    // args.push_back(ctx_ptr_);
-    for (Expr arg : call->args) {
-      // args.push_back(this->VisitExpr(arg).value());
-      this->VisitExpr(arg).value();
-    }
-    this->EmitCallPacked2("vm.builtin.alloc_storage", call->args, call);
-  }
+  // void EmitAllocTensor(const Call& call_node, int64_t dst_reg) {
+  //   ICHECK_EQ(call_node->args.size(), 4);
+  //   Array<PrimExpr> args;
+  //   args.reserve(4);
+  //   for (Expr arg : call_node->args) {
+  //     args.push_back(this->VisitExpr(arg).value());
+  //   }
+  //   this->EmitCallPacked("vm.builtin.alloc_tensor", args, dst_reg);
+  // }
 
-  void EmitAllocTensor(const Call& call_node, int64_t dst_reg) {
-    ICHECK_EQ(call_node->args.size(), 4);
-    Array<PrimExpr> args;
-    args.reserve(4);
-    for (Expr arg : call_node->args) {
-      args.push_back(this->VisitExpr(arg).value());
-    }
-    this->EmitCallPacked("vm.builtin.alloc_tensor", args, dst_reg);
-  }
-
-  // void EmitAllocTensor2(const Call& call_node) {
-  void EmitAllocTensor2(const CallNode* call_node) {
-    Call call = GetRef<Call>(call_node);
-    // ICHECK_EQ(call_node->args.size(), 4);
-    // Array<PrimExpr> args;
-    // args.reserve(4);
-    // for (Expr arg : call_node->args) {
-    //   args.push_back(this->VisitExpr(arg).value());
-    // }
-    // this->EmitCallPacked("vm.builtin.alloc_tensor", args, dst_reg);
-    this->EmitCallPacked2("vm.builtin.alloc_tensor", call->args, call);
-  }
+  // // void EmitAllocTensor2(const Call& call_node) {
+  // void EmitAllocTensor2(const CallNode* call_node) {
+  //   Call call = GetRef<Call>(call_node);
+  //   // ICHECK_EQ(call_node->args.size(), 4);
+  //   // Array<PrimExpr> args;
+  //   // args.reserve(4);
+  //   // for (Expr arg : call_node->args) {
+  //   //   args.push_back(this->VisitExpr(arg).value());
+  //   // }
+  //   // this->EmitCallPacked("vm.builtin.alloc_tensor", args, dst_reg);
+  //   this->EmitCallPacked2("vm.builtin.alloc_tensor", call->args, call);
+  // }
 
   template <typename... Args>
   std::string MakeString(Args const&... args) {
@@ -1062,70 +1046,32 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     this->EmitStmt(tir::Allocate(buffer_var, element_type, {storage_size_in_bytes_}, tir::const_true(), body));
   }
 
-  int64_t EmitKillObject(const Call& call_node) {
-    ICHECK_EQ(call_node->args.size(), 1);
-    PrimExpr arg = this->VisitExpr(call_node->args[0]).value();
-
-    // Check the arg is a register.
-    const auto* tir_call = arg.as<tir::CallNode>();
-    ICHECK(tir_call != nullptr);
-    ICHECK(tir_call->op == tir::builtin::anylist_getitem());
-    ICHECK(tir_call->args.size() == 2);
-    ICHECK(tir_call->args[0].same_as(reg_anylist_handle_));
-    const auto* p_dst_reg = tir_call->args[1].as<tir::IntImmNode>();
-    ICHECK(p_dst_reg != nullptr);
-    ICHECK(p_dst_reg->dtype == DataType::Int(32));
-
-    int64_t dst_reg = p_dst_reg->value;
-    this->EmitCallPacked("vm.builtin.null_value", {}, dst_reg);
-    return dst_reg;
-  }
-
-  // int64_t EmitKillObject2(const Call& call_node) {
-  //   ICHECK_EQ(call_node->args.size(), 1);
-  //   PrimExpr arg = this->VisitExpr(call_node->args[0]).value();
-
-  //   // Check the arg is a register.
-  //   const auto* tir_call = arg.as<tir::CallNode>();
-  //   ICHECK(tir_call != nullptr);
-  //   ICHECK(tir_call->op == tir::builtin::anylist_getitem());
-  //   ICHECK(tir_call->args.size() == 2);
-  //   ICHECK(tir_call->args[0].same_as(reg_anylist_handle_));
-  //   const auto* p_dst_reg = tir_call->args[1].as<tir::IntImmNode>();
-  //   ICHECK(p_dst_reg != nullptr);
-  //   ICHECK(p_dst_reg->dtype == DataType::Int(32));
-
-  //   int64_t dst_reg = p_dst_reg->value;
-  //   this->EmitCallPacked("vm.builtin.null_value", {}, dst_reg);
-  //   return dst_reg;
+  // void EmitReshape(const Call& call_node, int64_t dst_reg) {
+  //   // Handle args of the call
+  //   Array<PrimExpr> args;
+  //   args.push_back(ctx_ptr_);
+  //   for (Expr arg : call_node->args) {
+  //     args.push_back(this->VisitExpr(arg).value());
+  //   }
+  //   this->EmitCallPacked("vm.builtin.reshape", args, dst_reg);
   // }
 
-  void EmitReshape(const Call& call_node, int64_t dst_reg) {
-    // Handle args of the call
-    Array<PrimExpr> args;
-    args.push_back(ctx_ptr_);
-    for (Expr arg : call_node->args) {
-      args.push_back(this->VisitExpr(arg).value());
-    }
-    this->EmitCallPacked("vm.builtin.reshape", args, dst_reg);
-  }
+  // void EmitCallBuiltinWithCtx(const Call& call_node, int64_t dst_reg) {
+  //   Array<PrimExpr> args;
+  //   // if context is required, pass as first argument.
+  //   args.push_back(ctx_ptr_);
+  //   auto* func = call_node->args[0].as<ExternFuncNode>();
+  //   ICHECK(func) << "CallBuiltin comes with extern func";
 
-  void EmitCallBuiltinWithCtx(const Call& call_node, int64_t dst_reg) {
-    Array<PrimExpr> args;
-    // if context is required, pass as first argument.
-    args.push_back(ctx_ptr_);
-    auto* func = call_node->args[0].as<ExternFuncNode>();
-    ICHECK(func) << "CallBuiltin comes with extern func";
+  //   auto tuple_arg = Downcast<Tuple>(call_node->args[1]);
 
-    auto tuple_arg = Downcast<Tuple>(call_node->args[1]);
+  //   // Handle args of the call
+  //   for (Expr arg : tuple_arg->fields) {
+  //     args.push_back(this->VisitExpr(arg).value());
+  //   }
 
-    // Handle args of the call
-    for (Expr arg : tuple_arg->fields) {
-      args.push_back(this->VisitExpr(arg).value());
-    }
-
-    this->EmitCallPacked(func->global_symbol, args, dst_reg);
-  }
+  //   this->EmitCallPacked(func->global_symbol, args, dst_reg);
+  // }
 
   void EmitNormalCall(const Call& call_node, int64_t dst_reg) {
     LOG(INFO) << "EmitNormalCall" << "\n";
@@ -1201,14 +1147,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   /*! \brief system lib prefix */
   Optional<String> system_lib_prefix_;
   /*! \brief Cache ops that need to be frequently used later to reduce lookup overhead. */
-  // const Op& alloc_storage_op_ = Op::Get("relax.vm.alloc_storage");
-  const Op& alloc_storage_op_ = Op::Get("relax.memory.alloc_storage");
-  // const Op& alloc_tensor_op_ = Op::Get("relax.vm.alloc_tensor");
-  // const Op& alloc_tensor_op_ = Op::Get("relax.memory.alloc_tensor");
   const Op& alloc_tensor_op_ = Op::Get("relax.builtin.alloc_tensor");
-  // const Op& kill_object_op_ = Op::Get("relax.vm.kill_object");
-  const Op& kill_storage_op_ = Op::Get("relax.memory.kill_storage");
-  const Op& kill_tensor_op_ = Op::Get("relax.memory.kill_tensor");
   const Op& call_builtin_with_ctx_op_ = Op::Get("relax.call_builtin_with_ctx");
   const Op& null_value_op_ = Op::Get("relax.null_value");
   const Op& reshape_op_ = Op::Get("relax.reshape");
