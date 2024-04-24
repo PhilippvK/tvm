@@ -736,7 +736,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     tir::PrimFunc tir_func(main_signature_, body, ret_type, main_buffer_map_, DictAttrs(dict_attrs));
     tir_func = WithAttr(tir_func, "global_symbol", tir_func_name);
     registers_num_ = 0;
-    var_map_.clear();
+    // var_map_.clear();
     stmt_stack_.clear();
     return tir_func;
     // for (auto input : lowered_main_func->params) {
