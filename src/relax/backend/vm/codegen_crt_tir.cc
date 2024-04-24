@@ -395,17 +395,17 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
  private:
-  int64_t NewRegister() { return registers_num_++; }
+  // int64_t NewRegister() { return registers_num_++; }
 
-  static IntImm ConstInt64(int64_t value) { return IntImm(DataType::Int(64), value); }
+  // static IntImm ConstInt64(int64_t value) { return IntImm(DataType::Int(64), value); }
 
   static IntImm ConstInt32(int64_t value) { return IntImm(DataType::Int(32), value); }
 
-  PrimExpr RegListGet(int64_t slot) const {
-    // use 128 bits to represent any
-    return tir::Call(DataType::Handle(), tir::builtin::anylist_getitem(),
-                     {reg_anylist_handle_, ConstInt32(slot)});
-  }
+  // PrimExpr RegListGet(int64_t slot) const {
+  //   // use 128 bits to represent any
+  //   return tir::Call(DataType::Handle(), tir::builtin::anylist_getitem(),
+  //                    {reg_anylist_handle_, ConstInt32(slot)});
+  // }
 
   PrimExpr ConstListGet(int64_t slot) const {
     // use 128 bits to represent any
