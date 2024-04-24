@@ -630,8 +630,18 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     // declare this function.
     builder_->DeclareFunction(gsymbol.value(), vm::VMFuncInfo::FuncKind::kVMTIRFunc);
 
-    for (size_t i = 0; i < func->params.size(); ++i) {
-      this->var_map_.insert({func->params[i], GetBufferVarForIO(i)});
+    // for (size_t i = 0; i < func->params.size(); ++i) {
+    //   this->var_map_.insert({func->params[i], GetBufferVarForIO(i)});
+    // }
+
+    for (auto kv : storage_device_map_) {
+      LOG(INFO) << "kv.first=" << kv.first << "\n";
+      LOG(INFO) << "kv.second=" << kv.second << "\n";
+      for (auto sid : kv.second->storage_ids) {
+        LOG(INFO) << "sid=" << sid << "\n";
+        te::Var buffer_var(MakeString("sid_", sid), PointerType(PrimType(DataType::Int(8)), "global.workspace"));
+        sids_table_[sid] = buffer_var;
+      }
     }
     // size_t ret_reg = NewRegister();
 
