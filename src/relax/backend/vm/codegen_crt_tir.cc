@@ -46,9 +46,222 @@ namespace relax_vm {
 
 using vm::VMFuncInfo;
 
+class SInfoNode : public Object {
+ public:
+  std::vector<int64_t> storage_ids;
+  std::vector<int64_t> storage_sizes_in_bytes;
+
+  // TODO(@jroesch): expose the fields
+  void VisitAttrs(AttrVisitor* v) {}
+
+  static constexpr const char* _type_key = "relay.SInfo";
+  TVM_DECLARE_FINAL_OBJECT_INFO(SInfoNode, Object);
+};
+
+/*! \brief The storage information for a single expression. */
+class SInfo : public ObjectRef {
+ public:
+  SInfo(std::vector<int64_t> storage_ids,
+              std::vector<int64_t> storage_sizes_in_bytes);
+  TVM_DEFINE_OBJECT_REF_METHODS(SInfo, ObjectRef, SInfoNode);
+};
+
+// TODO: define SInfo
+TVM_REGISTER_NODE_TYPE(SInfoNode);
+
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<SInfoNode>([](const ObjectRef& ref, ReprPrinter* p) {
+      const auto* node = ref.as<SInfoNode>();
+      p->stream << "SInfoNode("
+                << "storage_ids=[";
+      for (auto id : node->storage_ids) {
+        p->stream << id << ",";
+      }
+      p->stream << "], storage_size_in_bytes=[";
+      for (auto bytes : node->storage_sizes_in_bytes) {
+        p->stream << bytes << ",";
+      }
+      p->stream << "])";
+    });
+
+SInfo::SInfo(std::vector<int64_t> storage_ids,
+                         std::vector<int64_t> storage_sizes_in_bytes) {
+  ICHECK_EQ(storage_ids.size(), storage_sizes_in_bytes.size());
+  auto node = make_object<SInfoNode>();
+  node->storage_ids = std::move(storage_ids);
+  node->storage_sizes_in_bytes = std::move(storage_sizes_in_bytes);
+  data_ = std::move(node);
+}
+
+using SMap =
+    std::unordered_map<Expr, SInfo, runtime::ObjectPtrHash, runtime::ObjectPtrEqual>;
+    // std::unordered_map<PrimExpr, tvm::relay::backend::StorageInfo, runtime::ObjectPtrHash, runtime::ObjectPtrEqual>;
 using StorageMap =
     std::unordered_map<Expr, tvm::relay::backend::StorageInfo, runtime::ObjectPtrHash, runtime::ObjectPtrEqual>;
-    // std::unordered_map<PrimExpr, tvm::relay::backend::StorageInfo, runtime::ObjectPtrHash, runtime::ObjectPtrEqual>;
+
+class CRTOnDemandAllocator2 : public ExprVisitor {
+ public:
+  // CRTOnDemandAllocator() : transform::ExprVisitor(Otpional<IRModule>()) {}
+
+  void Run(const Function& func) { VisitExpr(func); }
+
+  std::vector<int> GetReturnIds() const { return return_ids_; }
+
+  // std::vector<TensorType> GetReturnTtypes() const { return return_ttypes_; }
+
+  SMap GetStorageMap() const { return smap_; }
+
+ private:
+  using ExprVisitor::VisitExpr_;
+
+  void VisitExpr_(const CallNode* call_node) final {
+    LOG(INFO) << "2: VisitExpr_(const CallNode* call_node)" << "\n";
+    Call call = GetRef<Call>(call_node);
+
+    if (call->op.as<OpNode>()) {
+      LOG(INFO) << "2: OpNode" << "\n";
+      if (call_node->op == alloc_tensor_op_) {
+        LOG(INFO) << "2: ALLOC" << "\n";
+        // CreateStorage(call_node);
+      }
+    } else {
+      this->VisitExpr(call->op);
+    }
+    CreateStorage(call_node);
+    for (const Expr& arg : call_node->args) {
+      this->VisitExpr(arg);
+    }
+    AssignReturnSid(GetRef<Expr>(call_node));
+  }
+
+  void VisitExpr_(const VarNode* op) final { AssignReturnSid(GetRef<Expr>(op)); }
+
+  void VisitExpr_(const SeqExprNode* op) final {
+    LOG(INFO) << "2: VisitExpr_(const SeqExprNode* op)" << "\n";
+    for (auto block : op->blocks) {
+      LOG(INFO) << "2: block=" << block << "\n";
+      for (Binding binding : block->bindings) {
+        LOG(INFO) << "2: binding=" << binding << "\n";
+        this->VisitBinding(binding);
+        Expr expr = GetBoundValue(binding);
+        LOG(INFO) << "2: expr=" << expr << "\n";
+        VisitExpr(expr);
+        // LOG(INFO) << "2: value=" << value << "\n";
+        SInfo si = GetStorage(expr);
+        smap_[binding->var] = si;
+      }
+    }
+    this->VisitExpr(op->body);
+  }
+
+  void VisitExpr_(const ConstantNode* op) final {
+    CreateStorage(op);
+    AssignReturnSid(GetRef<Expr>(op));
+  }
+
+  SInfo GetStorage(const Expr& expr) {
+    VisitExpr(expr);
+    auto it = smap_.find(expr);
+    ICHECK(it != smap_.end()) << "Could not find " << expr->GetTypeKey() << " " << expr << " in storage device map";
+    return it->second;
+  }
+
+  void CreateStorage(const ExprNode* op) {
+    LOG(INFO) << "2: CreateStorage" << "\n";
+    Expr expr = GetRef<Expr>(op);
+    LOG(INFO) << "2: expr=" << expr << "\n";
+    std::vector<int64_t> storage_ids;
+    std::vector<Type> ttypes;
+    // std::vector<PrimExpr> tshapes;
+    std::vector<int64_t> storage_sizes_in_bytes;
+    auto type = expr->checked_type();
+    LOG(INFO) << "2: checked_type=" << type << "\n";
+    // if (type->IsInstance<TupleTypeNode>()) {
+    //   TupleType tuple_type = Downcast<TupleType>(type);
+    // TODO: flatten
+    if (auto tt = type.as<TensorType>()) {
+      LOG(INFO) << "2: tt=" << tt << "\n";
+      storage_ids.push_back(next_available_sid_++);
+      // ttypes.push_back(tt);
+      ICHECK(false) << "TODO";
+    } else if (auto dtt = type.as<DynTensorTypeNode>()) {
+      LOG(INFO) << "2: dtt=" << dtt << "\n";
+      storage_ids.push_back(next_available_sid_++);
+      int64_t sz = 1;
+      DataType elem_type = dtt->dtype;
+      if (const auto* tinfo = GetStructInfoAs<TensorStructInfoNode>(expr)) {
+        // LOG(INFO) << "2: tinfo=" << tinfo << "\n";
+        Array<PrimExpr> shape;
+        if (const ShapeExprNode* shape_expr = tinfo->shape.as<ShapeExprNode>()) {
+          // LOG(INFO) << "2: shape_expr=" << shape_expr << "\n";
+          // std::vector<int64_t> shape;
+          for (PrimExpr e : shape_expr->values) {
+            if (auto* int_value = e.as<IntImmNode>()) {
+              LOG(INFO) << "2: int_value=" << int_value->value << "\n";
+              // shape.push_back(int_value->value);
+              sz *= int_value->value;
+            } else {
+              LOG(FATAL) << "Should only use constant shape after shape lowering: " << shape_expr->values;
+            }
+          }
+          sz *= ((elem_type.bits() * elem_type.lanes()) + 8 - 1) / 8;
+          LOG(INFO) << "2: sz=" << sz << "\n";
+        }
+      }
+      storage_sizes_in_bytes.push_back(sz);
+      // ICHECK(false) << "TODO";
+    } else if (auto tuple_type = type.as<TupleTypeNode>()) {
+      LOG(INFO) << "2: tuple_type=" << tuple_type << "\n";
+      for (auto field : tuple_type->fields) {
+        LOG(INFO) << "2: field=" << field << "\n";
+        storage_ids.push_back(next_available_sid_++);
+        if (auto dtt = field.as<DynTensorTypeNode>()) {
+          int64_t sz = 1;
+          DataType elem_type = dtt->dtype;
+          if (const auto* tinfo = GetStructInfoAs<TensorStructInfoNode>(expr)) {
+            // LOG(INFO) << "2: tinfo=" << tinfo << "\n";
+            Array<PrimExpr> shape;
+            if (const ShapeExprNode* shape_expr = tinfo->shape.as<ShapeExprNode>()) {
+              // LOG(INFO) << "2: shape_expr=" << shape_expr << "\n";
+              // std::vector<int64_t> shape;
+              for (PrimExpr e : shape_expr->values) {
+                if (auto* int_value = e.as<IntImmNode>()) {
+                  LOG(INFO) << "2: int_value=" << int_value->value << "\n";
+                  // shape.push_back(int_value->value);
+                  sz *= int_value->value;
+                } else {
+                  LOG(FATAL) << "Should only use constant shape after shape lowering: " << shape_expr->values;
+                }
+              }
+              sz *= ((elem_type.bits() * elem_type.lanes()) + 8 - 1) / 8;
+              LOG(INFO) << "2: sz=" << sz << "\n";
+            }
+          }
+          storage_sizes_in_bytes.push_back(sz);
+        } else {
+          ICHECK(false) << "TODO";
+        }
+      }
+    }
+    // LOG(INFO) << "2: storage_ids=" << storage_ids << "\n";
+    // LOG(INFO) << "2: ttypes=" << ttypes << "\n";
+
+    smap_[expr] = SInfo(std::move(storage_ids), std::move(storage_sizes_in_bytes));
+  }
+  void AssignReturnSid(Expr e) {
+    if (smap_.find(e) != smap_.end()) {
+      SInfo& sinfo = smap_[e];
+      return_ids_.clear();
+      for (auto sid : sinfo->storage_ids) {
+        return_ids_.push_back(sid);
+      }
+    }
+  }
+  SMap smap_;
+  std::vector<int> return_ids_;
+  int next_available_sid_{0};
+  const Op& alloc_tensor_op_ = Op::Get("relax.builtin.alloc_tensor");
+};
 
 class CRTOnDemandAllocator : public ExprVisitor {
  public:
