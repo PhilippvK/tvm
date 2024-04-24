@@ -873,7 +873,21 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
 
   Optional<PrimExpr> VisitExpr_(const ConstantNode* op) final {
     LOG(INFO) << "VisitExpr_(const ConstantNode* op)" << "\n";
-    return ConstListGet(builder_->ConvertConstant(op->data).value());
+    Expr expr = GetRef<Expr>(op);
+    ICHECK(storage_device_map_.find(expr) != storage_device_map_.end()) << "Storage map did not contain constant expr: " << expr;
+    SInfo& sinfo = storage_device_map_[expr];
+    std::stringstream ss;
+    ss << "constant_" << constant_map_.size();
+    tir::Var constant(ss.str(), PointerType(PrimType(DataType(op->data->dtype))));
+    constant_map_[constant] = op;
+    auto sid = sinfo->storage_ids[0];
+    sids_table_[sid] = constant;
+    return constant;
+
+    // TODO: handle if output
+
+    // ICHECK(false) << "TODO: ConstantNode";
+    // return ConstListGet(builder_->ConvertConstant(op->data).value());
   }
 
   Optional<PrimExpr> VisitExpr_(const ShapeExprNode* op) final {
