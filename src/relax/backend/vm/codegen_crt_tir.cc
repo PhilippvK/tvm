@@ -604,6 +604,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     CRTOnDemandAllocator final_crt_allocator;
     final_crt_allocator.Run(func);
     storage_device_map_ = final_crt_allocator.GetStorageMap();
+    return_sid_ = final_crt_allocator.GetReturnIds();
     // initialize the state
     // stmt_stack_ = {};
     // registers_num_ = 0;
