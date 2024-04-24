@@ -601,7 +601,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     Optional<String> gsymbol = func->GetAttr<String>(tvm::attr::kGlobalSymbol);
     ICHECK(gsymbol.defined()) << "there should be no local functions in Relax VM codegen phase. "
                                  "Did you forget to apply LambdaLift or AttachGlobalSymbol Pass?";
-    CRTOnDemandAllocator final_crt_allocator;
+    CRTOnDemandAllocator2 final_crt_allocator;
     final_crt_allocator.Run(func);
     storage_device_map_ = final_crt_allocator.GetStorageMap();
     return_sid_ = final_crt_allocator.GetReturnIds();
