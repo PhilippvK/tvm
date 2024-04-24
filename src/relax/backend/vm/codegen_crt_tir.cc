@@ -1179,7 +1179,8 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   /*! \brief This is per IO var name counter to aid the generating unique names */
   std::unordered_map<std::string, int> io_var_names_;
  /*! \brief plan memory of device result */
-  StorageMap storage_device_map_;
+  // StorageMap storage_device_map_;
+  SMap storage_device_map_;
   /*! \brief mapping sid -> tir::Var */
   std::unordered_map<int, tir::Var> sids_table_;
   /*! \brief the list of return sids (note that the function might return more then one output */
