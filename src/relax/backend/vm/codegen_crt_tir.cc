@@ -1265,28 +1265,35 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
    * \brief Access IO vars using the buffer vars and
    * not the actual var.
    */
-  tir::Var GetBufferVarForIO(int index) { return main_buffer_map_[main_signature_[index]]->data; }
+  tir::Var GetBufferVarForIO(int index) {
+    return main_buffer_map_[main_signature_[index]]->data;
+  }
 
   /*!
    * \brief Return a vector of variables that represents the sids for the given Relay Expr
    */
   std::vector<tir::Var> PackSid(Expr expr) {
   // std::vector<tir::Var> PackSid(PrimExpr expr) {
+    LOG(INFO) << "PackSid" << "\n";
+    LOG(INFO) << "expr=" << expr << "\n";
     std::vector<tir::Var> buffer_vars;
 
     ICHECK(storage_device_map_.find(expr) != storage_device_map_.end())
         // << "Storage map did not contain constant expr";
         << "Storage map did not contain constant expr " << expr;
         // << "Storage map did not contain constant expr " << PrettyPrint(expr);
-    tvm::relay::backend::StorageInfo& sinfo = storage_device_map_[expr];
+    // tvm::relay::backend::StorageInfo& sinfo = storage_device_map_[expr];
+    SInfo& sinfo = storage_device_map_[expr];
 
     // Note that an expression can have multiple sids associated with it
     // e.g., returning multiple values from a function
     for (auto sid : sinfo->storage_ids) {
+      LOG(INFO) << "sid=" << sid << "\n";
       // Determine if an sid is an output buffer
       auto output_iter = std::find(return_sid_.begin(), return_sid_.end(), sid);
       if (output_iter != return_sid_.end()) {
         int output_index = std::distance(return_sid_.begin(), output_iter);
+        LOG(INFO) << "output_index=" << output_index << "\n";
         buffer_vars.push_back(GetBufferVarForIO(input_vars_.size() + output_index));
         continue;
       }
