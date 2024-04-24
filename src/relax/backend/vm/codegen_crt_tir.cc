@@ -680,6 +680,59 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         // CreateIOVar(ret.value().as<Expr>().value(), "output");
       }
     });
+    body = tir::SeqStmt({body});
+    std::unordered_map<int, bool> allocated;
+    for (auto kv : storage_device_map_) {
+      LOG(INFO) << "kv.first=" << kv.first << "\n";
+      LOG(INFO) << "kv.second=" << kv.second << "\n";
+      const bool is_input = (std::find(input_vars_.begin(), input_vars_.end(), kv.first) != input_vars_.end());
+      LOG(INFO) << "is_input=" << is_input << "\n";
+
+      const bool is_param = (params_by_expr_.find(kv.first) != params_by_expr_.end());
+      LOG(INFO) << "is_param=" << is_param << "\n";
+      if (is_input || is_param) {
+        LOG(INFO) << "continue 1" << "\n";
+        continue;
+      }
+      for (unsigned int i = 0; i < kv.second->storage_ids.size(); i++) {
+        int size = kv.second->storage_sizes_in_bytes[i];
+        LOG(INFO) << "size=" << size << "\n";
+        int sid = kv.second->storage_ids[i];
+        LOG(INFO) << "sid=" << sid << "\n";
+        if (std::find(return_sid_.begin(), return_sid_.end(), sid) != return_sid_.end()) {
+          LOG(INFO) << "is return" << "\n";
+          LOG(INFO) << "continue 2" << "\n";
+          continue;
+        }
+        if (allocated.find(sid) != allocated.end()) {
+          LOG(INFO) << "already allocated" << "\n";
+          continue;
+        }
+        // TODO
+        allocated[sid] = constant_map_.count(sids_table_[sid]);
+        if (!allocated[sid]) {
+          LOG(INFO) << "not yet allocated" << is_param << "\n";
+          PointerType ptype = Downcast<PointerType>(sids_table_[sid]->type_annotation);
+          DataType element_type = Downcast<PrimType>(ptype->element_type)->dtype;
+          body = tir::Allocate(sids_table_[sid], element_type, {size}, tir::const_true(), body);
+        } else {
+          LOG(INFO) << "allocate const" << "\n";
+
+        }
+        allocated[sid] = true;
+      }
+    }
+    for (auto kv : constant_map_) {
+      auto buffer_var = kv.first;
+      auto dtype = DataType(kv.second->data->dtype);
+      int ndim = kv.second->data->ndim;
+      Array<PrimExpr> extents;
+      for (int i = 0; i < ndim; i++) {
+        int shape = kv.second->data->shape[i];
+        extents.push_back(tir::make_const(DataType::Int(32), shape, Span()));
+      }
+      body = tir::AllocateConst(buffer_var, dtype, extents, kv.second->data, body);
+    }
     tir::PrimFunc tir_func(main_signature_, body, ret_type, main_buffer_map_, DictAttrs(dict_attrs));
     tir_func = WithAttr(tir_func, "global_symbol", tir_func_name);
     registers_num_ = 0;
