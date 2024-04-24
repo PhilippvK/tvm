@@ -672,6 +672,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     std::vector<tir::Stmt> stmts_;
     // tir::Stmt body = tir::SeqStmt::Flatten(stmts_);
     tir::Stmt body = WithNewScope([&]() {
+      CreateIOVar(func->body, "output", /*use_unique_name = */ false);
       Optional<PrimExpr> ret = ExprFunctor::VisitExpr(func->body);
       if (ret.defined()) {
         // this->EmitCallPacked("vm.builtin.copy", {ret.value()}, ret_reg);
