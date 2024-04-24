@@ -1188,6 +1188,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   /*! \brief mapping between expression and parameters */
   // Map<PrimExpr, String> params_by_expr_;
   Map<Expr, String> params_by_expr_;
+  std::unordered_map<const tir::Var, const ConstantNode*, ObjectPtrHash, ObjectPtrEqual> constant_map_;
     /*!
    * \brief Create tir::Var for input/output while updating the buffer_maps.
    *
