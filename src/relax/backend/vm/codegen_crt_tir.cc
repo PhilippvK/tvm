@@ -829,6 +829,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
 
   Optional<PrimExpr> VisitExpr_(const IfNode* op) final {
     LOG(INFO) << "VisitExpr_(const IfNode* op)" << "\n";
+    ICHECK(false) << "TODO: IfNode";
     // Reserve a register for return
     // size_t merge_register = NewRegister();
     // PrimExpr cond_value = this->VisitExpr(op->cond).value();
@@ -918,8 +919,9 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
 
   Optional<PrimExpr> VisitExpr_(const TupleGetItemNode* op) final {
     LOG(INFO) << "VisitExpr_(const TupleGetItemNode* op)" << "\n";
-    TupleGetItem expr = GetRef<TupleGetItem>(op);
-    Array<PrimExpr> args = {this->VisitExpr(expr->tuple).value()};
+    ICHECK(false) << "TODO: TupleGetTitemNode";
+    // TupleGetItem expr = GetRef<TupleGetItem>(op);
+    // Array<PrimExpr> args = {this->VisitExpr(expr->tuple).value()};
 
     // args.push_back(ConstInt64(expr->index));
 
