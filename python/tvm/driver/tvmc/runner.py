@@ -567,12 +567,48 @@ def run_module(
                 session = rpc.connect(hostname, port)
         elif device == "micro":
             # Remote RPC (running on a micro target)
-            logger.debug("Running on remote RPC (micro target).")
-            try:
-                session = tvm.micro.Session(project_.transport())
-                stack.enter_context(session)
-            except:
-                raise TVMCException("Could not open a session with the micro target.")
+            if hostname:
+                print("MICRO RPC!!!")
+                if isinstance(port, str):
+                    port = int(port)
+                if rpc_key:
+                    logger.debug("Running on remote RPC tracker with key %s.", rpc_key)
+                    # session = request_remote(rpc_key, hostname, port, timeout=1000)
+                    tracker = rpc.connect_tracker(hostname, port)
+                    use_existing = True
+                    skip_build = True
+                    skip_flash = True
+                    subdir = False
+                    remote = tracker.request(
+                        rpc_key,
+                        # priority=remote_kw["priority"],
+                        # session_timeout=remote_kw["timeout"],
+                        session_constructor_args=[
+                            "tvm.micro.compile_and_create_micro_session",
+                            None,
+                            None,
+                            json.dumps(options),
+                            str(project_dir),
+                            use_existing,
+                            skip_build,
+                            skip_flash,
+                            subdir,
+                        ],
+                    )
+                    system_lib = remote.get_function("runtime.SystemLib")()
+                else:
+                    logger.debug("Running on remote RPC with no key.")
+                    assert NotImplementedError
+
+                    # session = rpc.connect(hostname, port)
+                print("MICRO RPC???")
+            else:
+                logger.debug("Running on remote RPC (micro target).")
+                try:
+                    session = tvm.micro.Session(project_.transport())
+                    stack.enter_context(session)
+                except:
+                    raise TVMCException("Could not open a session with the micro target.")
         else:
             # Local
             logger.debug("Running a local session.")
