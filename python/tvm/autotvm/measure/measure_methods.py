@@ -769,8 +769,13 @@ def request_remote(device_key, host=None, port=None, priority=1, timeout=60):
     host = host or os.environ["TVM_TRACKER_HOST"]
     port = port or int(os.environ["TVM_TRACKER_PORT"])
 
-    tracker = _rpc.connect_tracker(host, port)
-    remote = tracker.request(device_key, priority=priority, session_timeout=timeout)
+    # device_key = None  # TODO
+
+    if device_key:
+        tracker = _rpc.connect_tracker(host, port)
+        remote = tracker.request(device_key, priority=priority, session_timeout=timeout)
+    else:
+        remote = _rpc.connect(host, port)
     return remote
 
 
