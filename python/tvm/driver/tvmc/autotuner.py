@@ -38,6 +38,7 @@ from tvm.relay.backend import Runtime
 from tvm.target import Target
 
 from . import TVMCException, composite_target, frontends
+from .pass_config import parse_configs
 from .main import register_parser
 from .model import TVMCModel
 from .target import target_from_cli, generate_target_args, reconstruct_target_args
@@ -255,6 +256,15 @@ def add_tune_args(parser, micro=False):
         '"input_name:[dim1,dim2,...,dimn] input_name2:[dim1,dim2]"',
         type=parse_shape_string,
     )
+    parser.add_argument(
+        "--pass-config",
+        action="append",
+        metavar=("name=value"),
+        help="configurations to be used at compile time. This option can be provided multiple "
+        "times, each one to set one configuration value, "
+        "e.g. '--pass-config relay.backend.use_auto_scheduler=0', "
+        "e.g. '--pass-config tir.add_lower_pass=opt_level1,pass1,opt_level2,pass2'.",
+    )
 
 
 @register_parser
@@ -336,6 +346,7 @@ def drive_tune(args):
 
     transform_args = parse_graph_transform_args(args)
     visualize_mode, visualize_path = parse_visualize_arg(args.visualize)
+    config = parse_configs(args.pass_config)
 
     tune_model(
         tvmc_model,
@@ -363,6 +374,7 @@ def drive_tune(args):
         visualize_path=visualize_path,
         tasks_filter=args.tasks,
         enable_wandb=args.wandb_callback,
+        extra_config=config,
         **transform_args,
     )
 
