@@ -554,7 +554,8 @@ def run_module(
                     "MLF can only be used to run micro device ('--device micro')."
                 )
 
-        if hostname:
+        # if hostname:
+        if False:
             if isinstance(port, str):
                 port = int(port)
             # Remote RPC
