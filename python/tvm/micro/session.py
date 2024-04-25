@@ -284,6 +284,9 @@ def compile_and_create_micro_session(
     project_options: dict = None,
     project_dir: Union[os.PathLike, str] = None,
     use_existing: bool = False,
+    skip_build: bool = False,
+    skip_flash: bool = False,
+    subdir: bool = True,
 ):
     """Compile the given libraries and sources into a MicroBinary, then invoke create_micro_session.
 
@@ -307,15 +310,17 @@ def compile_and_create_micro_session(
 
     use_existing: bool
         skips the project generation and opens transport to the project at the project_dir address.
+    TODO
     """
 
     if use_existing:
         project_dir = pathlib.Path(project_dir)
         assert project_dir.is_dir(), f"{project_dir} does not exist."
-        build_dir = project_dir / "generated-project" / "build"
-        shutil.rmtree(build_dir)
+        if not skip_build:
+            build_dir = project_dir / "generated-project" / "build"
+            shutil.rmtree(build_dir)
         generated_project = project.GeneratedProject.from_directory(
-            project_dir / "generated-project",
+            project_dir / "generated-project" if subdir else project_dir,
             options=json.loads(project_options),
         )
     else:
@@ -339,8 +344,11 @@ def compile_and_create_micro_session(
             logging.error("Project Generate Error: %s", str(exception))
             raise exception
 
-    generated_project.build()
-    generated_project.flash()
+    if not skip_build:
+        generated_project.build()
+    if not skip_flash:
+        generated_project.flash()
+
     transport = generated_project.transport()
 
     rpc_session = Session(transport_context_manager=transport)
