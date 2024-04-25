@@ -634,8 +634,18 @@ def run_module(
         elif device == "rocm":
             dev = session.rocm()
         elif device == "micro":
-            dev = session.device
-            lib = session.get_system_lib()
+            if hostname:
+                print("MICRO RPC!!! 2")
+                print("remote", remote, type(remote))
+                # print("remote.device()", remote.device(), type(remote.device()))
+                # dev = remote
+                # dev = remote.device()
+                dev = remote.cpu()
+                lib = system_lib
+                print("MICRO RPC??? 2")
+            else:
+                dev = session.device
+                lib = session.get_system_lib()
         else:
             assert device == "cpu"
             dev = session.cpu()
