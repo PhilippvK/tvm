@@ -234,10 +234,10 @@ def drive_run(args):
 
         # Check for options unavailable for micro targets.
 
-        if args.rpc_key or args.rpc_tracker:
-            raise TVMCException(
-                "--rpc-key and/or --rpc-tracker can't be specified for micro targets."
-            )
+        # if args.rpc_key or args.rpc_tracker:
+        #     raise TVMCException(
+        #         "--rpc-key and/or --rpc-tracker can't be specified for micro targets."
+        #     )
 
         if args.device != "micro":
             raise TVMCException(
