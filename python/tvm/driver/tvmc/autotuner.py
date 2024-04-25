@@ -104,7 +104,8 @@ def add_tune_args(parser, micro=False):
         help="which tasks should be tuned, i.e. 0 0,2 3-5 all list",
     )
 
-    if not micro:
+    # if not micro:
+    if True:
         parser.add_argument(
             "--rpc-key",
             help="the RPC tracker key of the target device. "
