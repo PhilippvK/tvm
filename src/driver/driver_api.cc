@@ -565,7 +565,6 @@ runtime::Module build(const IRModule& funcs, const Target& target_arg,
 }
 
 transform::Sequential MixedModulePassManager(IRModule mixed_mod, Target target) {
-  LOG(INFO) << "MixedModulePassManager" << "\n";
   transform::PassContext pass_ctx = transform::PassContext::Current();
 
   Array<Pass> mixed_pass_list;
@@ -635,7 +634,6 @@ TVM_REGISTER_GLOBAL("driver.mixed_mod_passes")
     });
 
 transform::Sequential HostModulePassManager(IRModule mixed_mod, Target target_host) {
-  LOG(INFO) << "HostModulePassManager" << "\n";
   transform::PassContext pass_ctx = transform::PassContext::Current();
   bool enable_debug = pass_ctx->GetConfig<Bool>("tir.enable_debug", Bool(false)).value();
 
@@ -670,7 +668,6 @@ TVM_REGISTER_GLOBAL("driver.host_mod_passes")
     });
 
 transform::Sequential DeviceModulePassManager(IRModule mixed_mod, Target target) {
-  LOG(INFO) << "DeviceModulePassManager" << "\n";
   Array<Pass> device_pass_list;
   runtime::TypedPackedFunc<bool(tir::PrimFunc)> fcond = [](const tir::PrimFunc& f) {
     return f->GetAttr<Integer>(tvm::attr::kCallingConv, Integer(CallingConv::kDefault)) ==
