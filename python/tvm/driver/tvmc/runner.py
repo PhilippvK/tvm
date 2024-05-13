@@ -34,6 +34,7 @@ from tvm import rpc
 from tvm.runtime import vm
 from tvm.autotvm.measure import request_remote
 from tvm.contrib import graph_executor as executor
+from tvm.runtime.executor import AotModule
 from tvm.contrib.debugger import debug_executor
 from tvm.runtime import profiler_vm
 from tvm.relay.param_dict import load_param_dict
@@ -660,7 +661,18 @@ def run_module(
                         module = tvm.micro.create_local_graph_executor(tvmc_package.graph, lib, dev)
                 else:
                     logger.debug("Creating runtime with profiling disabled.")
-                    module = executor.create(tvmc_package.graph, lib, dev)
+                    if tvmc_package.executor_type == "aot":
+                        # TODO: implement create() method
+                        # TODO: assert no rpc
+                        # dev, num_rpc_dev, device_type_id = get_device(libmod, device)
+                        # fcreate = tvm._ffi.get_global_func("tvm.aot_executor.create")
+                        # module = AotModule(fcreate(graph_json_str, libmod, *device_type_id))
+                        # module = AotModule(lib["main"](dev))
+                        # TODO: entry_name?
+                        module = AotModule(lib["__tvm_main__"](dev))
+                    else:
+                        assert tvmc_package.executor_type == "graph"
+                        module = executor.create(tvmc_package.graph, lib, dev)
 
             if tvmc_package.executor_type == "graph":
                 logger.debug("Loading params into the runtime module.")
