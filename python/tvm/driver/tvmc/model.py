@@ -56,7 +56,7 @@ import tvm.contrib.cc
 from tvm import relay
 from tvm.contrib import utils
 from tvm.driver.tvmc import TVMCException
-from tvm.relay.backend.executor_factory import GraphExecutorFactoryModule
+from tvm.relay.backend.executor_factory import GraphExecutorFactoryModule, AOTExecutorFactoryModule
 from tvm.runtime.module import BenchmarkResult
 from tvm.runtime.vm import Executable
 
@@ -223,7 +223,7 @@ class TVMCModel(object):
 
     def export_classic_format(
         self,
-        executor_factory: GraphExecutorFactoryModule,
+        executor_factory: Union[GraphExecutorFactoryModule, AOTExecutorFactoryModule],
         package_path: Optional[str] = None,
         cross: Optional[Union[str, Callable]] = None,
         cross_options: Optional[str] = None,
@@ -250,8 +250,6 @@ class TVMCModel(object):
             The path that the package was saved to.
         """
         lib_name = "mod." + lib_format
-        graph_name = "mod.json"
-        param_name = "mod.params"
 
         temp = self._tmp_dir
         if package_path is None:
@@ -272,17 +270,25 @@ class TVMCModel(object):
                 )
         self.lib_path = path_lib
 
-        with open(temp.relpath(graph_name), "w") as graph_file:
-            graph_file.write(executor_factory.get_graph_json())
-
-        with open(temp.relpath(param_name), "wb") as params_file:
-            params_file.write(relay.save_param_dict(executor_factory.get_params()))
+        graph_name = None
+        param_name = None
+        if isinstance(executor_factory, GraphExecutorFactoryModule):
+            graph_name = "mod.json"
+            param_name = "mod.params"
+            with open(temp.relpath(graph_name), "w") as graph_file:
+                graph_file.write(executor_factory.get_graph_json())
+            with open(temp.relpath(param_name), "wb") as params_file:
+                params_file.write(relay.save_param_dict(executor_factory.get_params()))
+        else:
+            assert isinstance(executor_factory, AOTExecutorFactoryModule)
 
         # Package up all the temp files into a tar file.
         with tarfile.open(package_path, "w") as tar:
             tar.add(path_lib, lib_name)
-            tar.add(temp.relpath(graph_name), graph_name)
-            tar.add(temp.relpath(param_name), param_name)
+            if graph_name:
+                tar.add(temp.relpath(graph_name), graph_name)
+            if param_name:
+                tar.add(temp.relpath(param_name), param_name)
 
         return package_path
 
@@ -448,9 +454,13 @@ class TVMCPackage(object):
             graph, params = None, None
             self.executor_type = "vm"
             if self.type == "classic":
-                graph = temp.relpath("mod.json")
-                params = temp.relpath("mod.params")
-                self.executor_type = "graph"
+                graph_path = temp.relpath("mod.json")
+                if os.path.exists(graph_path):
+                    self.executor_type = "graph"
+                    graph = graph_path
+                    params = temp.relpath("mod.params")
+                else:
+                    self.executor_type = "aot"
 
         if params is not None:
             with open(params, "rb") as param_file:
