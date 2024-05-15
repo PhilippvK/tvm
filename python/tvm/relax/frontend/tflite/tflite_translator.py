@@ -47,6 +47,9 @@ class TensorWrapper(object):
         self.buffer = buffer
         self.qnn_params = qnn_params
 
+    def __repr__(self):
+        return f"TensorWrapper({self.tensor_idx}, {self.tensor}, {self.buffer}, {self.qnn_params})"
+
 
 # SAME padding: https://www.tensorflow.org/api_guides/python/nn
 def get_pad_value(data, kernel, stride):
