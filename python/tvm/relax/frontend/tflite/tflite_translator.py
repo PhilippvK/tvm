@@ -24,6 +24,7 @@ import numpy as np
 
 import tvm
 from tvm import relax, tir, topi
+from ... import expr as _expr
 
 
 def to_int_list(np_array):
@@ -154,6 +155,30 @@ def build_str_map(obj):
             if isinstance(field_value, int):
                 ret[field_value] = field_name
     return ret
+
+
+def get_scalar_from_constant(expr):
+    """Returns scalar value from Relay constant scalar."""
+    print("get_scalar_from_constant", expr)
+    assert (
+        isinstance(expr, _expr.Constant) and not expr.data.shape
+    ), "Expr is not a constant scalar."
+    value = expr.data.numpy()
+    print("value", value)
+    assert value.dtype == np.dtype(np.int32) or value.dtype == np.dtype(np.int8) or value.dtype == np.dtype(
+        np.float32
+    ), "value must be float32/int32"
+    return value.item(0)
+
+
+def get_tensor_from_constant(expr):
+    """Returns tensor of values from Relay constant node."""
+    assert isinstance(expr, _expr.Constant)
+    value = expr.data.numpy()
+    assert value.dtype == np.dtype(np.int32) or value.dtype == np.dtype(
+        np.float32
+    ), "value must be float32/int32"
+    return value
 
 
 class TFLiteImporter:
@@ -325,16 +350,22 @@ class TFLiteImporter:
         if not ignore_qnn_params and lhs_tensor.qnn_params:
             assert rhs_tensor.qnn_params, "Both tensors should be quantized."
             assert output_tensor.qnn_params, "Output tensor should be quantized."
+            # lhs_expr = relax.op.qdq.dequantize(lhs_expr, lhs_tensor.qnn_params["scale"], lhs_tensor.qnn_params["zero_point"])
+            # rhs_expr = relax.op.qdq.dequantize(rhs_expr, rhs_tensor.qnn_params["scale"], rhs_tensor.qnn_params["zero_point"])
+            lhs_expr = self.dequantize(lhs_expr, lhs_tensor)
+            rhs_expr = self.dequantize(rhs_expr, rhs_tensor)
             out = relax_op(
-                lhs=lhs_expr,
-                rhs=rhs_expr,
-                lhs_scale=lhs_tensor.qnn_params["scale"],
-                lhs_zero_point=lhs_tensor.qnn_params["zero_point"],
-                rhs_scale=rhs_tensor.qnn_params["scale"],
-                rhs_zero_point=rhs_tensor.qnn_params["zero_point"],
-                output_scale=output_tensor.qnn_params["scale"],
-                output_zero_point=output_tensor.qnn_params["zero_point"],
+                lhs_expr,
+                rhs_expr,
+                # lhs_scale=lhs_tensor.qnn_params["scale"],
+                # lhs_zero_point=lhs_tensor.qnn_params["zero_point"],
+                # rhs_scale=rhs_tensor.qnn_params["scale"],
+                # rhs_zero_point=rhs_tensor.qnn_params["zero_point"],
+                # output_scale=output_tensor.qnn_params["scale"],
+                # output_zero_point=output_tensor.qnn_params["zero_point"],
             )
+            # out = relax.op.qdq.quantize(out, output_tensor.qnn_params["scale"], output_tensor.qnn_params["zero_point"])
+            out = self.quantize(out, output_tensor)
         else:
             out = relax_op(lhs_expr, rhs_expr)
 
@@ -356,16 +387,22 @@ class TFLiteImporter:
 
             # Handle fused activations
             if not ignore_qnn_params and output_tensor.qnn_params:
-                scale_val = get_scalar_from_constant(output_tensor.qnn_params["scale"])
-                zero_point_val = get_scalar_from_constant(output_tensor.qnn_params["zero_point"])
-                output_tensor_type_str = self.get_tensor_type_str(output_tensor.tensor.Type())
-                out = self.convert_qnn_fused_activation_function(
-                    expr=out,
-                    fused_activation_fn=fused_activation_fn,
-                    scale=scale_val,
-                    zero_point=zero_point_val,
-                    dtype=output_tensor_type_str,
-                )
+                # TODO: avoid QDQ between op and act
+                # scale_val = get_scalar_from_constant(output_tensor.qnn_params["scale"])
+                # zero_point_val = get_scalar_from_constant(output_tensor.qnn_params["zero_point"])
+                # output_tensor_type_str = self.get_tensor_type_str(output_tensor.tensor.Type())
+                # out = relax.op.qdq.dequantize(out, scale_val, zero_point_val)
+                out = self.dequantize(out, output_tensor)
+                # out = self.convert_qnn_fused_activation_function(
+                #     expr=out,
+                #     fused_activation_fn=fused_activation_fn,
+                #     scale=scale_val,
+                #     zero_point=zero_point_val,
+                #     dtype=output_tensor_type_str,
+                # )
+                out = self.convert_fused_activation_function(out, fused_activation_fn)
+                # out = relax.op.qdq.quantize(out, scale_val, zero_point_val)
+                out = self.quantize(out, output_tensor)
             else:
                 out = self.convert_fused_activation_function(out, fused_activation_fn)
         return self.block_builder.emit(out)
@@ -373,10 +410,19 @@ class TFLiteImporter:
     def convert_add(self, op):
         """Convert TFLite ADD"""
         # Check if the input tensor is quantized, call QNN op
-        if self.is_quantized(op):
-            raise NotImplementedError("Quantized TFLite Ops are unsupported")
-            return self._convert_elemwise(_qnn.op.add, op)
+        # if self.is_quantized(op):
+        #     raise NotImplementedError("Quantized TFLite Ops are unsupported")
+        #     return self._convert_elemwise(_qnn.op.add, op)
         return self._convert_elemwise(relax.op.add, op)
+
+    def convert_sub(self, op):
+        """Convert TFLite SUB"""
+        # Check if the input tensor is quantized, call QNN op
+        # if self.is_quantized(op):
+        #     raise NotImplementedError("Quantized TFLite Ops are unsupported")
+        #     return self._convert_elemwise(_qnn.op.subtract, op)
+        return self._convert_elemwise(relax.op.subtract, op)
+
 
     # def _maximum(self, node: mlir.ir.Operation) -> relax.Expr:
     #     lhs, rhs = self.retrieve_operands(node)
@@ -397,6 +443,13 @@ class TFLiteImporter:
     #     if isinstance(lhs, relax.Var) or isinstance(rhs, relax.Var):
     #         return self._call_binary_op(relax.op.multiply, lhs, rhs)
     #     return lhs * rhs
+    def convert_mul(self, op):
+        """Convert TFLite MUL"""
+        # Check if the input tensor is quantized, call QNN op
+        # if self.is_quantized(op):
+        #     raise NotImplementedError("Quantized TFLite Ops are unsupported")
+        #     return self._convert_elemwise(_qnn.op.mul, op)
+        return self._convert_elemwise(relax.op.multiply, op)
 
     # def _subtract(self, node: mlir.ir.Operation) -> relax.Expr:
     #     lhs, rhs = self.retrieve_operands(node)
@@ -594,10 +647,12 @@ class TFLiteImporter:
             # depthwise convolution:
             # 1 KH KW C(input_c * depth_multiplier), we require
             # KH KW IC M (depth_multiplier) (HWOI)
+            print("is_dw", is_depthwise_conv)
             if is_depthwise_conv:
                 weight_value = weight_value.reshape(kernel_h, kernel_w, input_c, depth_multiplier)
             else:
                 weight_value = weight_value.transpose((1, 2, 3, 0))
+            print("weight_value", weight_value)
 
             # weight_expr = self.exp_tab.new_const(
             #     weight_value, dtype=weight_tensor_type_str, source_name=weight_tensor.tensor.Name()
@@ -622,26 +677,42 @@ class TFLiteImporter:
             )
 
         if input_tensor.qnn_params:
-            qnn_conv2d_params = dict(params)
-            qnn_conv2d_params["input_zero_point"] = input_tensor.qnn_params["zero_point"]
-            qnn_conv2d_params["kernel_zero_point"] = weight_tensor.qnn_params["zero_point"]
-            qnn_conv2d_params["out_dtype"] = (
-                "int64" if output_tensor_type_str == "int16" else "int32"
-            )
-            qnn_conv2d_params["input_scale"] = input_tensor.qnn_params["scale"]
-            qnn_conv2d_params["kernel_scale"] = weight_tensor.qnn_params["scale"]
-            out = _qnn.op.conv2d(in_expr, weight_expr, **qnn_conv2d_params)
+            if input_tensor.qnn_params is not None:  # if not float32
+                in_expr = self.dequantize(in_expr, input_tensor)
+            in_expr = self.block_builder.normalize(in_expr)
+            if weight_tensor.qnn_params is not None:  # if not float32
+                weight_expr = self.dequantize(weight_expr, weight_tensor, axis=-2 if is_depthwise_conv else -1)
+            print("we", weight_expr)
+            print("wt", weight_tensor)
+            weight_expr = self.block_builder.normalize(weight_expr)
+            # qnn_conv2d_params = dict(params)
+            # qnn_conv2d_params["weight_zero_point"] = input_tensor.qnn_params["zero_point"]
+            # qnn_conv2d_params["kernel_zero_point"] = weight_tensor.qnn_params["zero_point"]
+            # qnn_conv2d_params["out_dtype"] = (
+            #     "int64" if output_tensor_type_str == "int16" else "int32"
+            # )
+            # qnn_conv2d_params["input_scale"] = input_tensor.qnn_params["scale"]
+            # qnn_conv2d_params["kernel_scale"] = weight_tensor.qnn_params["scale"]
+            # out = _qnn.op.conv2d(in_expr, weight_expr, **qnn_conv2d_params)
+            out = relax.op.nn.conv2d(in_expr, weight_expr, **params, out_dtype="float32")
+            out = self.block_builder.normalize(out)
+            out = self.quantize(out, output_tensor)  # TODO: use int32 here (also eleminates bias bug)
+            out = self.block_builder.normalize(out)
         else:
             out = relax.op.nn.conv2d(in_expr, weight_expr, **params)
             out = self.block_builder.normalize(out)
 
         # if we have bias
         if len(input_tensors) == 3:
+            print("has bias")
             bias_tensor = input_tensors[2]
+            print("bias_tensor", bias_tensor)
             bias_tensor_type = bias_tensor.tensor.Type()
+            print("bias_tensor_type", bias_tensor_type)
             # bias tensor type should be INT32 (int8 qnn) or INT64 (int16 qnn) or FLOAT32
             assert bias_tensor_type in (TensorType.INT32, TensorType.INT64, TensorType.FLOAT32)
             bias_tensor_type_str = self.get_tensor_type_str(bias_tensor_type)
+            print("bias_tensor_type_str", bias_tensor_type_str)
             if self.has_expr(bias_tensor.tensor_idx):
                 bias_expr = self.get_expr(bias_tensor.tensor_idx)
             else:
@@ -660,6 +731,8 @@ class TFLiteImporter:
                 bias_expr,
                 [1, 1, 1, -1]
             )
+            # TODO: only cast if required (skip for fp32)
+            out = relax.op.astype(out, bias_tensor_type_str)
             out = relax.op.add(out, bias_expr)
             out = self.block_builder.normalize(out)
 
@@ -678,29 +751,36 @@ class TFLiteImporter:
 
             new_input_scale_val = data_scale_val * weight_scale_val
             new_input_scale = relax.const(new_input_scale_val, "float32")
-            new_input_zero_point = relax.const(0, "int32")
+            # new_input_zero_point = relax.const(0, "int32")
+            new_input_zero_point = relax.const(0, "int8")
 
             # Finally requantize
-            out = _qnn.op.requantize(
-                out,
-                input_scale=new_input_scale,
-                input_zero_point=new_input_zero_point,
-                output_scale=output_tensor.qnn_params["scale"],
-                output_zero_point=output_tensor.qnn_params["zero_point"],
-                out_dtype=output_tensor_type_str,
-                axis=3,
-            )
+            # TODO: combine into requantize op
+            # TODO: add axis argument to self.quantize/dequantize
+            out = relax.op.qdq.dequantize(out, new_input_scale, new_input_zero_point, axis=3)
+            # out = _qnn.op.requantize(
+            #     out,
+            #     input_scale=new_input_scale,
+            #     input_zero_point=new_input_zero_point,
+            #     output_scale=output_tensor.qnn_params["scale"],
+            #     output_zero_point=output_tensor.qnn_params["zero_point"],
+            #     out_dtype=output_tensor_type_str,
+            #     axis=3,
+            # )
 
             # Call activation function
             output_scale_val = get_scalar_from_constant(output_tensor.qnn_params["scale"])
             output_zero_point_val = get_scalar_from_constant(output_tensor.qnn_params["zero_point"])
-            out = self.convert_qnn_fused_activation_function(
-                expr=out,
-                fused_activation_fn=fused_activation_fn,
-                scale=output_scale_val,
-                zero_point=output_zero_point_val,
-                dtype=output_tensor_type_str,
-            )
+            out = self.block_builder.normalize(out)
+            out = self.convert_fused_activation_function(out, fused_activation_fn)
+            # out = self.convert_qnn_fused_activation_function(
+            #     expr=out,
+            #     fused_activation_fn=fused_activation_fn,
+            #     scale=output_scale_val,
+            #     zero_point=output_zero_point_val,
+            #     dtype=output_tensor_type_str,
+            # )
+            out = relax.op.qdq.quantize(out, output_tensor.qnn_params["scale"], output_tensor.qnn_params["zero_point"], axis=3, out_dtype=output_tensor_type_str)
         else:
             out = self.convert_fused_activation_function(out, fused_activation_fn)
         return self.block_builder.emit(out)
@@ -830,6 +910,66 @@ class TFLiteImporter:
 
         return self.block_builder.emit(out)
 
+    def convert_quantize(self, op):
+        """Convert TFLite Quantize"""
+
+        input_tensors = self.get_input_tensors(op)
+        assert len(input_tensors) == 1, "input tensors length should be 1"
+        input_tensor = input_tensors[0]
+        input_tensor_type_str = self.get_tensor_type_str(input_tensor.tensor.Type())
+        in_expr = self.get_tensor_expr(input_tensor)
+
+        output_tensors = self.get_output_tensors(op)
+        assert len(output_tensors) == 1, "output tensors length should be 1"
+        output_tensor = output_tensors[0]
+        output_tensor_type_str = self.get_tensor_type_str(output_tensor.tensor.Type())
+
+        # The output must be quantized
+        assert output_tensor.qnn_params
+
+        # TFLite Quantize op can also act as Requantize op
+        if input_tensor_type_str == "float32":
+            out = self.quantize(in_expr, output_tensor)
+        else:
+            out = relax.op.qdq.requantize(  # TODO: implement
+                in_expr,
+                input_tensor.qnn_params["scale"],
+                input_tensor.qnn_params["zero_point"],
+                output_tensor.qnn_params["scale"],
+                output_tensor.qnn_params["zero_point"],
+                out_dtype=output_tensor_type_str,
+            )
+        return out
+
+    def convert_dequantize(self, op):
+        """Convert TFLite Dequantize"""
+        try:
+            from tflite.TensorType import TensorType
+        except ImportError:
+            raise ImportError("The tflite package must be installed")
+
+        input_tensors = self.get_input_tensors(op)
+        assert len(input_tensors) == 1, "input tensors length should be 1"
+        input_tensor = input_tensors[0]
+
+        if input_tensor.tensor.Type() == TensorType.FLOAT16:
+            dtype = self.get_tensor_type_str(input_tensor.tensor.Type())
+            input_value = self.get_tensor_value(input_tensor)
+            in_expr = self.exp_tab.new_const(
+                input_value, dtype=dtype, source_name=input_tensor.tensor.Name()
+            )
+            out = relay.cast(in_expr, dtype="float32")
+            return out
+
+        in_expr = self.get_expr(input_tensor.tensor_idx)
+
+        # The input must be quantized
+        assert input_tensor.qnn_params
+        # Dequantize the input.
+        out = self.dequantize(in_expr, input_tensor)
+
+        return out
+
     # def _reduce(self, node: mlir.ir.Operation) -> relax.Expr:
     #     data = self.retrieve_operands(node)
     #     dimensions = self._attr2value(node.attributes["dimensions"])
@@ -933,9 +1073,9 @@ class TFLiteImporter:
                     "TFLite avg_pool2dreshape requires input and output scale"
                     "and zero points to be equal"
                 )
-                out = _op.cast(in_expr, dtype="int32")
+                out = relax.op.astype(in_expr, dtype="int32")
                 out = relax.op.nn.avg_pool2d(out, **params)
-                out = _op.cast(out, dtype=output_tensor_type_str)
+                out = relax.op.astype(out, dtype=output_tensor_type_str)
             else:
                 out = relax.op.nn.avg_pool2d(in_expr, **params)
         elif pool_type == "max":
@@ -962,15 +1102,19 @@ class TFLiteImporter:
 
         # Handle fused activations
         if output_tensor.qnn_params:
-            scale_val = get_scalar_from_constant(output_tensor.qnn_params["scale"])
-            zero_point_val = get_scalar_from_constant(output_tensor.qnn_params["zero_point"])
-            out = self.convert_qnn_fused_activation_function(
-                expr=out,
-                fused_activation_fn=fused_activation_fn,
-                scale=scale_val,
-                zero_point=zero_point_val,
-                dtype=output_tensor_type_str,
-            )
+            # TODO: avoid QDQ between op and act
+            # scale_val = get_scalar_from_constant(output_tensor.qnn_params["scale"])
+            # zero_point_val = get_scalar_from_constant(output_tensor.qnn_params["zero_point"])
+            out = self.dequantize(out, output_tensor)
+            # out = self.convert_qnn_fused_activation_function(
+            #     expr=out,
+            #     fused_activation_fn=fused_activation_fn,
+            #     scale=scale_val,
+            #     zero_point=zero_point_val,
+            #     dtype=output_tensor_type_str,
+            # )
+            out = self.convert_fused_activation_function(out, fused_activation_fn)
+            out = self.quantize(out, output_tensor)
         else:
             out = self.convert_fused_activation_function(out, fused_activation_fn)
         return self.block_builder.emit(out)
@@ -1140,7 +1284,10 @@ class TFLiteImporter:
                 if is_qnn_params_valid:
                     qnn_params = dict()
                     qnn_params["scale"] = relax.const(scale, "float32")
-                    qnn_params["zero_point"] = relax.const(zero_point, "int32")
+                    # TODO: check if in int8 range
+                    # qnn_params["zero_point"] = relax.const(zero_point, "int32")
+                    print("zpp", zero_point)
+                    qnn_params["zero_point"] = relax.const(zero_point, "int8")
             return_list.append(TensorWrapper(tensor_idx, tensor, buffer, qnn_params))
         return return_list
 
@@ -1258,12 +1405,24 @@ class TFLiteImporter:
             expr = self.get_expr(tensor.tensor_idx)
         else:
             type_str = self.get_tensor_type_str(tensor.tensor.Type())
-            expr = self.exp_tab.new_const(
+            expr = relax.const(
                 self.get_tensor_value(tensor, is_sparse),
                 dtype=type_str,
-                source_name=tensor.tensor.Name(),
+                # source_name=tensor.tensor.Name(),
             )
         return expr
+
+    def has_same_qnn_params(self, lhs_tensor, rhs_tensor):
+        lhs_scale = lhs_tensor.qnn_params["scale"]
+        rhs_scale = rhs_tensor.qnn_params["scale"]
+        lhs_zero_point = lhs_tensor.qnn_params["zero_point"]
+        rhs_zero_point = rhs_tensor.qnn_params["zero_point"]
+        # 0.1 + 0.2 != 0.3
+        return np.allclose(
+            lhs_scale.data.numpy(), rhs_scale.data.numpy(), rtol=1e-5, atol=1e-5
+        ) and np.allclose(
+            lhs_zero_point.data.numpy(), rhs_zero_point.data.numpy(), rtol=1e-5, atol=1e-5
+        )
 
     def is_quantized(self, op):
         """Check if an input tensor is quantized."""
@@ -1271,6 +1430,34 @@ class TFLiteImporter:
         first_tensor = input_tensors[0]
         return first_tensor.qnn_params is not None
 
+    def quantize(self, expr, tensor_to_quantize, axis=-1):
+        """Helper function to quantize a tensor with Relay"""
+        print("quantize", expr, tensor_to_quantize)
+        print("scale", tensor_to_quantize.qnn_params["scale"], type(tensor_to_quantize.qnn_params["scale"]))
+        print("zp", tensor_to_quantize.qnn_params["zero_point"], type(tensor_to_quantize.qnn_params["zero_point"]))
+        tensor_type = tensor_to_quantize.tensor.Type()
+        tensor_type_str = self.get_tensor_type_str(tensor_type)
+        quantized = relax.op.qdq.quantize(
+            expr,
+            tensor_to_quantize.qnn_params["scale"],
+            tensor_to_quantize.qnn_params["zero_point"],
+            out_dtype=tensor_type_str,
+            axis=axis,
+        )
+        return quantized
+
+    def dequantize(self, expr, tensor, axis=-1):
+        """Helper function to dequantize a tensor with Relay"""
+        print("dequantize", expr, tensor)
+        print("scale", tensor.qnn_params["scale"], type(tensor.qnn_params["scale"]))
+        print("zp", tensor.qnn_params["zero_point"], type(tensor.qnn_params["zero_point"]))
+        dequantized = relax.op.qdq.dequantize(
+            expr,
+            tensor.qnn_params["scale"],
+            tensor.qnn_params["zero_point"],
+            axis=axis,
+        )
+        return dequantized
 
     def create_convert_map(self):
         # TODO: Add more operators
@@ -1291,7 +1478,7 @@ class TFLiteImporter:
             # "DENSIFY": self.convert_densify,
             # "DEPTH_TO_SPACE": self.convert_depth_to_space,
             "DEPTHWISE_CONV_2D": self.convert_depthwise_conv2d,
-            # "DEQUANTIZE": self.convert_dequantize,
+            "DEQUANTIZE": self.convert_dequantize,
             # "DETECTION_POSTPROCESS": self.convert_detection_postprocess,
             # "DIV": self.convert_div,
             # "ELU": self.convert_elu,
@@ -1328,7 +1515,7 @@ class TFLiteImporter:
             # "MEAN": self.convert_reduce_mean,
             # "MINIMUM": self.convert_minimum,
             # "MIRROR_PAD": self.convert_mirror_pad,
-            # "MUL": self.convert_mul,
+            "MUL": self.convert_mul,
             # "NEG": self.convert_neg,
             # "NOT_EQUAL": self.convert_not_equal,
             # "ONE_HOT": self.convert_one_hot,
@@ -1338,7 +1525,7 @@ class TFLiteImporter:
             # "POW": self.convert_pow,
             # "PRELU": self.convert_prelu,
             # "RANGE": self.convert_range,
-            # "QUANTIZE": self.convert_quantize,
+            "QUANTIZE": self.convert_quantize,
             # "REDUCE_ANY": self.convert_reduce_any,
             # "REDUCE_MAX": self.convert_reduce_max,
             # "REDUCE_MIN": self.convert_reduce_min,
@@ -1368,7 +1555,7 @@ class TFLiteImporter:
             # "SQUARED_DIFFERENCE": self.convert_squared_difference,
             # "SQUEEZE": self.convert_squeeze,
             # "STRIDED_SLICE": self.convert_strided_slice,
-            # "SUB": self.convert_sub,
+            "SUB": self.convert_sub,
             # "SUM": self.convert_reduce_sum,
             # "TAN": self.convert_tan,
             # "TANH": self.convert_tanh,
@@ -1450,7 +1637,7 @@ class TFLiteImporter:
             )
             # ret = ret
 
-            print("self._nodes", self._nodes)
+            # print("self._nodes", self._nodes)
             if len(output_tensors) == 1:
                 tensor_idx = output_tensors[0].tensor_idx
                 self._nodes[get_tensor_name(self.subgraph, tensor_idx)] = ret
