@@ -69,8 +69,6 @@
 // functions to be overriden.
 #define RELAX_EXPR_VISITOR_VISIT_BINDING_IMPL(OP)                                   \
   void ExprVisitor::VisitBinding_(const VarBindingNode* binding, const OP* value) { \
-    LOG(INFO) << "VisitBinding_ " #OP << "\n";                                           \
-    printf("VisitBinding_ " #OP "\n");                                           \
     this->VisitExpr(binding->value);                                                \
     this->VisitVarDef(binding->var);                                                \
   }
@@ -78,8 +76,6 @@
 // functions to be overriden.
 #define RELAX_EXPR_MUTATOR_VISIT_BINDING_IMPL(OP)                                   \
   void ExprMutator::VisitBinding_(const VarBindingNode* binding, const OP* value) { \
-    LOG(INFO) << "VisitBinding_ " #OP << "\n";                                           \
-    printf("VisitBinding_ " #OP "\n");                                           \
     Expr new_value = this->VisitExpr(binding->value);                               \
     this->ReEmitBinding(binding, new_value);                                        \
   }
