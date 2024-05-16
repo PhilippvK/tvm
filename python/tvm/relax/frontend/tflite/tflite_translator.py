@@ -162,12 +162,12 @@ def build_str_map(obj):
 
 def get_scalar_from_constant(expr):
     """Returns scalar value from Relay constant scalar."""
-    print("get_scalar_from_constant", expr)
+    # print("get_scalar_from_constant", expr)
     assert (
         isinstance(expr, _expr.Constant) and not expr.data.shape
     ), "Expr is not a constant scalar."
     value = expr.data.numpy()
-    print("value", value)
+    # print("value", value)
     assert value.dtype == np.dtype(np.int32) or value.dtype == np.dtype(np.int8) or value.dtype == np.dtype(
         np.float32
     ), "value must be float32/int32"
@@ -650,12 +650,12 @@ class TFLiteImporter:
             # depthwise convolution:
             # 1 KH KW C(input_c * depth_multiplier), we require
             # KH KW IC M (depth_multiplier) (HWOI)
-            print("is_dw", is_depthwise_conv)
+            # print("is_dw", is_depthwise_conv)
             if is_depthwise_conv:
                 weight_value = weight_value.reshape(kernel_h, kernel_w, input_c, depth_multiplier)
             else:
                 weight_value = weight_value.transpose((1, 2, 3, 0))
-            print("weight_value", weight_value)
+            # print("weight_value", weight_value)
 
             # weight_expr = self.exp_tab.new_const(
             #     weight_value, dtype=weight_tensor_type_str, source_name=weight_tensor.tensor.Name()
@@ -685,8 +685,8 @@ class TFLiteImporter:
             in_expr = self.block_builder.normalize(in_expr)
             if weight_tensor.qnn_params is not None:  # if not float32
                 weight_expr = self.dequantize(weight_expr, weight_tensor, axis=-2 if is_depthwise_conv else -1)
-            print("we", weight_expr)
-            print("wt", weight_tensor)
+            # print("we", weight_expr)
+            # print("wt", weight_tensor)
             weight_expr = self.block_builder.normalize(weight_expr)
             # qnn_conv2d_params = dict(params)
             # qnn_conv2d_params["weight_zero_point"] = input_tensor.qnn_params["zero_point"]
@@ -707,15 +707,15 @@ class TFLiteImporter:
 
         # if we have bias
         if len(input_tensors) == 3:
-            print("has bias")
+            # print("has bias")
             bias_tensor = input_tensors[2]
-            print("bias_tensor", bias_tensor)
+            # print("bias_tensor", bias_tensor)
             bias_tensor_type = bias_tensor.tensor.Type()
-            print("bias_tensor_type", bias_tensor_type)
+            # print("bias_tensor_type", bias_tensor_type)
             # bias tensor type should be INT32 (int8 qnn) or INT64 (int16 qnn) or FLOAT32
             assert bias_tensor_type in (TensorType.INT32, TensorType.INT64, TensorType.FLOAT32)
             bias_tensor_type_str = self.get_tensor_type_str(bias_tensor_type)
-            print("bias_tensor_type_str", bias_tensor_type_str)
+            # print("bias_tensor_type_str", bias_tensor_type_str)
             if self.has_expr(bias_tensor.tensor_idx):
                 bias_expr = self.get_expr(bias_tensor.tensor_idx)
             else:
@@ -1289,7 +1289,7 @@ class TFLiteImporter:
                     qnn_params["scale"] = relax.const(scale, "float32")
                     # TODO: check if in int8 range
                     # qnn_params["zero_point"] = relax.const(zero_point, "int32")
-                    print("zpp", zero_point)
+                    # print("zpp", zero_point)
                     qnn_params["zero_point"] = relax.const(zero_point, "int8")
             return_list.append(TensorWrapper(tensor_idx, tensor, buffer, qnn_params))
         return return_list
@@ -1435,9 +1435,9 @@ class TFLiteImporter:
 
     def quantize(self, expr, tensor_to_quantize, axis=-1):
         """Helper function to quantize a tensor with Relay"""
-        print("quantize", expr, tensor_to_quantize)
-        print("scale", tensor_to_quantize.qnn_params["scale"], type(tensor_to_quantize.qnn_params["scale"]))
-        print("zp", tensor_to_quantize.qnn_params["zero_point"], type(tensor_to_quantize.qnn_params["zero_point"]))
+        # print("quantize", expr, tensor_to_quantize)
+        # print("scale", tensor_to_quantize.qnn_params["scale"], type(tensor_to_quantize.qnn_params["scale"]))
+        # print("zp", tensor_to_quantize.qnn_params["zero_point"], type(tensor_to_quantize.qnn_params["zero_point"]))
         tensor_type = tensor_to_quantize.tensor.Type()
         tensor_type_str = self.get_tensor_type_str(tensor_type)
         quantized = relax.op.qdq.quantize(
@@ -1451,9 +1451,9 @@ class TFLiteImporter:
 
     def dequantize(self, expr, tensor, axis=-1):
         """Helper function to dequantize a tensor with Relay"""
-        print("dequantize", expr, tensor)
-        print("scale", tensor.qnn_params["scale"], type(tensor.qnn_params["scale"]))
-        print("zp", tensor.qnn_params["zero_point"], type(tensor.qnn_params["zero_point"]))
+        # print("dequantize", expr, tensor)
+        # print("scale", tensor.qnn_params["scale"], type(tensor.qnn_params["scale"]))
+        # print("zp", tensor.qnn_params["zero_point"], type(tensor.qnn_params["zero_point"]))
         dequantized = relax.op.qdq.dequantize(
             expr,
             tensor.qnn_params["scale"],
@@ -1673,7 +1673,7 @@ class TFLiteImporter:
         output : tvm.IRModule
             The result IRModule with entry function "main"
         """
-        print("from_tflite2", model, shape_dict, dtype_dict)
+        # print("from_tflite2", model, shape_dict, dtype_dict)
         try:
             from tflite.ActivationFunctionType import ActivationFunctionType
             from tflite.BuiltinOperator import BuiltinOperator
@@ -1748,7 +1748,7 @@ class TFLiteImporter:
             self.block_builder.emit_func_output(output)
 
         mod = self.block_builder.get()
-        mod.show()
+        # mod.show()
         return mod
 
 
