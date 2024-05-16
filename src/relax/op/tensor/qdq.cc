@@ -79,7 +79,12 @@ StructInfo InferStructInfoQuantize(const Call& call, const BlockBuilder& ctx) {
   }
 
   // Check that "axis" attribute is not out of range:
+  LOG(INFO) << "input_sinfo->ndim=" << input_sinfo->ndim << "\n";
+  LOG(INFO) << "attrs->axis=" << attrs->axis << "\n";
   int axis = (attrs->axis < 0) ? (input_sinfo->ndim + attrs->axis) : attrs->axis;
+  LOG(INFO) << "axis=" << axis << "\n";
+  LOG(INFO) << "(axis < 0)=" << (axis < 0) << "\n";
+  LOG(INFO) << "(axis > input_sinfo->ndim - 1)=" << (axis > input_sinfo->ndim - 1) << "\n";
   if (axis < 0 || axis > input_sinfo->ndim - 1) {
     ctx->ReportFatal(Diagnostic::Error(call)
                      << "relax.quantize: axis param is out of range (" << attrs->axis << ")");
@@ -161,10 +166,21 @@ StructInfo InferStructInfoDequantize(const Call& call, const BlockBuilder& ctx) 
   }
 
   // Check that "axis" attribute is not out of range:
-  int axis = (attrs->axis < 0) ? (input_sinfo->ndim + attrs->axis) : attrs->axis;
-  if (axis < 0 || axis > input_sinfo->ndim - 1) {
-    ctx->ReportFatal(Diagnostic::Error(call)
-                     << "relax.dequantize: axis param is out of range (" << attrs->axis << ")");
+  LOG(INFO) << "input_sinfo->ndim=" << input_sinfo->ndim << "\n";
+  LOG(INFO) << "attrs->axis=" << attrs->axis << "\n";
+
+  int axis = 0;
+  if (!IsScalarTensor(scale_sinfo)) {
+    axis = (attrs->axis < 0) ? (input_sinfo->ndim + attrs->axis) : attrs->axis;
+  }
+  LOG(INFO) << "axis=" << axis << "\n";
+  if (!IsScalarTensor(scale_sinfo)) {
+    LOG(INFO) << "(axis < 0)=" << (axis < 0) << "\n";
+    LOG(INFO) << "(axis > input_sinfo->ndim - 1)=" << (axis > input_sinfo->ndim - 1) << "\n";
+    if ((axis < 0 || axis > input_sinfo->ndim - 1)) {
+      ctx->ReportFatal(Diagnostic::Error(call)
+                       << "relax.dequantize: axis param is out of range (" << attrs->axis << ")");
+    }
   }
 
   auto check_param_size = [&](const TensorStructInfo& param_sinfo,
