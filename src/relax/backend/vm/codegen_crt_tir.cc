@@ -115,13 +115,13 @@ class CRTOnDemandAllocator2 : public ExprVisitor {
   using ExprVisitor::VisitExpr_;
 
   void VisitExpr_(const CallNode* call_node) final {
-    LOG(INFO) << "2: VisitExpr_(const CallNode* call_node)" << "\n";
+    // LOG(INFO) << "2: VisitExpr_(const CallNode* call_node)" << "\n";
     Call call = GetRef<Call>(call_node);
 
     if (call->op.as<OpNode>()) {
-      LOG(INFO) << "2: OpNode" << "\n";
+      // LOG(INFO) << "2: OpNode" << "\n";
       if (call_node->op == alloc_tensor_op_) {
-        LOG(INFO) << "2: ALLOC" << "\n";
+        // LOG(INFO) << "2: ALLOC" << "\n";
         // CreateStorage(call_node);
       }
     } else {
@@ -137,14 +137,14 @@ class CRTOnDemandAllocator2 : public ExprVisitor {
   void VisitExpr_(const VarNode* op) final { AssignReturnSid(GetRef<Expr>(op)); }
 
   void VisitExpr_(const SeqExprNode* op) final {
-    LOG(INFO) << "2: VisitExpr_(const SeqExprNode* op)" << "\n";
+    // LOG(INFO) << "2: VisitExpr_(const SeqExprNode* op)" << "\n";
     for (auto block : op->blocks) {
-      LOG(INFO) << "2: block=" << block << "\n";
+      // LOG(INFO) << "2: block=" << block << "\n";
       for (Binding binding : block->bindings) {
-        LOG(INFO) << "2: binding=" << binding << "\n";
+        // LOG(INFO) << "2: binding=" << binding << "\n";
         this->VisitBinding(binding);
         Expr expr = GetBoundValue(binding);
-        LOG(INFO) << "2: expr=" << expr << "\n";
+        // LOG(INFO) << "2: expr=" << expr << "\n";
         VisitExpr(expr);
         // LOG(INFO) << "2: value=" << value << "\n";
         SInfo si = GetStorage(expr);
@@ -167,25 +167,25 @@ class CRTOnDemandAllocator2 : public ExprVisitor {
   }
 
   void CreateStorage(const ExprNode* op) {
-    LOG(INFO) << "2: CreateStorage" << "\n";
+    // LOG(INFO) << "2: CreateStorage" << "\n";
     Expr expr = GetRef<Expr>(op);
-    LOG(INFO) << "2: expr=" << expr << "\n";
+    // LOG(INFO) << "2: expr=" << expr << "\n";
     std::vector<int64_t> storage_ids;
     std::vector<Type> ttypes;
     // std::vector<PrimExpr> tshapes;
     std::vector<int64_t> storage_sizes_in_bytes;
     auto type = expr->checked_type();
-    LOG(INFO) << "2: checked_type=" << type << "\n";
+    // LOG(INFO) << "2: checked_type=" << type << "\n";
     // if (type->IsInstance<TupleTypeNode>()) {
     //   TupleType tuple_type = Downcast<TupleType>(type);
     // TODO: flatten
     if (auto tt = type.as<TensorType>()) {
-      LOG(INFO) << "2: tt=" << tt << "\n";
+      // LOG(INFO) << "2: tt=" << tt << "\n";
       storage_ids.push_back(next_available_sid_++);
       // ttypes.push_back(tt);
       ICHECK(false) << "TODO";
     } else if (auto dtt = type.as<DynTensorTypeNode>()) {
-      LOG(INFO) << "2: dtt=" << dtt << "\n";
+      // LOG(INFO) << "2: dtt=" << dtt << "\n";
       storage_ids.push_back(next_available_sid_++);
       int64_t sz = 1;
       DataType elem_type = dtt->dtype;
@@ -197,23 +197,23 @@ class CRTOnDemandAllocator2 : public ExprVisitor {
           // std::vector<int64_t> shape;
           for (PrimExpr e : shape_expr->values) {
             if (auto* int_value = e.as<IntImmNode>()) {
-              LOG(INFO) << "2: int_value=" << int_value->value << "\n";
+              // LOG(INFO) << "2: int_value=" << int_value->value << "\n";
               // shape.push_back(int_value->value);
               sz *= int_value->value;
             } else {
-              LOG(FATAL) << "Should only use constant shape after shape lowering: " << shape_expr->values;
+              // LOG(FATAL) << "Should only use constant shape after shape lowering: " << shape_expr->values;
             }
           }
           sz *= ((elem_type.bits() * elem_type.lanes()) + 8 - 1) / 8;
-          LOG(INFO) << "2: sz=" << sz << "\n";
+          // LOG(INFO) << "2: sz=" << sz << "\n";
         }
       }
       storage_sizes_in_bytes.push_back(sz);
       // ICHECK(false) << "TODO";
     } else if (auto tuple_type = type.as<TupleTypeNode>()) {
-      LOG(INFO) << "2: tuple_type=" << tuple_type << "\n";
+      // LOG(INFO) << "2: tuple_type=" << tuple_type << "\n";
       for (auto field : tuple_type->fields) {
-        LOG(INFO) << "2: field=" << field << "\n";
+        // LOG(INFO) << "2: field=" << field << "\n";
         storage_ids.push_back(next_available_sid_++);
         if (auto dtt = field.as<DynTensorTypeNode>()) {
           int64_t sz = 1;
@@ -226,15 +226,15 @@ class CRTOnDemandAllocator2 : public ExprVisitor {
               // std::vector<int64_t> shape;
               for (PrimExpr e : shape_expr->values) {
                 if (auto* int_value = e.as<IntImmNode>()) {
-                  LOG(INFO) << "2: int_value=" << int_value->value << "\n";
+                  // LOG(INFO) << "2: int_value=" << int_value->value << "\n";
                   // shape.push_back(int_value->value);
                   sz *= int_value->value;
                 } else {
-                  LOG(FATAL) << "Should only use constant shape after shape lowering: " << shape_expr->values;
+                  // LOG(FATAL) << "Should only use constant shape after shape lowering: " << shape_expr->values;
                 }
               }
               sz *= ((elem_type.bits() * elem_type.lanes()) + 8 - 1) / 8;
-              LOG(INFO) << "2: sz=" << sz << "\n";
+              // LOG(INFO) << "2: sz=" << sz << "\n";
             }
           }
           storage_sizes_in_bytes.push_back(sz);
@@ -376,7 +376,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   static IRModule Run(relax::ExecBuilder builder, IRModule mod) {
-    LOG(INFO) << "Run2" << "\n";
+    // LOG(INFO) << "Run2" << "\n";
     // create a new copy
     IRModule res_mod = mod;
     res_mod.CopyOnWrite();
@@ -597,7 +597,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   tir::PrimFunc Codegen(const Function& func) {
-    LOG(INFO) << "Codegen" << "\n";
+    // LOG(INFO) << "Codegen" << "\n";
     Optional<String> gsymbol = func->GetAttr<String>(tvm::attr::kGlobalSymbol);
     ICHECK(gsymbol.defined()) << "there should be no local functions in Relax VM codegen phase. "
                                  "Did you forget to apply LambdaLift or AttachGlobalSymbol Pass?";
@@ -635,10 +635,10 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     // }
 
     for (auto kv : storage_device_map_) {
-      LOG(INFO) << "kv.first=" << kv.first << "\n";
-      LOG(INFO) << "kv.second=" << kv.second << "\n";
+      // LOG(INFO) << "kv.first=" << kv.first << "\n";
+      // LOG(INFO) << "kv.second=" << kv.second << "\n";
       for (auto sid : kv.second->storage_ids) {
-        LOG(INFO) << "sid=" << sid << "\n";
+        // LOG(INFO) << "sid=" << sid << "\n";
         te::Var buffer_var(MakeString("sid_", sid), PointerType(PrimType(DataType::Int(8)), "global.workspace"));
         sids_table_[sid] = buffer_var;
       }
@@ -683,40 +683,40 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     body = tir::SeqStmt({body});
     std::unordered_map<int, bool> allocated;
     for (auto kv : storage_device_map_) {
-      LOG(INFO) << "kv.first=" << kv.first << "\n";
-      LOG(INFO) << "kv.second=" << kv.second << "\n";
+      // LOG(INFO) << "kv.first=" << kv.first << "\n";
+      // LOG(INFO) << "kv.second=" << kv.second << "\n";
       const bool is_input = (std::find(input_vars_.begin(), input_vars_.end(), kv.first) != input_vars_.end());
-      LOG(INFO) << "is_input=" << is_input << "\n";
+      // LOG(INFO) << "is_input=" << is_input << "\n";
 
       const bool is_param = (params_by_expr_.find(kv.first) != params_by_expr_.end());
-      LOG(INFO) << "is_param=" << is_param << "\n";
+      // LOG(INFO) << "is_param=" << is_param << "\n";
       if (is_input || is_param) {
-        LOG(INFO) << "continue 1" << "\n";
+        // LOG(INFO) << "continue 1" << "\n";
         continue;
       }
       for (unsigned int i = 0; i < kv.second->storage_ids.size(); i++) {
         int size = kv.second->storage_sizes_in_bytes[i];
-        LOG(INFO) << "size=" << size << "\n";
+        // LOG(INFO) << "size=" << size << "\n";
         int sid = kv.second->storage_ids[i];
-        LOG(INFO) << "sid=" << sid << "\n";
+        // LOG(INFO) << "sid=" << sid << "\n";
         if (std::find(return_sid_.begin(), return_sid_.end(), sid) != return_sid_.end()) {
-          LOG(INFO) << "is return" << "\n";
-          LOG(INFO) << "continue 2" << "\n";
+          // LOG(INFO) << "is return" << "\n";
+          // LOG(INFO) << "continue 2" << "\n";
           continue;
         }
         if (allocated.find(sid) != allocated.end()) {
-          LOG(INFO) << "already allocated" << "\n";
+          // LOG(INFO) << "already allocated" << "\n";
           continue;
         }
         // TODO
         allocated[sid] = constant_map_.count(sids_table_[sid]);
         if (!allocated[sid]) {
-          LOG(INFO) << "not yet allocated" << is_param << "\n";
+          // LOG(INFO) << "not yet allocated" << is_param << "\n";
           PointerType ptype = Downcast<PointerType>(sids_table_[sid]->type_annotation);
           DataType element_type = Downcast<PrimType>(ptype->element_type)->dtype;
           body = tir::Allocate(sids_table_[sid], element_type, {size}, tir::const_true(), body);
         } else {
-          LOG(INFO) << "allocate const" << "\n";
+          // LOG(INFO) << "allocate const" << "\n";
 
         }
         allocated[sid] = true;
@@ -750,15 +750,15 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   Optional<PrimExpr> VisitExpr_(const SeqExprNode* op) final {
-    LOG(INFO) << "VisitExpr_(const SeqExprNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const SeqExprNode* op)" << "\n";
     for (auto block : op->blocks) {
-      LOG(INFO) << "block=" << block << "\n";
+      // LOG(INFO) << "block=" << block << "\n";
       for (Binding binding : block->bindings) {
-        LOG(INFO) << "binding=" << binding << "\n";
+        // LOG(INFO) << "binding=" << binding << "\n";
         Expr expr = GetBoundValue(binding);
-        LOG(INFO) << "expr=" << expr << "\n";
+        // LOG(INFO) << "expr=" << expr << "\n";
         Optional<PrimExpr> value = VisitExpr(expr);
-        LOG(INFO) << "value=" << value << "\n";
+        // LOG(INFO) << "value=" << value << "\n";
 
         if (expr.as<Var>() && value.defined()) {
           // For a normalized relax module, there should be one
@@ -784,18 +784,18 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   Optional<PrimExpr> VisitExpr_(const CallNode* call_node) final {
-    LOG(INFO) << "VisitExpr_(const CallNode* call_node)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const CallNode* call_node)" << "\n";
     Call call = GetRef<Call>(call_node);
 
     if (call_node->op == null_value_op_) {
-      LOG(INFO) << "null_value_op" << "\n";
+      // LOG(INFO) << "null_value_op" << "\n";
       return tir::Call(DataType::Handle(), tir::builtin::reinterpret(),
                        {IntImm(DataType::Int(64), 0)});
     }
     // int64_t dst_reg = HasVoidStructInfo(call) ? -1 : NewRegister();
     int64_t dst_reg = -1;
     if (call->op.as<OpNode>()) {
-      LOG(INFO) << "OpNode" << "\n";
+      // LOG(INFO) << "OpNode" << "\n";
       // return tir::Call(DataType::Handle(), tir::builtin::reinterpret(),
       //                  {IntImm(DataType::Int(64), 0)});
       // if (call_node->op == call_builtin_with_ctx_op_) {
@@ -822,13 +822,13 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     //   LOG(INFO) << "dst_reg >= 0" << "\n";
     //   return RegListGet(dst_reg);
     // } else {
-      LOG(INFO) << "dst_reg < 0" << "\n";
+      // LOG(INFO) << "dst_reg < 0" << "\n";
       return NullOpt;
     // }
   }
 
   Optional<PrimExpr> VisitExpr_(const IfNode* op) final {
-    LOG(INFO) << "VisitExpr_(const IfNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const IfNode* op)" << "\n";
     ICHECK(false) << "TODO: IfNode";
     // Reserve a register for return
     // size_t merge_register = NewRegister();
@@ -852,7 +852,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   Optional<PrimExpr> VisitExpr_(const VarNode* op) final {
-    LOG(INFO) << "VisitExpr_(const VarNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const VarNode* op)" << "\n";
     // Var var = GetRef<Var>(op);
     // auto it = this->var_map_.find(var);
     // ICHECK(it != this->var_map_.end()) << "Var " << var << " is not defined";
@@ -872,7 +872,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   Optional<PrimExpr> VisitExpr_(const ConstantNode* op) final {
-    LOG(INFO) << "VisitExpr_(const ConstantNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const ConstantNode* op)" << "\n";
     Expr expr = GetRef<Expr>(op);
     ICHECK(storage_device_map_.find(expr) != storage_device_map_.end()) << "Storage map did not contain constant expr: " << expr;
     SInfo& sinfo = storage_device_map_[expr];
@@ -891,7 +891,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   Optional<PrimExpr> VisitExpr_(const ShapeExprNode* op) final {
-    LOG(INFO) << "VisitExpr_(const ShapeExprNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const ShapeExprNode* op)" << "\n";
     std::vector<int64_t> shape;
     for (PrimExpr e : op->values) {
       if (auto* int_value = e.as<IntImmNode>()) {
@@ -904,22 +904,22 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   Optional<PrimExpr> VisitExpr_(const PrimValueNode* op) final {
-    LOG(INFO) << "VisitExpr_(const PrimValueNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const PrimValueNode* op)" << "\n";
     return op->value;
   }
 
   Optional<PrimExpr> VisitExpr_(const StringImmNode* op) final {
-    LOG(INFO) << "VisitExpr_(const StringImmNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const StringImmNode* op)" << "\n";
     return ConstListGet(builder_->ConvertConstant(op->value).value());
   }
 
   Optional<PrimExpr> VisitExpr_(const DataTypeImmNode* op) final {
-    LOG(INFO) << "VisitExpr_(const DataTypeImmNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const DataTypeImmNode* op)" << "\n";
     return ConstListGet(builder_->ConvertConstant(op->value).value());
   }
 
   Optional<PrimExpr> VisitExpr_(const TupleNode* op) final {
-    LOG(INFO) << "VisitExpr_(const TupleNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const TupleNode* op)" << "\n";
     ICHECK(false) << "TODO: TupleNode";
     // Tuple tuple = GetRef<Tuple>(op);
     // Array<PrimExpr> args;
@@ -932,7 +932,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   Optional<PrimExpr> VisitExpr_(const TupleGetItemNode* op) final {
-    LOG(INFO) << "VisitExpr_(const TupleGetItemNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const TupleGetItemNode* op)" << "\n";
     ICHECK(false) << "TODO: TupleGetTitemNode";
     // TupleGetItem expr = GetRef<TupleGetItem>(op);
     // Array<PrimExpr> args = {this->VisitExpr(expr->tuple).value()};
@@ -994,7 +994,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   Optional<PrimExpr> VisitExpr_(const GlobalVarNode* op) final {
-    LOG(INFO) << "VisitExpr_(const GlobalVarNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const GlobalVarNode* op)" << "\n";
     VMFuncInfo::FuncKind kind;
     auto symbol = LookupFunction(GetRef<Expr>(op), &kind);
     ICHECK(symbol.defined());
@@ -1003,7 +1003,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   }
 
   Optional<PrimExpr> VisitExpr_(const ExternFuncNode* op) final {
-    LOG(INFO) << "VisitExpr_(const ExternFuncNode* op)" << "\n";
+    // LOG(INFO) << "VisitExpr_(const ExternFuncNode* op)" << "\n";
     builder_->DeclareFunction(op->global_symbol, VMFuncInfo::FuncKind::kPackedFunc);
     return FuncListGet(builder_->GetFunction(op->global_symbol).value());
   }
@@ -1090,7 +1090,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   // }
 
   void EmitNormalCall(const Call& call_node, int64_t dst_reg) {
-    LOG(INFO) << "EmitNormalCall" << "\n";
+    // LOG(INFO) << "EmitNormalCall" << "\n";
     // Call call = GetRef<Call>(call_node);
     Array<PrimExpr> args = VisitArray(call_node->args);
     // A function can be a closure that comes from parent
@@ -1099,7 +1099,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     auto symbol = LookupFunction(call_node->op, &kind);
 
     if (symbol.defined() && kind == VMFuncInfo::FuncKind::kPackedFunc) {
-      LOG(INFO) << "defined && kPackedFunc" << "\n";
+      // LOG(INFO) << "defined && kPackedFunc" << "\n";
       // primfunc in the same module.
       // use cpacked to directly invoke without named based lookup
       if (Optional<tir::PrimFunc> prim_func = LookupPrimFunc(symbol.value())) {
@@ -1111,7 +1111,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         this->EmitCallPacked2(symbol.value(), call_node->args, call_node);
       }
     } else {
-      LOG(INFO) << "!(defined && kPackedFunc)" << "\n";
+      // LOG(INFO) << "!(defined && kPackedFunc)" << "\n";
       // Default path, leverage function table and invoke as closure
       Array<PrimExpr> all_args;
       all_args.push_back(ctx_ptr_);
@@ -1274,8 +1274,8 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
    */
   std::vector<tir::Var> PackSid(Expr expr) {
   // std::vector<tir::Var> PackSid(PrimExpr expr) {
-    LOG(INFO) << "PackSid" << "\n";
-    LOG(INFO) << "expr=" << expr << "\n";
+    // LOG(INFO) << "PackSid" << "\n";
+    // LOG(INFO) << "expr=" << expr << "\n";
     std::vector<tir::Var> buffer_vars;
 
     ICHECK(storage_device_map_.find(expr) != storage_device_map_.end())
@@ -1288,12 +1288,12 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     // Note that an expression can have multiple sids associated with it
     // e.g., returning multiple values from a function
     for (auto sid : sinfo->storage_ids) {
-      LOG(INFO) << "sid=" << sid << "\n";
+      // LOG(INFO) << "sid=" << sid << "\n";
       // Determine if an sid is an output buffer
       auto output_iter = std::find(return_sid_.begin(), return_sid_.end(), sid);
       if (output_iter != return_sid_.end()) {
         int output_index = std::distance(return_sid_.begin(), output_iter);
-        LOG(INFO) << "output_index=" << output_index << "\n";
+        // LOG(INFO) << "output_index=" << output_index << "\n";
         buffer_vars.push_back(GetBufferVarForIO(input_vars_.size() + output_index));
         continue;
       }
@@ -1331,7 +1331,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
  */
 
 IRModule CRTTIRCodeGen(ExecBuilder exec_builder, IRModule mod) {
-  LOG(INFO) << "CRTTIRCodeGen" << "\n";
+  // LOG(INFO) << "CRTTIRCodeGen" << "\n";
   return CodeGenCRTTIR::Run(exec_builder, mod);
 }
 
