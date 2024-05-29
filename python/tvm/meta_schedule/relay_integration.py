@@ -275,6 +275,8 @@ def tune_relay(
     num_tuning_cores: Union[Literal["physical", "logical"], int] = "physical",
     disabled_pass: Optional[Union[List[str], Set[str], Tuple[str]]] = None,
     instruments: Optional[Sequence[PassInstrument]] = None,
+    opt_level: int = 3,
+    pass_config: Mapping[str, Any] = MappingProxyType({}),
 ) -> Database:
     """Tune a Relay program.
 
@@ -340,6 +342,8 @@ def tune_relay(
             target,
             params,
             module_equality=module_equality,
+            opt_level=opt_level,
+            pass_config=pass_config,
             disabled_pass=disabled_pass,
             instruments=instruments,
         ),
@@ -349,21 +353,28 @@ def tune_relay(
         seed=seed,
         num_tuning_cores=num_tuning_cores,
     )
-    return tune_tasks(
-        tasks=tasks,
-        task_weights=task_weights,
-        work_dir=work_dir,
-        max_trials_global=max_trials_global,
-        max_trials_per_task=max_trials_per_task,
-        num_trials_per_iter=num_trials_per_iter,
-        builder=builder,
-        runner=runner,
-        database=database,
-        cost_model=cost_model,
-        measure_callbacks=measure_callbacks,
-        task_scheduler=task_scheduler,
-        module_equality=module_equality,
-    )
+    pass_config = dict(pass_config)
+    with transform.PassContext(
+        opt_level=opt_level,
+        config=pass_config,
+        disabled_pass=disabled_pass,
+        instruments=instruments,
+    ):
+        return tune_tasks(
+            tasks=tasks,
+            task_weights=task_weights,
+            work_dir=work_dir,
+            max_trials_global=max_trials_global,
+            max_trials_per_task=max_trials_per_task,
+            num_trials_per_iter=num_trials_per_iter,
+            builder=builder,
+            runner=runner,
+            database=database,
+            cost_model=cost_model,
+            measure_callbacks=measure_callbacks,
+            task_scheduler=task_scheduler,
+            module_equality=module_equality,
+        )
 
 
 def compile_relay(
