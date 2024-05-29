@@ -399,7 +399,7 @@ def _worker_func(
                 alloc_repeat,
             )
         # Step 4: Run time_evaluator
-        with Profiler.timeit("LocalRunner/run_evaluator"):
+        with Profiler.timeit("RPCRunner/run_evaluator"):
             costs: List[float] = f_run_evaluator(
                 session,
                 rt_mod,
