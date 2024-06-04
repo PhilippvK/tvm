@@ -615,6 +615,7 @@ def tune_model(
     if extra_config:
         assert isinstance(extra_config, dict)
         config.update(extra_config)
+    print("config", config)
 
     with tvm.transform.PassContext(opt_level=3, config=config):
         if tuning_records is None:
