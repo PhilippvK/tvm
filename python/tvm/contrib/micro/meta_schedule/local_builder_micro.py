@@ -70,6 +70,17 @@ def get_local_builder_micro():
         # mod = InstallDebugSpans()(mod)
         print("E")
         mod = RemoveWeightLayoutRewriteBlock(skip_ndarray_rewrite=True)(mod)
+        # TODO
+        # opt_level = 3
+        # config = {
+        #     "tir.disable_vectorize": True,
+        #     "tir.enable_debug": True,
+        # }
+        # disabled_pass = []
+        # with tvm.transform.PassContext(
+        #     opt_level=opt_level, config=config, disabled_pass=disabled_pass,
+        # ):
+        #     rt_mod = tvm_build(mod, target=target, runtime=runtime)
         rt_mod = tvm_build(mod, target=target, runtime=runtime)
         return rt_mod
 
