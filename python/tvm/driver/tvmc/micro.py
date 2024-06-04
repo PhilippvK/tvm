@@ -383,6 +383,10 @@ def tune_handler(args):
     else:
         rpc_hostname = None
         rpc_port = None
+    # print("rpc_hostname", rpc_hostname)
+    # print("rpc_port", rpc_port)
+    # print("rpc_key", args.rpc_key)
+    # input("123")
 
     tune_model(
         tvmc_model,
