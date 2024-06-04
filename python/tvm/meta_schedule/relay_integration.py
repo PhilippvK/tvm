@@ -357,6 +357,8 @@ def tune_relay(
         seed=seed,
         num_tuning_cores=num_tuning_cores,
     )
+    # tasks = [tasks[1]]
+    # task_weights = [task_weights[1]]
     pass_config = dict(pass_config)
     with transform.PassContext(
         opt_level=opt_level,
