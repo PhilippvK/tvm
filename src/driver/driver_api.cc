@@ -347,6 +347,7 @@ IRModule LowerModule(IRModule mod, bool simple_mode) {
 }
 
 TVM_REGISTER_GLOBAL("driver.lower_module").set_body_typed([](IRModule mod, bool simple_mode) {
+  LOG(INFO) << "lower_module";
   return LowerModule(std::move(mod), simple_mode);
 });
 
@@ -636,6 +637,7 @@ TVM_REGISTER_GLOBAL("driver.mixed_mod_passes")
 
 transform::Sequential HostModulePassManager(IRModule mixed_mod, Target target_host) {
   transform::PassContext pass_ctx = transform::PassContext::Current();
+  LOG(INFO) << "HostModulePassManager";
   bool enable_debug = pass_ctx->GetConfig<Bool>("tir.enable_debug", Bool(false)).value();
 
   Array<tvm::transform::Pass> host_pass_list;
