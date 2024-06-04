@@ -98,6 +98,7 @@ def lower(
     binds: Optional[Mapping[tensor.Tensor, Buffer]] = None,
     simple_mode: bool = False,
 ) -> IRModule:
+    print("lower", lower)
     """Lowering step before build into target.
 
     Parameters
@@ -126,12 +127,17 @@ def lower(
     m : IRModule
        The result IRModule
     """
+    print("A1")
     if isinstance(inp, IRModule):
+        print("B1")
         return ffi.lower_module(inp, simple_mode)
     if isinstance(inp, PrimFunc):
+        print("B2")
         return ffi.lower_primfunc(inp, name, simple_mode)
     if isinstance(inp, te.Schedule):
+        print("B3")
         return ffi.lower_schedule(inp, args, name, binds, simple_mode)
+    print("A2")
     raise ValueError(
         f"Expected input to be an IRModule, PrimFunc or te.Schedule, but got {type(inp)}"
     )
@@ -221,7 +227,9 @@ def build(
     ----
     See the note on :any:`tvm.target` on target string format.
     """
+    print("driver.build")
     if isinstance(inputs, te.Schedule):
+        print("Schedule")
         if args is None:
             raise ValueError("args must be given for build from schedule")
         input_mod = lower(inputs, args, name=name, binds=binds)
@@ -231,8 +239,10 @@ def build(
             merged_mod.update(lower(x))
         input_mod = merged_mod
     elif isinstance(inputs, PrimFunc):
+        print("PrimFunc")
         input_mod = lower(inputs, name=name)
     elif isinstance(inputs, tvm.IRModule):
+        print("IRModule")
         input_mod = lower(inputs)
     elif not isinstance(inputs, (dict, container.Map)):
         raise ValueError(
