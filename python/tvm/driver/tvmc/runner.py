@@ -618,8 +618,11 @@ def run_module(
         # must be already flashed into the micro target before one tries
         # to run it. Hence skip model upload for micro targets.
         if device != "micro":
+            print("session.upload!", tvmc_package.lib_path)
             session.upload(tvmc_package.lib_path)
+            print("session.load_module!", tvmc_package.lib_name)
             lib = session.load_module(tvmc_package.lib_name)
+            print("lib!", lib)
 
         # TODO expand to other supported devices, as listed in tvm.rpc.client (@leandron)
         logger.debug("Device is %s.", device)
@@ -691,24 +694,34 @@ def run_module(
                 outputs[output_name] = val.numpy()
         else:
             # TODO(gromero): Adjust for micro targets.
+            print("A1")
             fallback = False
             if profile:
+                print("A1 - profile")
                 if device == "micro":
+                    print("A1 - profile - micro")
                     logger.debug("Creating runtime (micro) with profiling enabled.")
                     assert tvmc_package.executor_type == "graph", "MicroTVM profiling is only available on host-driven graph executor"
                     module = tvm.micro.create_local_debug_executor(
                         tvmc_package.graph, lib, dev
                     )
                 else:
+                    print("A1 - profile - !micro")
                     logger.debug("Creating runtime with profiling enabled.")
                     module = debug_executor.create(tvmc_package.graph, lib, dev, dump_root="./prof")
             else:
+                print("A1 - !profile")
                 if device == "micro":
+                    print("A1 - !profile - micro")
                     logger.debug("Creating runtime (micro) with profiling disabled.")
                     if tvmc_package.executor_type == "aot":
+                        print("A1 - !profile - micro - aot")
                         module = tvm.micro.create_local_aot_executor(session)
                     else:
+                        print("A1 - !profile - micro - !aot")
                         if benchmark:
+                            print("A1 - !profile - micro - !aot - benchmark")
+                            # fallback = True
                             try:
                                 # MicroTVM on-device graph executor if available
                                 module = executor.create(tvmc_package.graph, lib, dev)
@@ -716,13 +729,16 @@ def run_module(
                                 logger.debug("Falling back to host-driven MicroTVM session.")
                                 fallback = True
                         else:
+                            print("A1 - !profile - micro - !aot - !benchmark")
                             fallback = True
 
                         if fallback:
+                            print("A1 - micro - fallback")
                             module = tvm.micro.create_local_graph_executor(
                                 tvmc_package.graph, lib, dev
                             )
                 else:
+                    print("A1 - !profile - !micro")
                     logger.debug("Creating runtime with profiling disabled.")
                     module = executor.create(tvmc_package.graph, lib, dev)
 
@@ -739,7 +755,9 @@ def run_module(
                     # RPC does not support datatypes such as Array and Map,
                     # fallback to obtaining input information from graph json.
                     if tvmc_package.executor_type == "aot":
+                        print("inputs", inputs)
                         assert inputs is not None, "MicroTVM AoT Executor needs --inputs or --fill-mode none"
+                        # TODO: define shape
                         # assert input_shapes is not None, "TODO"
                         # print("input_shapes", input_shapes)
                         # TODO: via cmdline args?
