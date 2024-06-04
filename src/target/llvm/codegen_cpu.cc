@@ -475,6 +475,7 @@ llvm::BasicBlock* CodeGenCPU::CheckCallSuccess(llvm::Value* retcode) {
 }
 
 void CodeGenCPU::CreateComputeScope(const AttrStmtNode* op) {
+  LOG(INFO) << "CreateComputeScope";
   EmitDebugLocation(op);
   /*! \brief maintain states that should be guarded when step into compute scope */
   struct ComputeScopeStates {
@@ -1439,6 +1440,7 @@ void CodeGenCPU::VisitStmt_(const AttrStmtNode* op) {
     ICHECK(value != nullptr);
     this->CreateStaticInit(value->value, op->body);
   } else if (op->attr_key == tir::attr::compute_scope) {
+    LOG(INFO) << "tir::attr::compute_scope";
     this->CreateComputeScope(op);
   } else if (tir::attr::IsPragmaKey(op->attr_key)) {
     if (op->attr_key == "pragma_parallel_stride_pattern") {
