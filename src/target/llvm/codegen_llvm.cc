@@ -2073,6 +2073,7 @@ void CodeGenLLVM::VisitStmt_(const EvaluateNode* op) {
 }
 
 void CodeGenLLVM::EmitDebugLocation(const Optional<Span>& span) {
+    // LOG(INFO) << "EmitDebugLocation";
 #if TVM_LLVM_VERSION >= 50
   if (di_subprogram_ == nullptr) {
     // debug info is not always generated outside of CPU codegen

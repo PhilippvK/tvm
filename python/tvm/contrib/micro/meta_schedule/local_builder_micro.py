@@ -18,6 +18,7 @@
 
 import os
 import tempfile
+import tvm
 from typing import Optional, Dict
 from tvm.ir import IRModule
 from tvm.runtime import NDArray
@@ -28,7 +29,7 @@ from tvm import micro
 from tvm.contrib.tar import tar
 from tvm.relay.backend import Runtime
 from tvm.driver import build as tvm_build
-from tvm.tir.transform import RemoveWeightLayoutRewriteBlock
+from tvm.tir.transform import RemoveWeightLayoutRewriteBlock, InstallDebugSpans
 
 
 def get_local_builder_micro():
@@ -58,8 +59,10 @@ def get_local_builder_micro():
         # changing it is necessary for micro targets,
         # since the generated projects already include a main function.
         prim_func = mod["main"].with_attr("global_symbol", "default_function")
+        # prim_func = InstallDebugSpans()(prim_func)
         mod = IRModule({"main": prim_func})
         runtime = Runtime("crt", {"system-lib": True})
+        # mod = InstallDebugSpans()(mod)
         mod = RemoveWeightLayoutRewriteBlock(skip_ndarray_rewrite=True)(mod)
         rt_mod = tvm_build(mod, target=target, runtime=runtime)
         return rt_mod

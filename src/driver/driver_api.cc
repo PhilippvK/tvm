@@ -274,6 +274,9 @@ Array<tvm::transform::Pass> CreatePassList(bool disable_loop_partition) {
 IRModule LowerWithPassList(IRModule mod, Array<tvm::transform::Pass> pass_list) {
   auto optimize = tvm::transform::Sequential(pass_list);
   mod = optimize(std::move(mod));
+  LOG(INFO) << "LowerWithPassList";
+  // bool enable_debug = pass_ctx->GetConfig<Bool>("tir.enable_debug", Bool(false)).value();
+  // LOG(INFO) << "enable_debug=" << enable_debug;
   return mod;
 }
 
@@ -605,6 +608,8 @@ TVM_REGISTER_GLOBAL("driver.mixed_mod_passes")
 transform::Sequential HostModulePassManager(IRModule mixed_mod, Target target_host) {
   transform::PassContext pass_ctx = transform::PassContext::Current();
   bool enable_debug = pass_ctx->GetConfig<Bool>("tir.enable_debug", Bool(false)).value();
+  // bool enable_debug = pass_ctx->GetConfig<Bool>("tir.enable_debug", Bool(true)).value();
+  LOG(INFO) << "enable_debug=" << enable_debug;
 
   Array<tvm::transform::Pass> host_pass_list;
 
@@ -625,6 +630,7 @@ transform::Sequential HostModulePassManager(IRModule mixed_mod, Target target_ho
   host_pass_list.push_back(tir::transform::CombineContextCall());
 
   if (enable_debug) {
+    LOG(INFO) << "push InstallDebugSpans";
     host_pass_list.push_back(tir::transform::InstallDebugSpans());
   }
 

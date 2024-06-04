@@ -130,6 +130,7 @@ namespace transform {
 
 Pass InstallDebugSpans() {
   auto pass_func = [](IRModule mod, PassContext ctx) {
+    LOG(INFO) << "INSTALLPASS";
     Map<GlobalVar, PrimFunc> external_host_functions;
     for (const auto& [gvar, base_func] : mod->functions) {
       if (auto opt = base_func.as<PrimFunc>()) {
