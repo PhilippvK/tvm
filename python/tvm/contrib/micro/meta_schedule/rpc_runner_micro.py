@@ -120,6 +120,7 @@ def _worker_func(
     device_type: str,
     args_info: T_ARG_INFO_JSON_OBJ_LIST,
 ) -> List[float]:
+    print("_worker_func")
     if platform not in micro.build.MicroTVMTemplateProject.list():
         # lookup via path
         if not Path(platform).is_dir():
@@ -143,12 +144,19 @@ def _worker_func(
     }
 
     build_result = namedtuple("BuildResult", ["filename"])(artifact_path)
+    print("build_result", build_result)
 
     with module_loader(remote_kw, build_result) as (remote, mod):
         dev = remote.device(device_type, 0)
+        print("mod", mod, dir(mod), mod.imported_modules)
         f_prepare = ""
         if evaluator_config.enable_cpu_cache_flush:
             f_prepare = "cache_flush_cpu_non_first_arg"
+        # TODO: PROFILER
+        # mod.save("/tmp/saved.tar")
+        # mod.export_library("/tmp/saved.o")
+        # mod.get_source()
+        print("!")
         time_f = mod.time_evaluator(
             mod.entry_name,
             dev,
@@ -165,6 +173,8 @@ def _worker_func(
         dev.sync()
 
         costs = time_f(*args).results
+    print("costs", costs)
+    # input(">")
     return costs
 
 
