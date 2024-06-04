@@ -318,6 +318,8 @@ class Module(object):
         repeats_to_cooldown=1,
         f_preproc="",
     ):
+        print("time_evaluator", func_name)
+        func_name = "default_function"
         """Get an evaluator that measures time cost of running function.
 
         Parameters
@@ -390,10 +392,16 @@ class Module(object):
 
             def evaluator(*args):
                 """Internal wrapped evaluator."""
+                print("evaluator")
                 # Wrap feval so we can add more stats in future.
+                # print("aaa")
                 blob = feval(*args)
+                # print("bbb")
                 fmt = "@" + ("d" * repeat)
+                # print("ccc")
                 results = struct.unpack(fmt, blob)
+                print("results", results)
+                # print("ddd")
                 return BenchmarkResult(results)
 
             return evaluator
