@@ -288,6 +288,7 @@ def compile_and_create_micro_session(
     skip_flash: bool = False,
     subdir: bool = True,
 ):
+    print("compile_and_create_micro_session")
     """Compile the given libraries and sources into a MicroBinary, then invoke create_micro_session.
 
     Parameters
@@ -348,6 +349,10 @@ def compile_and_create_micro_session(
         generated_project.build()
     if not skip_flash:
         generated_project.flash()
+    print("temp_dir", temp_dir.path)
+    # import time
+    # time.sleep(60)
+    # input("<>")
 
     transport = generated_project.transport()
 
