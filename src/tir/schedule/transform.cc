@@ -299,6 +299,7 @@ void LeafBlockRemovalPlan(const ScheduleState& self, const StmtSRef& leaf_block_
 
 Optional<LoopRV> TileWithTensorIntrin(const tir::Schedule& sch, const tir::BlockRV& block_rv,
                                       const String& intrin_name, bool allow_padding) {
+  LOG(INFO) << "TileWithTensorIntrin";
   Optional<tir::TensorizeInfo> opt_tensorize_info =
       GetTensorizeLoopMapping(sch->state(), sch->GetSRef(block_rv),
                               tir::TensorIntrin::Get(intrin_name).value()->desc, allow_padding);

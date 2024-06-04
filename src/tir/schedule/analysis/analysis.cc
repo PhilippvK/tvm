@@ -1674,6 +1674,7 @@ struct TensorIntrinDescInfo {
  */
 TensorIntrinDescInfo ExtractTensorIntrinDescInfo(arith::Analyzer* analyzer,
                                                  const PrimFunc& desc_func) {
+  LOG(INFO) << "ExtractTensorIntrinDescInfo";
   TensorIntrinDescInfo info;
   const auto* desc_scope_realize = desc_func->body.as<BlockRealizeNode>();
   ICHECK(desc_scope_realize);
@@ -1705,6 +1706,7 @@ Optional<TensorizeInfo> GetTensorizeLoopMapping(const tir::ScheduleState& self,
                                                 const tir::StmtSRef& block_sref,
                                                 const tir::PrimFunc& desc_func,
                                                 bool allow_padding) {
+  LOG(INFO) << "GetTensorizeLoopMapping";
   arith::Analyzer analyzer;
   const tir::BlockRealize& block = tir::GetBlockRealize(self, block_sref);
   // Step 1. Analyze desc_func, extract its block, loops and loop vars
@@ -1875,6 +1877,7 @@ class AutoTensorizeMappingProposer {
  public:
   static Array<IndexMap> ProposeMappings(const AutoTensorizeComparator* extractor,
                                          arith::Analyzer* analyzer) {
+    LOG(INFO) << "AutoTensorizeMappingProposer::ProposeMappings";
     AutoTensorizeMappingProposer proposer(extractor, analyzer);
     proposer.CollectFeasibleSet();
     return proposer.ProposeAllFuseMapping();
@@ -2053,6 +2056,7 @@ class AutoTensorizeMappingProposer {
 bool CheckAutoTensorizeApplicable(const ScheduleState& state, const tir::StmtSRef& block_sref,
                                   const tir::PrimFunc& desc_func,
                                   AutoTensorizeComparator* extractor) {
+  LOG(INFO) << "CheckAutoTensorizeApplicable";
   // Step 1. Analyze desc_func, extract its block, loops and loop vars
   // Step 2. Check if `desc_block` matches `block`
   // Ignore the scope of buffers when comparing, since we can do cache_read/write
@@ -2065,6 +2069,7 @@ bool CheckAutoTensorizeApplicable(const ScheduleState& state, const tir::StmtSRe
 
 bool CheckAutoTensorizeApplicable(const tir::Schedule& sch, const tir::BlockRV& block_rv,
                                   const tir::PrimFunc& desc_func) {
+  LOG(INFO) << "CheckAutoTensorizeApplicable2";
   AutoTensorizeComparator extractor(sch->state()->mod);
   return CheckAutoTensorizeApplicable(sch->state(), sch->GetSRef(block_rv), desc_func, &extractor);
 }

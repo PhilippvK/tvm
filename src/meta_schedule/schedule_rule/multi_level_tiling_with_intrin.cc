@@ -31,6 +31,7 @@ namespace meta_schedule {
  */
 Optional<tir::BlockRV> TileForIntrin(tir::Schedule sch, tir::BlockRV block,
                                      const std::string& intrin_name) {
+  LOG(INFO) << "TileForIntrin";
   Optional<tir::LoopRV> tiled_loop_rv = TileWithTensorIntrin(sch, block, intrin_name);
   if (!tiled_loop_rv) {
     return NullOpt;
@@ -47,6 +48,7 @@ Optional<tir::BlockRV> TileForIntrin(tir::Schedule sch, tir::BlockRV block,
 class MultiLevelTilingWithIntrinNode : public MultiLevelTilingNode {
  protected:
   Array<tir::Schedule> Apply(const tir::Schedule& sch, const tir::BlockRV& block_rv) final {
+    LOG(INFO) << "MultiLevelTilingWithIntrinNode::Apply";
     auto desc_func = tir::TensorIntrin::Get(intrin_name).value()->desc;
     if (!CheckAutoTensorizeApplicable(sch, block_rv, desc_func)) {
       TVM_PY_LOG(INFO, logger) << "The workload cannot be tensorized.";
@@ -95,6 +97,7 @@ ScheduleRule ScheduleRule::MultiLevelTilingWithIntrin(
     String intrin_name, String structure, Optional<Array<String>> tile_binds,
     Optional<Integer> max_innermost_factor, Optional<Array<Integer>> vector_load_lens,
     Optional<Map<String, ObjectRef>> reuse_read, Optional<Map<String, ObjectRef>> reuse_write) {
+  LOG(INFO) << "ScheduleRule::MultiLevelTilingWithIntrin";
   ICHECK(tir::TensorIntrin::Get(intrin_name).defined())
       << "Provided tensor intrinsic " << intrin_name << " is not registered.";
   auto node = MultiLevelTilingInitCommon<MultiLevelTilingWithIntrinNode>(
