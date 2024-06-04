@@ -256,6 +256,7 @@ class RPCRunner(Runner):
         enable_cpu_cache_flush=False,
         module_loader=None,
     ):
+        print("RPCRunner")
         super(RPCRunner, self).__init__(timeout, n_parallel)
 
         self.key = key
@@ -432,6 +433,7 @@ class LocalRunner(RPCRunner):
         enable_cpu_cache_flush=False,
         module_loader=None,
     ):
+        print("LOCAL RUNNER")
         super(LocalRunner, self).__init__(
             "",
             None,
