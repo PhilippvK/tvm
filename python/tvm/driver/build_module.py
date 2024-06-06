@@ -98,7 +98,7 @@ def lower(
     binds: Optional[Mapping[tensor.Tensor, Buffer]] = None,
     simple_mode: bool = False,
 ) -> IRModule:
-    print("lower", lower)
+    # print("lower", lower)
     """Lowering step before build into target.
 
     Parameters
@@ -127,17 +127,17 @@ def lower(
     m : IRModule
        The result IRModule
     """
-    print("A1")
+    # print("A1")
     if isinstance(inp, IRModule):
-        print("B1")
+        # print("B1")
         return ffi.lower_module(inp, simple_mode)
     if isinstance(inp, PrimFunc):
-        print("B2")
+        # print("B2")
         return ffi.lower_primfunc(inp, name, simple_mode)
     if isinstance(inp, te.Schedule):
-        print("B3")
+        # print("B3")
         return ffi.lower_schedule(inp, args, name, binds, simple_mode)
-    print("A2")
+    # print("A2")
     raise ValueError(
         f"Expected input to be an IRModule, PrimFunc or te.Schedule, but got {type(inp)}"
     )
@@ -227,9 +227,9 @@ def build(
     ----
     See the note on :any:`tvm.target` on target string format.
     """
-    print("driver.build")
+    # print("driver.build")
     if isinstance(inputs, te.Schedule):
-        print("Schedule")
+        # print("Schedule")
         if args is None:
             raise ValueError("args must be given for build from schedule")
         input_mod = lower(inputs, args, name=name, binds=binds)
@@ -239,8 +239,10 @@ def build(
             merged_mod.update(lower(x))
         input_mod = merged_mod
     elif isinstance(inputs, PrimFunc):
+        # print("PrimFunc")
         input_mod = lower(inputs, name=name)
     elif isinstance(inputs, tvm.IRModule):
+        # print("IRModule")
         assert (
             len(inputs.get_global_vars()) > 0
         ), "Expected a non-empty IRModule, but the IRModule contained no functions."
@@ -303,7 +305,7 @@ def build(
     annotated_mods, target_host = Target.canon_target_map_and_host(annotated_mods, target_host)
 
     rt_mod_host = _driver_ffi.tir_to_runtime(annotated_mods, target_host)
-    print("[rt_mod_host]", rt_mod_host)
+    # print("[rt_mod_host]", rt_mod_host)
 
     annotated_mods, target_host = Target.canon_target_map_and_host(annotated_mods, target_host)
     # print("annotated_mods", annotated_mods)
@@ -312,22 +314,22 @@ def build(
         target_host = Target(target_host)
 
     if str(runtime) == "crt" and runtime["system-lib"]:
-        print("if")
-        print("target_host.kind.name", target_host.kind.name)
+        # print("if")
+        # print("target_host.kind.name", target_host.kind.name)
         if target_host.kind.name == "c":
-            print("ifif")
+            # print("ifif")
             create_csource_crt_metadata_module = tvm._ffi.get_global_func(
                 "runtime.CreateCSourceCrtMetadataModule"
             )
             to_return = create_csource_crt_metadata_module([rt_mod_host], target_host, runtime)
         elif target_host.kind.name == "llvm":
-            print("ifelif")
+            # print("ifelif")
             create_llvm_crt_metadata_module = tvm._ffi.get_global_func(
                 "runtime.CreateLLVMCrtMetadataModule"
             )
             to_return = create_llvm_crt_metadata_module([rt_mod_host], target_host, runtime)
     else:
-        print("else")
+        # print("else")
         to_return = rt_mod_host
 
     return OperatorModule.from_module(to_return, ir_module_by_target=annotated_mods, name=name)
