@@ -223,6 +223,28 @@ def get_dotprod_intrin2(in_dtype, out_dtype):
         #     aaval, bbval, ccval
         # ).astype(out_dtype)
 
+    @T.prim_func
+    def dot_prod_impl2(a: T.handle, b: T.handle, c: T.handle) -> None:
+        # A = T.match_buffer(a, (4,), dtype=in_dtype, offset_factor=1)
+        # B = T.match_buffer(b, (4, 4), dtype=in_dtype, offset_factor=1)
+        # C = T.match_buffer(c, (4,), dtype=out_dtype, offset_factor=1)
+        A = T.match_buffer(a, (4,), dtype=in_dtype, offset_factor=1)
+        B = T.match_buffer(b, (4,), dtype=in_dtype, offset_factor=1)
+        C = T.match_buffer(c, (1,), dtype=out_dtype, offset_factor=1)
+        with T.block("root"):
+            # T.reads(C[0:4], A[0:4], B[0:4, 0:4])
+            T.reads(C[0], A[0:4], B[0:4])
+            T.writes(C[0])
+            for i in T.serial(0, 4):
+                # for k in T.serial(0, 4):
+                    with T.block("update"):
+                        # vi, vk = T.axis.remap("SR", [i, k])
+                        vi = T.axis.remap("R", [i])
+                        C[0] = C[0] + T.cast(A[vi], out_dtype) * T.cast(B[vi], out_dtype)
+                        # C[vi] = C[vi] + T.cast(A[vk], dtype=out_dtype) * T.cast(
+                        #     B[vi, vk], dtype=out_dtype
+                        # )
+
     return dot_prod_desc, dot_prod_impl
 
 ARM_DOT_4x4_i8_NEON_INTRIN = "dot_4x4_i8i8s32_neon"
