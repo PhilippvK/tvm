@@ -741,6 +741,7 @@ StmtSRef Blockize(ScheduleState self, const Array<StmtSRef>& blocks, bool preser
 
 void Tensorize(ScheduleState self, const StmtSRef& sref, const TensorIntrin& intrin,
                bool preserve_unit_iters) {
+  LOG(INFO) << "Tensorize";
   // Step 1: Blockize the subtree rooted at the given loop if needed
   BlockRealize block_realize{nullptr};
   Optional<Block> old_block = NullOpt;
@@ -759,7 +760,9 @@ void Tensorize(ScheduleState self, const StmtSRef& sref, const TensorIntrin& int
 
   arith::Analyzer analyzer;
   PrimFunc intrin_desc = Simplify(intrin->desc, &analyzer);
+  // LOG(INFO) << "intrin_desc=" << intrin_desc;
   PrimFunc intrin_impl = DeepCopy(intrin->impl);
+  // LOG(INFO) << "intrin_impl=" << intrin_impl;
 
   int index_dtype_bits = -1;
   auto f_update_max_dtype_bits_from_region = [&](const Array<BufferRegion>& buffer_regions) {
