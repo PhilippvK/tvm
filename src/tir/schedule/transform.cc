@@ -303,12 +303,16 @@ Optional<LoopRV> TileWithTensorIntrin(const tir::Schedule& sch, const tir::Block
   Optional<tir::TensorizeInfo> opt_tensorize_info =
       GetTensorizeLoopMapping(sch->state(), sch->GetSRef(block_rv),
                               tir::TensorIntrin::Get(intrin_name).value()->desc, allow_padding);
+  // LOG(INFO) << "opt_tensorize_info=" << opt_tensorize_info;
   if (!opt_tensorize_info) return NullOpt;
   const tir::TensorizeInfoNode* info = opt_tensorize_info.value().get();
+  // LOG(INFO) << "info=" << info;
   if (info->block_iter_paddings.defined()) {
+    // LOG(INFO) << "pad";
     sch->PadEinsum(block_rv, info->block_iter_paddings.value());
   }
   // Construct a mapping from tir loops back to LoopRVs
+  // LOG(INFO) << "map";
   Map<tir::StmtSRef, LoopRV> loop2rv;
   {
     Array<LoopRV> loop_rvs = sch->GetLoops(block_rv);
@@ -317,11 +321,14 @@ Optional<LoopRV> TileWithTensorIntrin(const tir::Schedule& sch, const tir::Block
     }
   }
   // Split the loops
+  // LOG(INFO) << "split";
   arith::Analyzer analyzer;
   std::unordered_set<const tir::StmtSRefNode*> inner_loops;
   std::vector<LoopRV> reorder_suffix;
   reorder_suffix.resize(info->loop_map.size());
+  // LOG(INFO) << "for";
   for (const auto& kv : info->loop_map) {
+    // LOG(INFO) << "for iter";
     // Extract mapping (block_loop => desc_loop)
     const tir::StmtSRef& block_loop_sref = kv.first;
     const tir::ForNode* block_loop = block_loop_sref->StmtAs<tir::ForNode>();
@@ -347,6 +354,7 @@ Optional<LoopRV> TileWithTensorIntrin(const tir::Schedule& sch, const tir::Block
     reorder_suffix[desc_loop_index] = split[1];
   }
   // Reorder the loops
+  // LOG(INFO) << "reorder";
   std::vector<LoopRV> reorder_list;
   bool meet = false;
   Array<LoopRV> all_loops = sch->GetLoops(block_rv);
@@ -360,6 +368,7 @@ Optional<LoopRV> TileWithTensorIntrin(const tir::Schedule& sch, const tir::Block
   reorder_list.insert(reorder_list.end(), reorder_suffix.begin(), reorder_suffix.end());
   sch->Reorder(reorder_list);
   ICHECK(!reorder_suffix.empty());
+  // LOG(INFO) << "return";
   return reorder_suffix[0];
 }
 
