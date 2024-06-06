@@ -31,14 +31,25 @@ namespace meta_schedule {
  */
 Optional<tir::BlockRV> TileForIntrin(tir::Schedule sch, tir::BlockRV block,
                                      const std::string& intrin_name) {
-  LOG(INFO) << "TileForIntrin";
+  // LOG(INFO) << "TileForIntrin";
   Optional<tir::LoopRV> tiled_loop_rv = TileWithTensorIntrin(sch, block, intrin_name);
+  // LOG(INFO) << "tiled_loop_rv=" << tiled_loop_rv;
   if (!tiled_loop_rv) {
+    // LOG(INFO) << "NullOpt";
     return NullOpt;
   }
   ICHECK(tiled_loop_rv.defined());
   tir::BlockRV outer_block = sch->Blockize(tiled_loop_rv.value());
   sch->Annotate(outer_block, tir::attr::meta_schedule_auto_tensorize, String(intrin_name));
+  // LOG(INFO) << "return outer_block";
+  // LOG(INFO) << "sch=" << sch;
+  // LOG(INFO) << "block=" << block;
+  // LOG(INFO) << "outer_block=" << outer_block;
+  auto state = sch->state();
+  auto block_sref = sch->GetSRef(block);
+  const tir::BlockRealize& block2 = tir::GetBlockRealize(state, block_sref);
+  // LOG(INFO) << "block=" << block;
+  // LOG(INFO) << "block2=" << block2;
   return outer_block;
 }
 
@@ -48,10 +59,11 @@ Optional<tir::BlockRV> TileForIntrin(tir::Schedule sch, tir::BlockRV block,
 class MultiLevelTilingWithIntrinNode : public MultiLevelTilingNode {
  protected:
   Array<tir::Schedule> Apply(const tir::Schedule& sch, const tir::BlockRV& block_rv) final {
-    LOG(INFO) << "MultiLevelTilingWithIntrinNode::Apply";
+    // LOG(INFO) << "MultiLevelTilingWithIntrinNode::Apply";
     auto desc_func = tir::TensorIntrin::Get(intrin_name).value()->desc;
     if (!CheckAutoTensorizeApplicable(sch, block_rv, desc_func)) {
       TVM_PY_LOG(INFO, logger) << "The workload cannot be tensorized.";
+      // LOG(INFO) << "The workload cannot be tensorized.";
       return {sch};
     }
 
@@ -59,9 +71,11 @@ class MultiLevelTilingWithIntrinNode : public MultiLevelTilingNode {
 
     if (res.empty()) {
       TVM_PY_LOG(INFO, logger) << "The workload cannot be tensorized.";
+      // LOG(INFO) << "The workload cannot be tensorized. (2)";
       return {sch};
     }
     TVM_PY_LOG(INFO, logger) << "Tensorizing with " << intrin_name;
+    // LOG(INFO) << "Tensorizing with " << intrin_name;
     return res;
   }
 
@@ -75,11 +89,15 @@ class MultiLevelTilingWithIntrinNode : public MultiLevelTilingNode {
   // Override ApplySubRules to tile the inner loops according to the given tensor intrinsic, then
   // tile the outerloops.
   virtual std::vector<State> ApplySubRules(std::vector<State> states) {
+    // LOG(INFO) << "MultiLevelTilingWithIntrinNode::ApplySubRules";
     states = SubRule(std::move(states), [&](State state) {
+      // LOG(INFO) << "subrule";
       if (auto block_rv = TileForIntrin(state->sch, state->block_rv, intrin_name)) {
+        // LOG(INFO) << "subrule if";
         state->block_rv = block_rv.value();
         return std::vector<State>(1, state);
       }
+      // LOG(INFO) << "subrule after";
       return std::vector<State>();
     });
     return MultiLevelTilingNode::ApplySubRules(states);
@@ -97,7 +115,7 @@ ScheduleRule ScheduleRule::MultiLevelTilingWithIntrin(
     String intrin_name, String structure, Optional<Array<String>> tile_binds,
     Optional<Integer> max_innermost_factor, Optional<Array<Integer>> vector_load_lens,
     Optional<Map<String, ObjectRef>> reuse_read, Optional<Map<String, ObjectRef>> reuse_write) {
-  LOG(INFO) << "ScheduleRule::MultiLevelTilingWithIntrin";
+  // LOG(INFO) << "ScheduleRule::MultiLevelTilingWithIntrin";
   ICHECK(tir::TensorIntrin::Get(intrin_name).defined())
       << "Provided tensor intrinsic " << intrin_name << " is not registered.";
   auto node = MultiLevelTilingInitCommon<MultiLevelTilingWithIntrinNode>(
