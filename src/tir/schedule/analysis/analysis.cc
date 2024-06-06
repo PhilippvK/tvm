@@ -2086,10 +2086,17 @@ bool CheckAutoTensorizeApplicable(const ScheduleState& state, const tir::StmtSRe
   // Step 2. Check if `desc_block` matches `block`
   // Ignore the scope of buffers when comparing, since we can do cache_read/write
   const BlockRealize& block = tir::GetBlockRealize(state, block_sref);
+  // LOG(INFO) << "block=" << block;
   arith::Analyzer analyzer;
   auto desc_info = tir::ExtractTensorIntrinDescInfo(&analyzer, desc_func);
+  // LOG(INFO) << "desc_info=" << desc_info;
+  // const BlockRealizeNode* desc_block = nullptr;
+  // std::vector<const tir::ForNode*> desc_loops;
+  // std::unordered_set<const tir::VarNode*> desc_loop_vars;
 
-  return extractor->VisitStmt(block->block, desc_info.desc_block->block);
+  bool ret = extractor->VisitStmt(block->block, desc_info.desc_block->block);
+  LOG(INFO) << "ret=" << ret;
+  return ret;
 }
 
 bool CheckAutoTensorizeApplicable(const tir::Schedule& sch, const tir::BlockRV& block_rv,
