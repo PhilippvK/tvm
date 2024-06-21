@@ -138,6 +138,7 @@ class BuildModule(object):
         params : dict
             The parameters of the final graph.
         """
+        print("build_module.build")
         # pylint: disable=import-outside-toplevel
         from tvm.auto_scheduler import is_auto_scheduler_enabled
         from tvm.meta_schedule import is_meta_schedule_enabled
@@ -285,6 +286,7 @@ def build(
     params=None,
     mod_name="default",
 ):
+    print("relay.build")
     # fmt: off
     # pylint: disable=line-too-long
     """Helper function that builds a Relay function to run on TVM graph executor.
@@ -334,6 +336,7 @@ def build(
     """
     # pylint: enable=line-too-long
     # fmt: on
+    print("ir_mod", ir_mod)
 
     if not isinstance(ir_mod, (IRModule, _function.Function)):
         raise ValueError("Type of input parameter mod must be tvm.IRModule")
@@ -347,10 +350,13 @@ def build(
             "instead of deprecated parameter mod (tvm.relay.function.Function)",
             DeprecationWarning,
         )
+    print("ir_mod", ir_mod)
 
     raw_targets = Target.canon_multi_target_and_host(Target.target_or_current(target), target_host)
+    print("raw_targets", raw_targets)
     assert len(raw_targets) > 0
     target_host = raw_targets[0].host
+    print("target_host", target_host)
 
     # If current dispatch context is fallback context (the default root context),
     # then load pre-tuned parameters from TopHub
@@ -371,12 +377,20 @@ def build(
             constant_memory_pools=constant_memory_pools,
             mod_name=mod_name,
         )
+        print("graph_json", graph_json)
+        print("runtime_mod", runtime_mod)
+        print("params", params)
         func_metadata = bld_mod.get_function_metadata()
+        print("func_metadata", func_metadata)
         devices = bld_mod.get_devices()
+        print("devices", devices)
         lowered_ir_mods = bld_mod.get_irmodule()
+        print("lowered_ir_mods", lowered_ir_mods)
         executor_codegen_metadata = bld_mod.get_executor_codegen_metadata()
+        print("executor_codegen_metadata", executor_codegen_metadata)
 
         if executor.name == "aot":
+            print("aot")
             executor_factory = _executor_factory.AOTExecutorFactoryModule(
                 ir_mod,
                 lowered_ir_mods,
@@ -391,6 +405,7 @@ def build(
                 devices,
             )
         elif executor.name == "graph":
+            print("graph")
             executor_factory = _executor_factory.GraphExecutorFactoryModule(
                 ir_mod,
                 raw_targets,
@@ -403,6 +418,7 @@ def build(
             )
         else:
             assert False, "Executor " + executor + " not supported"
+        print("executor_factory", executor_factory)
 
         return executor_factory
 

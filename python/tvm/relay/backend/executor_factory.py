@@ -110,10 +110,12 @@ class AOTExecutorFactoryModule(ExecutorFactoryModule):
         devices,
     ):
         fcreate = get_global_func("tvm.aot_executor_factory.create")
+        print("factory_params", params)
         args = []
         for k, v in params.items():
             args.append(k)
             args.append(ndarray.array(v))
+        print("factory_args", args)
 
         self.module = fcreate(libmod, libmod_name, *args)
         self.ir_mod = ir_mod
@@ -126,6 +128,7 @@ class AOTExecutorFactoryModule(ExecutorFactoryModule):
         self.params = params
         self.iter_cnt = 0
         self.function_metadata = function_metadata
+        print("function_metadata", function_metadata)
         self.executor_codegen_metadata = executor_codegen_metadata
         self.devices = devices
 
