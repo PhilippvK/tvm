@@ -151,6 +151,7 @@ class Executable:
 def _vmcodegen(
     builder: "relax.ExecBuilder",
     mod: tvm.IRModule,
+    config: "tvm.CompilationConfig",
     exec_mode: str = "bytecode",
 ) -> tvm.IRModule:
     """Running VM codegen.
@@ -177,7 +178,7 @@ def _vmcodegen(
     if exec_mode == "compiled":
         return _ffi_api.VMTIRCodeGen(builder, mod)  # type: ignore
     if exec_mode == "crt":
-        return _ffi_api.CRTTIRCodeGen(builder, mod)  # type: ignore
+        return _ffi_api.CRTTIRCodeGen(builder, mod, config)  # type: ignore
     raise ValueError(f"Unknown exec_mode {exec_mode}")
 
 
@@ -207,6 +208,7 @@ def _vmlink(
     params: Optional[Dict[str, list]] = None,
     *,
     system_lib: Optional[bool] = None,
+    metadata = None
 ):
     """
     Internal codegen function to make executable.
@@ -252,7 +254,7 @@ def _vmlink(
             target=target,
             runtime=_autodetect_system_lib_req(target, system_lib),
         )
-    return Executable(_ffi_api.VMLink(builder, target, lib, ext_libs, params))  # type: ignore
+    return Executable(_ffi_api.VMLink(builder, target, lib, ext_libs, params, metadata))  # type: ignore
 
 
 def build(
@@ -337,18 +339,74 @@ def build(
             with target:
                 mod = pipeline(mod)
 
+    ctxt = tvm.transform.PassContext()
+    config = tvm.target.make_compilation_config(ctxt, target)
     ext_libs, constants = _extract_attrs(mod)
+    print("constants", constants)
     params.update(dict(constants))
+    print("params", params)
+    input("$$$")
     builder = relax.ExecBuilder()
-    mod = _vmcodegen(builder, mod, exec_mode)
-    return _vmlink(
+    mod2 = _vmcodegen(builder, mod, config, exec_mode)
+    # metadata = None
+    from tvm.relay.backend import Executor
+    from tvm.relay.backend.aot import CreateExecutorMetadata
+    executor = Executor("aot", {"interface-api": "packed"})
+    # mod = Module
+    # f = mod["__tvm_main__"]
+    # expected_metadata = {
+    #     "inputs": [f.params[0]],
+    #     "input_tensor_types": [TensorType((5, 7), "float32")],
+    #     "outputs": ["output"],
+    #     "output_tensor_types": [TensorType((5, 7), "float32")],
+    #     "pools": f.params[2:],
+    #     "devices": f.attrs["devices"],
+    #     "executor": "aot",
+    #     "mod_name": "test_mod",
+    #     "interface_api": "c",
+    #     "unpacked_api": False,
+    #     "workspace_alignment": 16,
+    #     "constant_alignment": 1,
+    #     "pool_inputs": {},
+    #     "io_pool_allocations": {},
+    # }
+    print("mod2", mod2)
+    input("1")
+    metadata = CreateExecutorMetadata(mod2, "tvmgen_default", executor, 16, 1)
+    linked_mod = _vmlink(
         builder=builder,
         target=target,
-        tir_mod=_filter_tir(mod),
+        tir_mod=_filter_tir(mod2),
         ext_libs=ext_libs,
         params=params,
         system_lib=system_lib,
+        metadata=metadata,
     )
+    runtime = tvm.relay.backend.Runtime("cpp", {"system-lib": True})
+    from tvm.relay.backend import executor_factory as _executor_factory
+    print("linked_mod", linked_mod)
+    print("linked_mod.mod", linked_mod.mod)
+    input("-1-1-1")
+    from tvm.relay.backend.aot import CreateFunctionMetadata
+    func_metadata = CreateFunctionMetadata(_filter_tir(mod2), 16, 1)
+    print("func_metadata (relax)", func_metadata)
+    # func_metadata = None
+    # func_metadata = CreateFunctionMetadata(linked_mod.mod.imported_modules[0], 16, 1)
+    executor_factory = _executor_factory.AOTExecutorFactoryModule(
+        mod,  # ir_mod,
+        mod2,  # lowered_ir_mods,
+        target,
+        executor,
+        runtime,
+        linked_mod.mod.imported_modules[0],
+        "default",
+        params,
+        func_metadata,
+        metadata,
+        metadata.devices,
+    )
+    # return linked_mod
+    return executor_factory
 
 
 def _filter_tir(mod: tvm.IRModule) -> Optional[tvm.IRModule]:
