@@ -452,26 +452,55 @@ TVM_REGISTER_GLOBAL("relax.VMCodeGen").set_body_typed(VMCodeGen);
  * \brief Link the libraries together.
  */
 Module VMLink(ExecBuilder builder, Target target, Optional<Module> lib, Array<Module> ext_libs,
-              Map<String, runtime::NDArray> params) {
+              Map<String, runtime::NDArray> params, relay::backend::ExecutorCodegenMetadata metadata) {
+  LOG(INFO) << "VMLink";
   // TODO(relax-team) Revisit the param and ext_lib options.
   ObjectPtr<Executable> executable = builder->Get();
   if (!lib.defined()) {
+    LOG(INFO) << "!lib.defined()";
     lib = codegen::CSourceModuleCreate(";", "", Array<String>{});
   }
   std::unordered_map<std::string, runtime::NDArray> conv_params;
   for (const auto& [name, param] : params) {
+    LOG(INFO) << "convert_params";
     conv_params[name] = param;
   }
+  LOG(INFO) << "lib=" << lib;
+  LOG(INFO) << "lib.value()=" << lib.value();
+  String mod_name_ = "default";
+  // auto metadata = relay::backend::ExecutorCodegenMetadata();
+  // auto metadata = relay::backend::ExecutorCodegenMetadata(
+  //     {} /* inputs */,
+  //     // inputs,
+  //     {} /* input_tensor_types */,
+  //     {} /*outputs */,
+  //     {} /* output_tensor_types */,
+  //     {} /* pools */,
+  //     {} /* devices */,
+  //     // runtime::kTvmExecutorGraph /* executor */,
+  //     runtime::kTvmExecutorAot /* executor */,
+  //     mod_name_ /* mod_name */,
+  //     "packed" /* interface_api */,
+  //     Bool(false) /* unpacked_api */
+  // );
+
+  LOG(INFO) << "metadata=" << metadata;
   Module combined_lib = codegen::CreateMetadataModule(
       conv_params, lib.value(), ext_libs, target,
 
       // TODO(@sunggg): Currently, CRT uses relay-specific executor for uTVM support.
       // Before jumping into details, only support cpp runtime for now.
       relay::Runtime::Create("cpp"),
-      relay::Executor::Create("graph"),  // TODO(@sunggg): pass arbitrarily executor. CPP runtime
+      // relay::Executor::Create("graph"),  // TODO(@sunggg): pass arbitrarily executor. CPP runtime
+      //                                    // won't use this anyways.
+      relay::Executor::Create("aot"),  // TODO(@sunggg): pass arbitrarily executor. CPP runtime
                                          // won't use this anyways.
-      relay::backend::ExecutorCodegenMetadata());
+      metadata);
+      // relay::backend::ExecutorCodegenMetadata());
+  LOG(INFO) << "combined_lib=" << combined_lib;
+  LOG(INFO) << "Import";
   executable->Import(combined_lib);
+  LOG(INFO) << "return";
   return Module(executable);
 }
 
