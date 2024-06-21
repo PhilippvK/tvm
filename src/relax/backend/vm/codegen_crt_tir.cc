@@ -33,6 +33,7 @@
 #include <tvm/tir/expr.h>
 #include <tvm/tir/function.h>
 #include <tvm/tir/stmt.h>
+#include <tvm/tir/transform.h>
 #include "../../../relay/backend/utils.h"
 
 #include <cctype>
@@ -370,27 +371,47 @@ class CRTOnDemandAllocator : public ExprVisitor {
  */
 class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
  public:
-  explicit CodeGenCRTTIR(relax::ExecBuilder builder, IRModule ctx_mod)
-      : builder_(builder), ctx_mod_(ctx_mod) {
+  explicit CodeGenCRTTIR(relax::ExecBuilder builder, IRModule ctx_mod, tvm::CompilationConfig config)
+      : builder_(builder), ctx_mod_(ctx_mod), config_(config) {
     system_lib_prefix_ = ctx_mod_->GetAttr<String>(tvm::attr::kSystemLibPrefix);
   }
 
-  static IRModule Run(relax::ExecBuilder builder, IRModule mod) {
+  static IRModule Run(relax::ExecBuilder builder, IRModule mod, const tvm::CompilationConfig& config) {
     // LOG(INFO) << "Run2" << "\n";
     // create a new copy
     IRModule res_mod = mod;
     res_mod.CopyOnWrite();
 
-    CodeGenCRTTIR codegen(builder, mod);
+    CodeGenCRTTIR codegen(builder, mod, config);
     // Remove relax function and turn into TIR func.
     for (auto& p : mod->functions) {
+      LOG(INFO) << "p";
       if (auto* func = p.second.as<FunctionNode>()) {
+        LOG(INFO) << "func";
         auto tir_func = codegen.Codegen(GetRef<Function>(func));
         auto gsymbol = tir_func->GetAttr<String>(tvm::attr::kGlobalSymbol);
-        res_mod->Add(GlobalVar(gsymbol.value()), tir_func);
+        LOG(INFO) << "gsymbol=" << gsymbol.value();
+        // res_mod->Add(GlobalVar(gsymbol.value()), tir_func);
+        String name = "__tvm_main__";
+        String name2 = "tvmgen_default___tvm_main__";
+        tir_func = WithAttr(tir_func, "global_symbol", name2);
+        res_mod->Add(GlobalVar(name), tir_func);
         res_mod->Remove(p.first);
+      } else if (auto* func = p.second.as<tir::PrimFuncNode>()) {
+        LOG(INFO) << "!prim func";
+        auto tir_func = GetRef<tir::PrimFunc>(func);
+        auto gsymbol = tir_func->GetAttr<String>(tvm::attr::kGlobalSymbol);
+        tir_func = WithAttr(tir_func, tvm::attr::kTarget, config->host_target);
+        res_mod->Remove(p.first); // TODO: use ->Update()!
+        res_mod->Add(GlobalVar(gsymbol.value()), tir_func);
+      } else {
+        LOG(INFO) << "!func";
       }
     }
+    // TODO: make call_type variable
+    // TODO: try CPacked indead of Packed?
+    auto pack_calls = tir::transform::LegalizePackedCalls();
+    res_mod = pack_calls(res_mod);
     return res_mod;
   }
 
@@ -628,7 +649,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
       CreateIOVar(input, input_name, /*use_unique_name = */ false);
     }
     // declare this function.
-    builder_->DeclareFunction(gsymbol.value(), vm::VMFuncInfo::FuncKind::kVMTIRFunc);
+    builder_->DeclareFunction(gsymbol.value(), vm::VMFuncInfo::FuncKind::kVMTIRFunc);  // TODO: check attr
 
     // for (size_t i = 0; i < func->params.size(); ++i) {
     //   this->var_map_.insert({func->params[i], GetBufferVarForIO(i)});
@@ -660,13 +681,23 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     Type ret_type = VoidType();
     // Array<tir::Var> tir_params = {ctx_ptr_, reg_anylist_handle_, const_anylist_handle_,
     //                               func_anylist_handle_};
-    String tir_func_name = system_lib_prefix_.value_or("") + "__vmtir__" + gsymbol.value();
+    LOG(INFO) << "sl_prefix=" << system_lib_prefix_.value_or("");
+    String tir_func_name = system_lib_prefix_.value_or("") + "__tvm_main__";  // + gsymbol.value();
+    // String tir_func_name = system_lib_prefix_.value_or("") + "__tvm_main2__";  // + gsymbol.value();
+    // String tir_func_name = "__tvm_main__";
+    // String tir_func_name = "__tvm_main__";
     // tir::PrimFunc tir_func(tir_params, body, ret_type, {});
     Map<String, ObjectRef> dict_attrs;
+    dict_attrs.Set("runner_function", Bool(true));
+    dict_attrs.Set("tir.is_entry_func", Bool(true));
+    Array<tir::Var> input_vars =
+        Array<tir::Var>(main_signature_.begin(), main_signature_.begin() + input_vars_.size());
+    dict_attrs.Set("input_vars", input_vars);
+    // String mod_name = "tvmgen_default";
     // String run_func_name = runtime::get_name_mangled(mod_name, runtime::symbol::tvm_module_main);
-    // dict_attrs.Set("global_symbol", run_func_name);
+    // dict_attrs.Set("global_symbol", tir_func_name);
     // dict_attrs.Set("runner_function", Bool(true));
-    // dict_attrs.Set(tvm::attr::kTarget, config_->host_target);
+    dict_attrs.Set(tvm::attr::kTarget, config_->host_target);
     // tir::Stmt final_body = tir::SeqStmt({device_activations, body, device_deactivations});
     // tir::Stmt body = tir::SeqStmt({});
     std::vector<tir::Stmt> stmts_;
@@ -680,6 +711,13 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         // CreateIOVar(ret.value().as<Expr>().value(), "output");
       }
     });
+    LOG(INFO) << "input_vars_.size()=" << input_vars_.size();
+    LOG(INFO) << "return_sid_.size()=" << return_sid_.size();
+    LOG(INFO) << "main_signature_.size()=" << main_signature_.size();
+    Array<tir::Var> output_vars =
+        Array<tir::Var>(main_signature_.begin() + input_vars_.size(),
+                        main_signature_.begin() + input_vars_.size() + return_sid_.size());
+    dict_attrs.Set("output_vars", output_vars);
     body = tir::SeqStmt({body});
     std::unordered_map<int, bool> allocated;
     for (auto kv : storage_device_map_) {
@@ -1090,7 +1128,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   // }
 
   void EmitNormalCall(const Call& call_node, int64_t dst_reg) {
-    // LOG(INFO) << "EmitNormalCall" << "\n";
+    LOG(INFO) << "EmitNormalCall" << "\n";
     // Call call = GetRef<Call>(call_node);
     Array<PrimExpr> args = VisitArray(call_node->args);
     // A function can be a closure that comes from parent
@@ -1099,7 +1137,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     auto symbol = LookupFunction(call_node->op, &kind);
 
     if (symbol.defined() && kind == VMFuncInfo::FuncKind::kPackedFunc) {
-      // LOG(INFO) << "defined && kPackedFunc" << "\n";
+      LOG(INFO) << "defined && kPackedFunc" << "\n";
       // primfunc in the same module.
       // use cpacked to directly invoke without named based lookup
       if (Optional<tir::PrimFunc> prim_func = LookupPrimFunc(symbol.value())) {
@@ -1111,7 +1149,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         this->EmitCallPacked2(symbol.value(), call_node->args, call_node);
       }
     } else {
-      // LOG(INFO) << "!(defined && kPackedFunc)" << "\n";
+      LOG(INFO) << "!(defined && kPackedFunc)" << "\n";
       // Default path, leverage function table and invoke as closure
       Array<PrimExpr> all_args;
       all_args.push_back(ctx_ptr_);
@@ -1119,7 +1157,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
       for (auto arg : args) {
         all_args.push_back(arg);
       }
-      this->EmitCallPacked("vm.builtin.invoke_closure", all_args, dst_reg);
+      this->EmitCallPacked("vm.builtin.invoke_closure", all_args, dst_reg);  // TODO: remove
     }
   }
 
@@ -1160,6 +1198,8 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   std::unordered_map<Var, Optional<PrimExpr>, ObjectPtrHash, ObjectPtrEqual> var_map_;
   /*! \brief the context module. */
   IRModule ctx_mod_;
+  /*! \brief All available targets. */
+  CompilationConfig config_;
   /*! \brief system lib prefix */
   Optional<String> system_lib_prefix_;
   /*! \brief Cache ops that need to be frequently used later to reduce lookup overhead. */
@@ -1330,9 +1370,9 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
  * \return Extra TIR module created.
  */
 
-IRModule CRTTIRCodeGen(ExecBuilder exec_builder, IRModule mod) {
+IRModule CRTTIRCodeGen(ExecBuilder exec_builder, IRModule mod, const tvm::CompilationConfig& config) {
   // LOG(INFO) << "CRTTIRCodeGen" << "\n";
-  return CodeGenCRTTIR::Run(exec_builder, mod);
+  return CodeGenCRTTIR::Run(exec_builder, mod, config);
 }
 
 TVM_REGISTER_GLOBAL("relax.CRTTIRCodeGen").set_body_typed(CRTTIRCodeGen);
