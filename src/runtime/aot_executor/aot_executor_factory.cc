@@ -37,12 +37,14 @@ namespace runtime {
 AotExecutorFactory::AotExecutorFactory(
     const std::unordered_map<std::string, tvm::runtime::NDArray>& params,
     const std::string& module_name) {
+  LOG(INFO) << "AotExecutorFactory";
   params_ = params;
   module_name_ = module_name;
 }
 
 PackedFunc AotExecutorFactory::GetFunction(
     const String& name, const tvm::runtime::ObjectPtr<tvm::runtime::Object>& sptr_to_self) {
+  LOG(INFO) << "GetFunction";
   if (name == module_name_) {
     return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
       ICHECK_GT(args.num_args, 0) << "Must supply at least one device argument";
@@ -87,6 +89,7 @@ void AotExecutorFactory::SaveToBinary(dmlc::Stream* stream) {
 }
 
 Module AotExecutorFactory::ExecutorCreate(const std::vector<Device>& devs) {
+  LOG(INFO) << "ExecutorCreate";
   auto exec = make_object<AotExecutor>(this->imports_[0], devs);
   // set params
   SetParams(exec.get(), this->params_);
@@ -125,7 +128,9 @@ TVM_REGISTER_GLOBAL("tvm.aot_executor_factory.create").set_body([](TVMArgs args,
     std::string name = args[i].operator String();
     params[name] = args[i + 1].operator tvm::runtime::NDArray();
   }
+  LOG(INFO) << "tvm.aot_executor_factory.create";
   auto exec = make_object<AotExecutorFactory>(params, args[1]);
+  LOG(INFO) << "exec=?";  // << exec;
   exec->Import(args[0]);
   *rv = Module(exec);
 });

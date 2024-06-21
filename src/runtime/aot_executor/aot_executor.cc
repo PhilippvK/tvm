@@ -54,18 +54,27 @@ AotExecutor::AotExecutor(tvm::runtime::Module module, const std::vector<Device>&
   CHECK(is_valid_device)
       << "At this time, AOTExecutor supports only execution on kDLCPU 0 or kDLHexagon 0";
 
+   LOG(INFO) << "for metadata inputs";
   for (auto input : metadata_->inputs()) {
+    LOG(INFO) << "input";
+    LOG(INFO) << "input->shape=" << input->shape().size();
+    LOG(INFO) << "input->shape[0]=" << input->shape()[0];
     // TODO(areusch): Encode device information in Metadata.
     args_.emplace_back(NDArray::Empty(ShapeTuple(input->shape().begin(), input->shape().end()),
                                       input->dtype(), devices_[0]));
   }
 
+   LOG(INFO) << "for metadata outputs";
   for (auto output : metadata_->outputs()) {
+    LOG(INFO) << "output";
+    LOG(INFO) << "output->shape=" << output->shape().size();
+    LOG(INFO) << "output->shape[0]" << output->shape()[0];
     args_.emplace_back(NDArray::Empty(ShapeTuple(output->shape().begin(), output->shape().end()),
                                       output->dtype(), devices_[0]));
   }
 
   // USMP is used
+   LOG(INFO) << "(metadata_->num_workspace_pools())=" << (metadata_->num_workspace_pools());
   if (metadata_->num_workspace_pools()) {
     // merge all constants into one ndarray
     int64_t blob_len = 0;
@@ -164,12 +173,16 @@ PackedFunc AotExecutor::GetFunction(const String& name, const ObjectPtr<Object>&
 }
 
 void AotExecutor::Run() {
+  LOG(INFO) << "AotExecutor::Run";
+  LOG(INFO) << "?=" << get_name_mangled(metadata_->mod_name(), ::tvm::runtime::symbol::tvm_module_main);
   auto pf = module_.GetFunction(
       get_name_mangled(metadata_->mod_name(), ::tvm::runtime::symbol::tvm_module_main),
+      /// ::tvm::runtime::symbol::tvm_module_main,
       true /* query_imports */);
   ICHECK(pf != nullptr) << "Module entrypoint is not defined";
 
   const int num_args = args_.size();
+  LOG(INFO) << "num_args=" << num_args;
   auto call_values = ::std::make_unique<TVMValue[]>(num_args);
   auto call_type_codes = ::std::make_unique<int[]>(num_args);
   for (int i = 0; i < num_args; ++i) {

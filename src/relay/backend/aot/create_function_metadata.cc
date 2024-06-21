@@ -52,6 +52,7 @@ Map<String, backend::FunctionInfo> CalculateFunctionInfos(const IRModule& mod,
   Map<String, backend::FunctionInfo> function_metadata;
   for (const auto& kv : mod->functions) {
     GlobalVar global_var = kv.first;
+    LOG(INFO) << "gv=" << global_var->name_hint;
     BaseFunc base_func = kv.second;
     if (base_func->IsInstance<tir::PrimFuncNode>()) {
       tir::PrimFunc pfunc = Downcast<tir::PrimFunc>(base_func);
