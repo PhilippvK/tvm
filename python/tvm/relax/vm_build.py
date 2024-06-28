@@ -348,31 +348,32 @@ def build(
     input("$$$")
     builder = relax.ExecBuilder()
     mod2 = _vmcodegen(builder, mod, config, exec_mode)
-    # metadata = None
-    from tvm.relay.backend import Executor
-    from tvm.relay.backend.aot import CreateExecutorMetadata
-    executor = Executor("aot", {"interface-api": "packed"})
-    # mod = Module
-    # f = mod["__tvm_main__"]
-    # expected_metadata = {
-    #     "inputs": [f.params[0]],
-    #     "input_tensor_types": [TensorType((5, 7), "float32")],
-    #     "outputs": ["output"],
-    #     "output_tensor_types": [TensorType((5, 7), "float32")],
-    #     "pools": f.params[2:],
-    #     "devices": f.attrs["devices"],
-    #     "executor": "aot",
-    #     "mod_name": "test_mod",
-    #     "interface_api": "c",
-    #     "unpacked_api": False,
-    #     "workspace_alignment": 16,
-    #     "constant_alignment": 1,
-    #     "pool_inputs": {},
-    #     "io_pool_allocations": {},
-    # }
-    print("mod2", mod2)
-    input("1")
-    metadata = CreateExecutorMetadata(mod2, "tvmgen_default", executor, 16, 1)
+    metadata = None
+    if exec_mode == "crt":
+        from tvm.relay.backend import Executor
+        from tvm.relay.backend.aot import CreateExecutorMetadata
+        executor = Executor("aot", {"interface-api": "packed"})
+        # mod = Module
+        # f = mod["__tvm_main__"]
+        # expected_metadata = {
+        #     "inputs": [f.params[0]],
+        #     "input_tensor_types": [TensorType((5, 7), "float32")],
+        #     "outputs": ["output"],
+        #     "output_tensor_types": [TensorType((5, 7), "float32")],
+        #     "pools": f.params[2:],
+        #     "devices": f.attrs["devices"],
+        #     "executor": "aot",
+        #     "mod_name": "test_mod",
+        #     "interface_api": "c",
+        #     "unpacked_api": False,
+        #     "workspace_alignment": 16,
+        #     "constant_alignment": 1,
+        #     "pool_inputs": {},
+        #     "io_pool_allocations": {},
+        # }
+        print("mod2", mod2)
+        input("1")
+        metadata = CreateExecutorMetadata(mod2, "tvmgen_default", executor, 16, 1)
     linked_mod = _vmlink(
         builder=builder,
         target=target,
@@ -382,31 +383,32 @@ def build(
         system_lib=system_lib,
         metadata=metadata,
     )
-    runtime = tvm.relay.backend.Runtime("cpp", {"system-lib": True})
-    from tvm.relay.backend import executor_factory as _executor_factory
-    print("linked_mod", linked_mod)
-    print("linked_mod.mod", linked_mod.mod)
-    input("-1-1-1")
-    from tvm.relay.backend.aot import CreateFunctionMetadata
-    func_metadata = CreateFunctionMetadata(_filter_tir(mod2), 16, 1)
-    print("func_metadata (relax)", func_metadata)
-    # func_metadata = None
-    # func_metadata = CreateFunctionMetadata(linked_mod.mod.imported_modules[0], 16, 1)
-    executor_factory = _executor_factory.AOTExecutorFactoryModule(
-        mod,  # ir_mod,
-        mod2,  # lowered_ir_mods,
-        target,
-        executor,
-        runtime,
-        linked_mod.mod.imported_modules[0],
-        "default",
-        params,
-        func_metadata,
-        metadata,
-        metadata.devices,
-    )
-    # return linked_mod
-    return executor_factory
+    if exec_mode == "crt":
+        runtime = tvm.relay.backend.Runtime("cpp", {"system-lib": True})
+        from tvm.relay.backend import executor_factory as _executor_factory
+        print("linked_mod", linked_mod)
+        print("linked_mod.mod", linked_mod.mod)
+        input("-1-1-1")
+        from tvm.relay.backend.aot import CreateFunctionMetadata
+        func_metadata = CreateFunctionMetadata(_filter_tir(mod2), 16, 1)
+        print("func_metadata (relax)", func_metadata)
+        # func_metadata = None
+        # func_metadata = CreateFunctionMetadata(linked_mod.mod.imported_modules[0], 16, 1)
+        executor_factory = _executor_factory.AOTExecutorFactoryModule(
+            mod,  # ir_mod,
+            mod2,  # lowered_ir_mods,
+            target,
+            executor,
+            runtime,
+            linked_mod.mod.imported_modules[0],
+            "default",
+            params,
+            func_metadata,
+            metadata,
+            metadata.devices,
+        )
+        return executor_factory
+    return linked_mod
 
 
 def _filter_tir(mod: tvm.IRModule) -> Optional[tvm.IRModule]:
