@@ -85,7 +85,8 @@ void SendToRunner(TaskRecordNode* self, const Runner& runner) {
           /*f_done=*/[]() -> bool { return true; },
           /*f_result=*/
           [msg = builder_result->error_msg]() -> RunnerResult {
-            return RunnerResult(NullOpt, msg);
+            // return RunnerResult(NullOpt, msg);
+            return RunnerResult(NullOpt, NullOpt, msg);
           }));
     } else {
       results.push_back(futures[j++]);
@@ -106,15 +107,29 @@ void TaskCleanUp(TaskRecordNode* self, int task_id, const Array<RunnerResult>& r
     const RunnerResult& runner_result = results[i];
     Optional<String> error_msg = NullOpt;
     int trials = self->latency_ms.size() + 1;
-    double run_ms = 1e9;
+    double run_ms = 0;
+    double text_kb = 0;
+    double rodata_kb = 0;
+    double const_kb = 0;
+    double workspace_kb = 0;
     if ((error_msg = builder_result->error_msg)) {
       ++self->build_error_count;
     } else if ((error_msg = runner_result->error_msg)) {
       ++self->run_error_count;
     } else {
       run_ms = GetRunMsMedian(runner_result);
+      Array<FloatImm> mem = runner_result->mem.value();
+      ICHECK(mem.size() == 4);
+      text_kb = mem[0]->value;
+      rodata_kb = mem[1]->value;
+      const_kb = mem[2]->value;
+      workspace_kb = mem[3]->value;
     }
     self->latency_ms.push_back(run_ms);
+    self->text_kb.push_back(text_kb);
+    self->rodata_kb.push_back(rodata_kb);
+    self->const_kb.push_back(const_kb);
+    self->workspace_kb.push_back(workspace_kb);
     if (error_msg) {
       const tir::Schedule& sch = candidate->sch;
       std::string err = error_msg.value();
@@ -275,6 +290,10 @@ void TaskSchedulerNode::PrintTuningStatistics() {
           << "Speed (GFLOPS)"
           << "Latency (us)"
           << "Weighted Latency (us)"
+          << "Mem .text [kB]"
+          << "Mem .rodata [kB]"
+          << "Const [kB]"
+          << "workspace [kB]"
           << "Trials"
           << "Done";
   p.Separator();
@@ -286,16 +305,27 @@ void TaskSchedulerNode::PrintTuningStatistics() {
         << /*flops=*/static_cast<int64_t>(task->flop)
         << /*weight=*/static_cast<int>(task->task_weight);
     double latency_ms = 1e9;
+    double text_kb = 0;
+    double rodata_kb = 0;
+    double const_kb = 0;
+    double workspace_kb = 0;
     if (!task->latency_ms.empty()) {
-      latency_ms = *std::min_element(task->latency_ms.begin(), task->latency_ms.end());
+      auto min = std::min_element(task->latency_ms.begin(), task->latency_ms.end());
+      latency_ms = *min;
+      text_kb = task->text_kb[std::distance(task->latency_ms.begin(), min)];
+      rodata_kb = task->rodata_kb[std::distance(task->latency_ms.begin(), min)];
+      const_kb = task->const_kb[std::distance(task->latency_ms.begin(), min)];
+      workspace_kb = task->workspace_kb[std::distance(task->latency_ms.begin(), min)];
     }
     if (latency_ms >= 1e9) {
-      row << /*speed=*/"N/A" << /*latency=*/"N/A" << /*weighted_latency=*/"N/A";
+      // row << /*speed=*/"N/A" << /*latency=*/"N/A" << /*weighted_latency=*/"N/A";
+      row << /*speed=*/"N/A" << /*latency=*/"N/A" << /*weighted_latency=*/"N/A" << /*text_kb*/"N/A" << /*rodata_kb*/"N/A" << /*const_kb*/"N/A" << /*workspace_kb*/"N/A";
     } else {
       latency_ms *= 1000.0;
       double speed = task->flop / latency_ms / 1000.0;
       double weighted_latency = latency_ms * task->task_weight;
-      row << /*speed=*/speed << /*latency=*/latency_ms << /*weighted_latency=*/weighted_latency;
+      // row << /*speed=*/speed << /*latency=*/latency_ms << /*weighted_latency=*/weighted_latency;
+      row << /*speed=*/speed << /*latency=*/latency_ms << /*weighted_latency=*/weighted_latency << /*text_kb=*/text_kb << /*rodata_kb*/rodata_kb << /*const_kb*/const_kb << /*workspace_kb*/workspace_kb;
       total_latency += weighted_latency;
       total_trials += trials;
     }

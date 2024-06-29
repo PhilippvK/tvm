@@ -81,7 +81,35 @@ def get_local_builder_micro():
         #     opt_level=opt_level, config=config, disabled_pass=disabled_pass,
         # ):
         #     rt_mod = tvm_build(mod, target=target, runtime=runtime)
-        rt_mod = tvm_build(mod, target=target, runtime=runtime)
+        # rt_mod = tvm_build(mod, target=target, runtime=runtime)
+
+        const_bytes = -1
+        workspace_bytes = -1
+
+        def my_pass():
+            # print("my_pass")
+            def _transform(f, *_):
+                nonlocal const_bytes
+                nonlocal workspace_bytes
+                # print("_transform")
+                # print("f", f)
+                const_bytes = tvm.tir.analysis.calculate_constant_bytes(f, 16)
+                # print("const_bytes2", const_bytes)
+                workspace_bytes = tvm.tir.analysis.calculate_workspace_bytes(f, 16)
+                f = f.with_attr("const_bytes", const_bytes)
+                f = f.with_attr("workspace_bytes", workspace_bytes)
+                # print("workspace_bytes2", workspace_bytes)
+                return f
+            return tvm.tir.transform.prim_func_pass(_transform, opt_level=0, name="my_pass")
+        with tvm.transform.PassContext(config={"tir.add_lower_pass": [(3, my_pass())]}):
+            rt_mod = tvm_build(mod, target=target, runtime=runtime)
+        print("const_bytes3", const_bytes)
+        print("workspace_bytes3", workspace_bytes)
+        # with tvm.transform.PassContext(
+        #     opt_level=3, config={"tir.usmp.enable": True},
+        # ):
+        #     usmp_mod = tvm_build(mod, target=target, runtime=runtime)
+        #     print("usmp_mod", usmp_mod)
         return rt_mod
 
     def _micro_export(mod: OperatorModule) -> str:

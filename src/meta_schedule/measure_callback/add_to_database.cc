@@ -46,10 +46,17 @@ class AddToDatabaseNode : public MeasureCallbackNode {
       } else {
         run_secs = Array<FloatImm>{FloatImm(DataType::Float(32), 1e10)};
       }
+      // Array<FloatImm> mem{nullptr};
+      // if (result->mem.defined()) {
+      //   mem = result->mem.value();
+      // } else {
+      //   mem = Array<FloatImm>{FloatImm(DataType::Float(32), 1e10)};
+      // }
       database->CommitTuningRecord(TuningRecord(
           /*trace=*/candidate->sch->trace().value(),
           /*workload=*/workload,
           /*run_secs=*/run_secs,
+          //  /*mem=*/mem,
           /*target=*/target,
           /*args_info=*/candidate->args_info));
     }

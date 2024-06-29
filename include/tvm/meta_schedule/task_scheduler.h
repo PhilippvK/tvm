@@ -53,6 +53,10 @@ class TaskRecordNode : public runtime::Object {
   int run_error_count = 0;
   /*! \brief The latency of each run, in milliseconds. */
   std::vector<double> latency_ms = {};
+  std::vector<double> text_kb = {};
+  std::vector<double> rodata_kb = {};
+  std::vector<double> const_kb = {};
+  std::vector<double> workspace_kb = {};
   /*! \brief The measure candidates. */
   Optional<Array<MeasureCandidate>> measure_candidates = NullOpt;
   /*! \brief The building results. */
@@ -68,6 +72,10 @@ class TaskRecordNode : public runtime::Object {
     v->Visit("build_error_count", &build_error_count);
     v->Visit("run_error_count", &run_error_count);
     // `latency_ms` is not visited
+    // `text_kb` is not visited
+    // `rodata_kb` is not visited
+    // `const_kb` is not visited
+    // `workspace_kb` is not visited
     v->Visit("measure_candidates", &measure_candidates);
     v->Visit("builder_results", &builder_results);
     v->Visit("runner_futures", &runner_futures);

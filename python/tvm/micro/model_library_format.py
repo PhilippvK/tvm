@@ -583,6 +583,21 @@ def _export_operator_model_library_format(mod: build_module.OperatorModule, temp
             )
 
         targets.append(target)
+    assert len(mod.ir_module_by_target.keys()) == 1
+    ir_mod = list(mod.ir_module_by_target.values())[0]
+    f = ir_mod["main"]
+    const_bytes = -2
+    workspace_bytes = -2
+    try:
+        print("f", f)
+        print("dir(f)", dir(f))
+        print("f.attrs", type(f.attrs), f.attrs)
+        if "const_bytes" in f.attrs:
+            const_bytes = f.attrs["const_bytes"].value
+        if "workspace_bytes" in f.attrs:
+            workspace_bytes = f.attrs["workspace_bytes"].value
+    except Exception as exe:
+        print("exe", exe)
 
     src_dir = tempdir / "src"
     src_dir.mkdir()
@@ -596,9 +611,19 @@ def _export_operator_model_library_format(mod: build_module.OperatorModule, temp
         "target": [str(t) for t in targets],
         "executors": [],
         "style": "operator",
+        "const_bytes": const_bytes,
+        "workspace_bytes": workspace_bytes,
     }
-    with open(tempdir / METADATA_FILE, "w") as metadata_f:
-        json.dump(metadata, metadata_f)
+    print("md", metadata)
+    try:
+        with open(tempdir / METADATA_FILE, "w") as metadata_f:
+            print("0")
+            json.dump(metadata, metadata_f)
+            print("tempdir / METADATA_FILE", tempdir / METADATA_FILE)
+            # input("00")
+    except Exception as exe:
+        print("exe", exe)
+    print("1")
 
     codegen_dir = tempdir / "codegen"
     codegen_dir.mkdir()

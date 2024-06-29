@@ -18,7 +18,7 @@
 import concurrent.futures
 import os.path as osp
 from contextlib import contextmanager
-from typing import Callable, List, Optional, Union
+from typing import Callable, List, Optional, Union, Dict
 
 from tvm.contrib.popen_pool import PopenPoolExecutor
 from tvm.rpc import RPCSession
@@ -117,18 +117,26 @@ class RPCRunnerFuture(PyRunnerFuture):
 
     def result(self) -> RunnerResult:
         try:
-            run_secs: List[float] = self.future.result()
+            costs: Dict[str, float] = self.future.result()
+            print("costs")
+            run_secs: List[float] = costs.get("run_secs", None)
+            print("rs", run_secs)
+            mem: List[float] = costs.get("mem", None)
+            print("m", mem)
         except TimeoutError:
             return RunnerResult(
+                None,
                 None,
                 error_msg=f"RPCRunner: Timeout, killed after {self.timeout_sec} seconds",
             )
         except Exception as exception:  # pylint: disable=broad-except
             return RunnerResult(
                 None,
+                None,
                 error_msg="RPCRunner: An exception occurred\n" + str(exception),
             )
-        return RunnerResult(run_secs, None)
+        # return RunnerResult(run_secs, None)
+        return RunnerResult(run_secs, mem, None)
 
 
 @derived_object
