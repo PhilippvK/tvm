@@ -360,7 +360,7 @@ else:
 
 # ### Relay
 
-# Relay build (Default C++, LLVM)
+# Relay build (Graph C++, LLVM)
 
 # In[17]:
 
@@ -380,7 +380,6 @@ else:
 
 
 if RUNTIME == "cpp" and EXECUTOR == "aot" and TARGET == "llvm" and not UNPACKED and not USMP:
-    print("HERE")
     relay_instrument_lib_aot_cpp_llvm = MyInstrument()
     with tvm.transform.PassContext(instruments=[relay_instrument_lib_aot_cpp_llvm], config=pass_config):
         lib_aot_cpp_llvm = relay.build(relay_mod, target=target, runtime=cpp_runtime, executor=aot_executor)
@@ -424,7 +423,7 @@ else:
 
 if RUNTIME == "crt" and EXECUTOR == "aot" and TARGET == "llvm" and not UNPACKED and not USMP:
     relay_instrument_lib_aot_crt_llvm = MyInstrument()
-    with tvm.transform.PassContext(instruments=[relay_instrument_lib_aot_crt_llvm], config=config):
+    with tvm.transform.PassContext(instruments=[relay_instrument_lib_aot_crt_llvm], config=pass_config):
         lib_aot_crt_llvm = relay.build(relay_mod, target=target, runtime=crt_runtime, executor=aot_executor)
 else:
     relay_instrument_lib_aot_crt_llvm = None
@@ -438,7 +437,7 @@ else:
 
 if RUNTIME == "crt" and EXECUTOR == "aot" and TARGET == "c" and UNPACKED and not USMP:
     relay_instrument_lib_aot_crt_c = MyInstrument()
-    with tvm.transform.PassContext(instruments=[relay_instrument_lib_aot_crt_c], config=config):
+    with tvm.transform.PassContext(instruments=[relay_instrument_lib_aot_crt_c], config=pass_config):
         lib_aot_crt_c = relay.build(relay_mod, target=target, runtime=crt_runtime, executor=aot_executor)
 else:
     relay_instrument_lib_aot_crt_c = None
@@ -450,9 +449,9 @@ else:
 # In[21]:
 
 
-if RUNTIME == "crt" and EXECUTOR == "aot" and TARGET == "c" and not USMP:
+if RUNTIME == "crt" and EXECUTOR == "aot" and TARGET == "c" and UNPACKED and not USMP:
     relay_instrument_lib_aot_crt_c = MyInstrument()
-    with tvm.transform.PassContext(instruments=[relay_instrument_lib_aot_crt_c], config=config):
+    with tvm.transform.PassContext(instruments=[relay_instrument_lib_aot_crt_c], config=pass_config):
         lib_aot_crt_c = relay.build(relay_mod, target=target, runtime=crt_runtime, executor=aot_executor)
 else:
     relay_instrument_lib_aot_crt_c = None
@@ -579,11 +578,25 @@ relay_instrument.output[-1][0].show()
 
 
 if TARGET == "llvm":
+    dev = tvm.device(str(TARGET), dev_id=0)
     if EXEC_MODE in ["bytecode", "compiled"]:
-        vm = relax.VirtualMachine(ex, tvm.cpu())
+        # vm = relax.VirtualMachine(ex, tvm.cpu())
+        vm = relax.VirtualMachine(ex, dev)
         relax_output = vm["main"](relax_data).numpy()
     elif EXEC_MODE == "crt":
-        pass
+        factory_module = ex
+        # print("relay lib", lib, type(lib), dir(lib))
+        # print("relay lib.lib", lib.lib, type(lib.lib), dir(lib.lib))
+        # print("factory_module", factory_module, type(factory_module), dir(factory_module))
+        # print("factory_module.lib", factory_module.lib, type(factory_module.lib), dir(factory_module.lib))
+        rt_mod = tvm.runtime.executor.AotModule(factory_module["default"](dev))
+        # rt_mod = tvm.runtime.executor.AotModule(lib["default"](dev))
+        # print("rt_mod", rt_mod)
+        # print("relax_data", relax_data.shape)
+        # print("relay_data", relay_data.shape)
+        rt_mod.set_input("x", relax_data)
+        rt_mod.run()
+        relax_output = rt_mod.get_output(0).numpy()
     else:
         assert False
 else:
@@ -633,20 +646,6 @@ else:
 #     devices,
 # )
 # print("factory_module", factory_module)
-dev = tvm.device(str(TARGET), dev_id=0)
-factory_module = ex
-# print("relay lib", lib, type(lib), dir(lib))
-# print("relay lib.lib", lib.lib, type(lib.lib), dir(lib.lib))
-# print("factory_module", factory_module, type(factory_module), dir(factory_module))
-# print("factory_module.lib", factory_module.lib, type(factory_module.lib), dir(factory_module.lib))
-rt_mod = tvm.runtime.executor.AotModule(factory_module["default"](dev))
-# rt_mod = tvm.runtime.executor.AotModule(lib["default"](dev))
-# print("rt_mod", rt_mod)
-# print("relax_data", relax_data.shape)
-# print("relay_data", relay_data.shape)
-rt_mod.set_input("x", relax_data)
-rt_mod.run()
-relax_output = rt_mod.get_output(0).numpy()
 
 
 # ### Relay
