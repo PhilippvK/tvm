@@ -261,9 +261,8 @@ def _vmlink(
         lib = tvm.build(
             tir_mod,
             target=target,
-            runtime=
+            runtime=runtime,
             # _autodetect_system_lib_req(target, system_lib),
-            runtime,
         )
     return Executable(_ffi_api.VMLink(builder, target, lib, ext_libs, params, metadata))  # type: ignore
 
