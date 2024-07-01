@@ -453,20 +453,20 @@ TVM_REGISTER_GLOBAL("relax.VMCodeGen").set_body_typed(VMCodeGen);
  */
 Module VMLink(ExecBuilder builder, Target target, Optional<Module> lib, Array<Module> ext_libs,
               Map<String, runtime::NDArray> params, relay::backend::ExecutorCodegenMetadata metadata) {
-  LOG(INFO) << "VMLink";
+  // LOG(INFO) << "VMLink";
   // TODO(relax-team) Revisit the param and ext_lib options.
   ObjectPtr<Executable> executable = builder->Get();
   if (!lib.defined()) {
-    LOG(INFO) << "!lib.defined()";
+    // LOG(INFO) << "!lib.defined()";
     lib = codegen::CSourceModuleCreate(";", "", Array<String>{});
   }
   std::unordered_map<std::string, runtime::NDArray> conv_params;
   for (const auto& [name, param] : params) {
-    LOG(INFO) << "convert_params";
+    // LOG(INFO) << "convert_params";
     conv_params[name] = param;
   }
-  LOG(INFO) << "lib=" << lib;
-  LOG(INFO) << "lib.value()=" << lib.value();
+  // LOG(INFO) << "lib=" << lib;
+  // LOG(INFO) << "lib.value()=" << lib.value();
   String mod_name_ = "default";
   // auto metadata = relay::backend::ExecutorCodegenMetadata();
   // auto metadata = relay::backend::ExecutorCodegenMetadata(
@@ -484,7 +484,7 @@ Module VMLink(ExecBuilder builder, Target target, Optional<Module> lib, Array<Mo
   //     Bool(false) /* unpacked_api */
   // );
 
-  LOG(INFO) << "metadata=" << metadata;
+  // LOG(INFO) << "metadata=" << metadata;
   Module combined_lib = codegen::CreateMetadataModule(
       conv_params, lib.value(), ext_libs, target,
 
@@ -497,10 +497,10 @@ Module VMLink(ExecBuilder builder, Target target, Optional<Module> lib, Array<Mo
                                          // won't use this anyways.
       metadata);
       // relay::backend::ExecutorCodegenMetadata());
-  LOG(INFO) << "combined_lib=" << combined_lib;
-  LOG(INFO) << "Import";
+  // LOG(INFO) << "combined_lib=" << combined_lib;
+  // LOG(INFO) << "Import";
   executable->Import(combined_lib);
-  LOG(INFO) << "return";
+  // LOG(INFO) << "return";
   return Module(executable);
 }
 

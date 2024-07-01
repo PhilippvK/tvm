@@ -34,29 +34,29 @@ namespace aot {
 ExecutorCodegenMetadata CreateExecutorMetadata(const IRModule& mod, String mod_name,
                                                Executor executor, Integer workspace_byte_alignment,
                                                Integer constant_byte_alignment) {
-  LOG(INFO) << "CreateExecutorMetadata";
+  // LOG(INFO) << "CreateExecutorMetadata";
   // Get relevant executor config information
   std::string interface_api = executor->GetAttr<String>("interface-api").value_or("packed");
-  LOG(INFO) << "interface_api=" << interface_api;
+  // LOG(INFO) << "interface_api=" << interface_api;
   bool unpacked_api = executor->GetAttr<Bool>("unpacked-api").value_or(Bool(false));
-  LOG(INFO) << "unpacked_api=" << unpacked_api;
+  // LOG(INFO) << "unpacked_api=" << unpacked_api;
   // Get the input vars
   auto tir_main_func = Downcast<tir::PrimFunc>(mod->Lookup(runtime::symbol::tvm_module_main));
-  LOG(INFO) << "tir_main_func=?";
+  // LOG(INFO) << "tir_main_func=?";
   Array<tir::Var> inputs = tir_main_func->GetAttr<Array<tir::Var>>("input_vars").value();
-  LOG(INFO) << "inputs=?";
+  // LOG(INFO) << "inputs=?";
   Array<TensorType> input_tensor_types;
   for (const auto& input : inputs) {
     auto buffer = tir_main_func->buffer_map.Get(input).value();
     input_tensor_types.push_back(TensorType(buffer->shape, buffer->dtype));
   }
-  LOG(INFO) << "input_tensor_types=?";
+  // LOG(INFO) << "input_tensor_types=?";
   // Extract USMP metadata to pass onto metadata sources
   Map<tir::Var, tir::usmp::AllocatedPoolInfo> pool_var_info;
   std::vector<tir::Var> pool_vars;
   Optional<Array<tir::usmp::AllocatedPoolInfo>> allocated_pool_infos =
       tir_main_func->GetAttr<Array<tir::usmp::AllocatedPoolInfo>>(tvm::attr::kPoolArgs);
-  LOG(INFO) << "allocated_pool_infos=?";
+  // LOG(INFO) << "allocated_pool_infos=?";
   if (allocated_pool_infos) {
     for (const tir::usmp::AllocatedPoolInfo& allocated_pool_info : allocated_pool_infos.value()) {
       int pool_var_index = allocated_pool_info->pool_var_idx.value()->value;
@@ -67,10 +67,10 @@ ExecutorCodegenMetadata CreateExecutorMetadata(const IRModule& mod, String mod_n
   Map<String, tir::usmp::PoolAllocation> io_pool_allocations =
       mod->GetAttr<Map<String, tir::usmp::PoolAllocation>>(tvm::attr::kIOTensorPoolAllocations)
           .value_or({});
-  LOG(INFO) << "io_pool_allocations=?";
+  // LOG(INFO) << "io_pool_allocations=?";
 
   Array<tir::Var> outputs = tir_main_func->GetAttr<Array<tir::Var>>("output_vars").value();
-  LOG(INFO) << "outputs=?";
+  // LOG(INFO) << "outputs=?";
   Array<TensorType> output_tensor_types;
   std::vector<String> output_var_names;
   for (const auto& output : outputs) {
@@ -78,8 +78,8 @@ ExecutorCodegenMetadata CreateExecutorMetadata(const IRModule& mod, String mod_n
     output_tensor_types.push_back(TensorType(buffer->shape, buffer->dtype));
     output_var_names.push_back(output->name_hint);
   }
-  LOG(INFO) << "output_tensor_types=?";
-  LOG(INFO) << "output_var_names=?";
+  // LOG(INFO) << "output_tensor_types=?";
+  // LOG(INFO) << "output_var_names=?";
   auto devices = tir_main_func->GetAttr<Array<String>>("devices").value_or({});
 
   return ExecutorCodegenMetadata(inputs, input_tensor_types, output_var_names, output_tensor_types,

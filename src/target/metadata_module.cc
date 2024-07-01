@@ -45,7 +45,7 @@ static runtime::Module CreateCrtMetadataModule(
     Array<runtime::Module> non_crt_exportable_modules,
     Array<runtime::Module> crt_exportable_modules,
     const std::unordered_map<std::string, runtime::NDArray>& const_var_ndarray) {
-  LOG(INFO) << "CreateCrtMetadataModule";
+  // LOG(INFO) << "CreateCrtMetadataModule";
   if (!non_crt_exportable_modules.empty()) {
     std::string non_exportable_modules;
     for (unsigned int i = 0; i < non_crt_exportable_modules.size(); i++) {
@@ -148,7 +148,7 @@ static runtime::Module CreateCppMetadataModule(
     Array<runtime::Module> non_crt_exportable_modules,
     Array<runtime::Module> crt_exportable_modules,
     const std::unordered_map<std::string, runtime::NDArray>& const_var_ndarray) {
-  LOG(INFO) << "CreateCppMetadataModule";
+  // LOG(INFO) << "CreateCppMetadataModule";
   if (!non_crt_exportable_modules.empty()) {
     runtime::Module const_loader_mod =
         runtime::ConstLoaderModuleCreate(const_var_ndarray, const_vars_by_symbol);
@@ -158,12 +158,12 @@ static runtime::Module CreateCppMetadataModule(
     }
     target_module = const_loader_mod;
   }
-  LOG(INFO) << "metadata=" << metadata;
+  // LOG(INFO) << "metadata=" << metadata;
 
   if (metadata.defined()) {
-    LOG(INFO) << "metadata.defined()";
+    // LOG(INFO) << "metadata.defined()";
     runtime::metadata::Metadata runtime_metadata = ConvertMetaData(metadata);
-    LOG(INFO) << "runtime_metadata=" << runtime_metadata;
+    // LOG(INFO) << "runtime_metadata=" << runtime_metadata;
 
     if (metadata->executor == runtime::kTvmExecutorAot && runtime->name == relay::kTvmRuntimeCpp) {
       if (target->kind->name == "c") {
@@ -181,7 +181,7 @@ static runtime::Module CreateCppMetadataModule(
       }
     }
   } else {
-    LOG(INFO) << "!metadata.defined()";
+    // LOG(INFO) << "!metadata.defined()";
   }
 
   return target_module;
@@ -203,7 +203,7 @@ runtime::Module CreateMetadataModule(
     tvm::runtime::Module target_module, const Array<runtime::Module>& ext_modules, Target target,
     tvm::relay::Runtime runtime, tvm::relay::Executor executor,
     relay::backend::ExecutorCodegenMetadata metadata) {
-  LOG(INFO) << "CreateMetadataModule";
+  // LOG(INFO) << "CreateMetadataModule";
   // Here we split modules into two groups:
   //  1. Those modules which can be exported to C-runtime. These are DSO-exportable
   //     (i.e. llvm or c) modules which return nothing from get_const_vars().
@@ -212,12 +212,12 @@ runtime::Module CreateMetadataModule(
   Array<runtime::Module> non_crt_exportable_modules;
 
   bool is_targeting_crt = runtime->name == "crt";
-  LOG(INFO) << "is_targeting_crt=" << is_targeting_crt;
+  // LOG(INFO) << "is_targeting_crt=" << is_targeting_crt;
 
   // Wrap all submodules in the initialization wrapper.
   std::unordered_map<std::string, std::vector<std::string>> const_vars_by_symbol;
   for (tvm::runtime::Module mod : ext_modules) {
-    LOG(INFO) << "mod=" << mod;
+    // LOG(INFO) << "mod=" << mod;
     auto pf_sym = mod.GetFunction("get_symbol");
     auto pf_var = mod.GetFunction("get_const_vars");
     std::vector<std::string> symbol_const_vars;

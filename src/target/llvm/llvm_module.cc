@@ -191,7 +191,7 @@ PackedFunc LLVMModuleNode::GetFunction(const String& name, const ObjectPtr<Objec
   TVMBackendPackedCFunc faddr;
   With<LLVMTarget> llvm_target(*llvm_instance_, LLVMTarget::GetTargetMetadata(*module_));
   if (name == runtime::symbol::tvm_module_main) {
-    LOG(INFO) << "LLVM name=" << name;
+    // LOG(INFO) << "LLVM name=" << name;
     const char* entry_name = reinterpret_cast<const char*>(
         GetGlobalAddr(runtime::symbol::tvm_module_main, *llvm_target));
     ICHECK(entry_name != nullptr) << "Symbol " << runtime::symbol::tvm_module_main
@@ -346,23 +346,23 @@ void LLVMModuleNode::Init(const IRModule& mod, const Target& target) {
     }
     auto f = Downcast<PrimFunc>(kv.second);
     auto global_symbol = f->GetAttr<String>(tvm::attr::kGlobalSymbol);
-    LOG(INFO) << "LLVM global_symbol=" << global_symbol;
+    // LOG(INFO) << "LLVM global_symbol=" << global_symbol;
     bool is_entry_func = f->HasNonzeroAttr(tir::attr::kIsEntryFunc);
     // bool is_entry_func = true;
-    LOG(INFO) << "LLVM is_entry_func=" << is_entry_func;
+    // LOG(INFO) << "LLVM is_entry_func=" << is_entry_func;
 
     ICHECK(global_symbol || !is_entry_func) << "The entry func must be exposed externally.";
 
     if (global_symbol) {
-      LOG(INFO) << "gs!";
+      // LOG(INFO) << "gs!";
       function_names_.push_back(global_symbol.value());
       if (is_entry_func) {
-        LOG(INFO) << "ief!";
+        // LOG(INFO) << "ief!";
         entry_func = global_symbol.value();
       }
     }
   }
-  LOG(INFO) << "LLVM1 function_names_=" << function_names_;
+  // LOG(INFO) << "LLVM1 function_names_=" << function_names_;
   // TODO(@jroesch): follow up on this condition.
   // ICHECK(funcs.size() > 0);
   // TODO(tqchen): remove the entry function behavior as it does not
@@ -373,7 +373,7 @@ void LLVMModuleNode::Init(const IRModule& mod, const Target& target) {
 
   cg->AddFunctionsOrdered(mod->functions.begin(), mod->functions.end());
   if (entry_func.length() != 0) {
-    LOG(INFO) << "AddMainFunction";
+    // LOG(INFO) << "AddMainFunction";
     cg->AddMainFunction(entry_func);
   }
 
@@ -581,9 +581,9 @@ bool LLVMModuleNode::IsCompatibleWithHost(const llvm::TargetMachine* tm) const {
 // Get global address from execution engine.
 void* LLVMModuleNode::GetGlobalAddr(const std::string& name, const LLVMTarget& llvm_target) const {
   // first verifies if GV exists.
-  LOG(INFO) << "LLVMModuleNode::GetGlobalAddr name=" << name;
-  LOG(INFO) << "LLVM function_names_=" << function_names_;
-  LOG(INFO) << "module_=" << module_;
+  // LOG(INFO) << "LLVMModuleNode::GetGlobalAddr name=" << name;
+  // LOG(INFO) << "LLVM function_names_=" << function_names_;
+  // LOG(INFO) << "module_=" << module_;
   if (module_->getGlobalVariable(name) != nullptr) {
     if (jit_engine_ == "mcjit") {
       return reinterpret_cast<void*>(mcjit_ee_->getGlobalValueAddress(name));
@@ -598,7 +598,7 @@ void* LLVMModuleNode::GetGlobalAddr(const std::string& name, const LLVMTarget& l
       LOG(FATAL) << "Either `mcjit` or `orcjit` are not initialized.";
     }
   }
-  LOG(INFO) << "nullptr";
+  // LOG(INFO) << "nullptr";
   return nullptr;
 }
 

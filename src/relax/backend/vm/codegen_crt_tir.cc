@@ -385,12 +385,12 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     CodeGenCRTTIR codegen(builder, mod, config);
     // Remove relax function and turn into TIR func.
     for (auto& p : mod->functions) {
-      LOG(INFO) << "p";
+      // LOG(INFO) << "p";
       if (auto* func = p.second.as<FunctionNode>()) {
-        LOG(INFO) << "func";
+        // LOG(INFO) << "func";
         auto tir_func = codegen.Codegen(GetRef<Function>(func));
         auto gsymbol = tir_func->GetAttr<String>(tvm::attr::kGlobalSymbol);
-        LOG(INFO) << "gsymbol=" << gsymbol.value();
+        // LOG(INFO) << "gsymbol=" << gsymbol.value();
         // res_mod->Add(GlobalVar(gsymbol.value()), tir_func);
         String name = "__tvm_main__";
         String name2 = "tvmgen_default___tvm_main__";
@@ -398,14 +398,14 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         res_mod->Add(GlobalVar(name), tir_func);
         res_mod->Remove(p.first);
       } else if (auto* func = p.second.as<tir::PrimFuncNode>()) {
-        LOG(INFO) << "!prim func";
+        // LOG(INFO) << "!prim func";
         auto tir_func = GetRef<tir::PrimFunc>(func);
         auto gsymbol = tir_func->GetAttr<String>(tvm::attr::kGlobalSymbol);
         tir_func = WithAttr(tir_func, tvm::attr::kTarget, config->host_target);
         res_mod->Remove(p.first); // TODO: use ->Update()!
         res_mod->Add(GlobalVar(gsymbol.value()), tir_func);
       } else {
-        LOG(INFO) << "!func";
+        // LOG(INFO) << "!func";
       }
     }
     // TODO: make call_type variable
@@ -681,7 +681,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     Type ret_type = VoidType();
     // Array<tir::Var> tir_params = {ctx_ptr_, reg_anylist_handle_, const_anylist_handle_,
     //                               func_anylist_handle_};
-    LOG(INFO) << "sl_prefix=" << system_lib_prefix_.value_or("");
+    // LOG(INFO) << "sl_prefix=" << system_lib_prefix_.value_or("");
     String tir_func_name = system_lib_prefix_.value_or("") + "__tvm_main__";  // + gsymbol.value();
     // String tir_func_name = system_lib_prefix_.value_or("") + "__tvm_main2__";  // + gsymbol.value();
     // String tir_func_name = "__tvm_main__";
@@ -711,9 +711,9 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         // CreateIOVar(ret.value().as<Expr>().value(), "output");
       }
     });
-    LOG(INFO) << "input_vars_.size()=" << input_vars_.size();
-    LOG(INFO) << "return_sid_.size()=" << return_sid_.size();
-    LOG(INFO) << "main_signature_.size()=" << main_signature_.size();
+    // LOG(INFO) << "input_vars_.size()=" << input_vars_.size();
+    // LOG(INFO) << "return_sid_.size()=" << return_sid_.size();
+    // LOG(INFO) << "main_signature_.size()=" << main_signature_.size();
     Array<tir::Var> output_vars =
         Array<tir::Var>(main_signature_.begin() + input_vars_.size(),
                         main_signature_.begin() + input_vars_.size() + return_sid_.size());
@@ -1128,7 +1128,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   // }
 
   void EmitNormalCall(const Call& call_node, int64_t dst_reg) {
-    LOG(INFO) << "EmitNormalCall" << "\n";
+    // LOG(INFO) << "EmitNormalCall" << "\n";
     // Call call = GetRef<Call>(call_node);
     Array<PrimExpr> args = VisitArray(call_node->args);
     // A function can be a closure that comes from parent
@@ -1137,7 +1137,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     auto symbol = LookupFunction(call_node->op, &kind);
 
     if (symbol.defined() && kind == VMFuncInfo::FuncKind::kPackedFunc) {
-      LOG(INFO) << "defined && kPackedFunc" << "\n";
+      // LOG(INFO) << "defined && kPackedFunc" << "\n";
       // primfunc in the same module.
       // use cpacked to directly invoke without named based lookup
       if (Optional<tir::PrimFunc> prim_func = LookupPrimFunc(symbol.value())) {
@@ -1149,7 +1149,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         this->EmitCallPacked2(symbol.value(), call_node->args, call_node);
       }
     } else {
-      LOG(INFO) << "!(defined && kPackedFunc)" << "\n";
+      // LOG(INFO) << "!(defined && kPackedFunc)" << "\n";
       // Default path, leverage function table and invoke as closure
       Array<PrimExpr> all_args;
       all_args.push_back(ctx_ptr_);

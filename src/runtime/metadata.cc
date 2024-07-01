@@ -99,10 +99,10 @@ class MetadataModuleNode : public ::tvm::runtime::ModuleNode {
 
   PackedFunc GetFunction(const String& name, const ObjectPtr<Object>& sptr_to_self) {
     if (name == "get_metadata") {
-      LOG(INFO) << "GetFunction: get_metadata";
+      // LOG(INFO) << "GetFunction: get_metadata";
       return PackedFunc([this, sptr_to_self](TVMArgs args, TVMRetValue* rv) {
-        LOG(INFO) << "running get_metadata";
-        LOG(INFO) << "metadata_.defined()=" << metadata_.defined();
+        // LOG(INFO) << "running get_metadata";
+        // LOG(INFO) << "metadata_.defined()=" << metadata_.defined();
         if (!metadata_.defined()) {
           TVMFunctionHandle f_handle;
           int32_t ret_code = TVMBackendGetFuncFromEnv(this, symbol::tvm_get_c_metadata, &f_handle);
