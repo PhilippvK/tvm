@@ -62,7 +62,7 @@ def get_relax_dense(dtype):
 
 
 
-def get_relax_conv2d(dtype):
+def get_relax_conv2d_relu_max_pool2d(dtype):
     conv2d_input_n = 1
     conv2d_input_c = 16
     conv2d_input_h = 64
@@ -90,29 +90,64 @@ def get_relax_conv2d(dtype):
         bias = relax.Constant(tvm.nd.array(conv2d_bias_matrix))
         output_conv2d = relax.op.nn.conv2d(input, weights, data_layout="NCHW", kernel_layout="HWIO")
         output_bias = relax.op.add(output_conv2d, bias)
+        output_relu = relax.op.nn.relu(output_bias)
+        output_pool = relax.op.nn.max_pool2d(output_relu)
         builder.emit_func_output(output_bias, params=[input])
 
     return builder.get(), conv2d_data, conv2d_params
 
 
-def compare_aot_with_vm(mod, data, params):
+def get_relax_dnn(dtype, bind_params=True):
+    data_np = np.random.randn(1, 64).astype(dtype)
+    data_shape = data_np.shape
+    builder = relax.BlockBuilder()
+    weight1_np = np.random.randn(64, 64).astype(dtype)
+    weight2_np = np.random.randn(64, 64).astype(dtype)
+
+    with builder.function("main"):
+        model = nn.Sequential(
+            nn.Linear(data_shape[1], weight1_np.shape[0], bias=False),
+            nn.ReLU(),
+            nn.Linear(weight2_np.shape[0], weight2_np.shape[1], bias=False),
+            nn.ReLU(),
+        )
+        data = nn.Placeholder(data_shape, name="data")
+        output = model(data)
+        params = [data] + model.parameters()
+        builder.emit_func_output(output, params=params)
+
+    mod = builder.get()
+    dnn_params = {"linear_weight": weight1_np, "linear_weight1": weight2_np}
+    if bind_params:
+        mod = relax.transform.BindParams("main", dnn_params)(mod)
+    dnn_data = tvm.nd.array(data_np)
+    return mod, dnn_data, dnn_params
+
+
+def compare_aot_with_vm(mod, data, params, input_name):
     # config
     dev = tvm.cpu()
     target = tvm.target.Target("llvm", host="llvm")
+    runtime = tvm.relay.backend.Runtime("cpp", {"system-lib": True})
+    executor = tvm.relay.backend.Executor("aot", {"interface-api": "packed"})
 
     # build mod with vm and aot
     vm_ex = relax.build(mod, target, exec_mode="compiled")
-    aot_ex = relax.build(mod, target, pipeline="micro2_build", exec_mode="crt", system_lib=True)  # TODO: system_lib yes/no?; Rename pipeline and exec mode
+    aot_ex = relax.build(mod, target, pipeline="micro2_build", exec_mode="crt", runtime=runtime, executor=executor)  # TODO: system_lib yes/no?; Rename pipeline and exec mode
 
     # get aot result
     rt_mod = tvm.runtime.executor.AotModule(aot_ex["default"](dev))  # TODO: move relax build
-    rt_mod.set_input("x", data)
+    rt_mod.set_input(input_name, data)
     rt_mod.run()
     aot_out = rt_mod.get_output(0)
 
     # get vm result
-    vm = relax.VirtualMachine(vm_ex, dev)
+    PROFILE = False
+    vm = relax.VirtualMachine(vm_ex, dev, profile=PROFILE)
     vm_out = vm["main"](data)
+    if PROFILE:
+        report = vm.profile("main", tvm.nd.array(data))
+        print("report", report)
 
     # compare aot with vm result
     tvm.testing.assert_allclose(vm_out.numpy(), aot_out.numpy(), rtol=1e-7, atol=1e-7)
@@ -124,17 +159,46 @@ def test_relax_llvm_aot_dense(dtype):
     mod, data, params = get_relax_dense(dtype)
 
     # build, run and compare
-    compare_aot_with_vm(mod, data, params)
+    compare_aot_with_vm(mod, data, params, "x")
 
 
 
 @pytest.mark.parametrize("dtype", ["float32", "int32"])
 def test_relax_llvm_aot_conv2d(dtype):
     # get relax mod
-    mod, data, params = get_relax_conv2d(dtype)
+    mod, data, params = get_relax_conv2d_relu_max_pool2d(dtype)
 
     # build, run and compare
-    compare_aot_with_vm(mod, data, params)
+    compare_aot_with_vm(mod, data, params, "x")
+
+
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_relax_llvm_aot_dnn(dtype):
+    # get relax mod
+    mod, data, params = get_relax_dnn(dtype)
+
+    # build, run and compare
+    compare_aot_with_vm(mod, data, params, "data")
+
+
+# @pytest.mark.parametrize("dtype", ["float32", "int32"])
+# def test_relax_c_aot_dense(dtype):
+#     # config
+#     dev = tvm.cpu()
+#     target = tvm.target.Target("c")
+#
+#     # get relax mod
+#     mod, data, params = get_relax_dense(dtype)
+#
+#
+#     # build mod with vm and aot
+#     aot_ex = relax.build(mod, target, pipeline="micro2_build", exec_mode="crt", system_lib=True)  # TODO: system_lib yes/no?; Rename pipeline and exec mode
+#
+#     # get aot result
+#     rt_mod = tvm.runtime.executor.AotModule(aot_ex["default"](dev))  # TODO: move relax build
+#     rt_mod.set_input("x", data)
+#     rt_mod.run()
+#     aot_out = rt_mod.get_output(0)
 
 
 
