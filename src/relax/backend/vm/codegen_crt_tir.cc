@@ -202,7 +202,7 @@ class CRTOnDemandAllocator2 : public ExprVisitor {
               // shape.push_back(int_value->value);
               sz *= int_value->value;
             } else {
-              // LOG(FATAL) << "Should only use constant shape after shape lowering: " << shape_expr->values;
+              LOG(FATAL) << "Should only use constant shape after shape lowering: " << shape_expr->values;
             }
           }
           sz *= ((elem_type.bits() * elem_type.lanes()) + 8 - 1) / 8;
@@ -231,7 +231,7 @@ class CRTOnDemandAllocator2 : public ExprVisitor {
                   // shape.push_back(int_value->value);
                   sz *= int_value->value;
                 } else {
-                  // LOG(FATAL) << "Should only use constant shape after shape lowering: " << shape_expr->values;
+                  LOG(FATAL) << "Should only use constant shape after shape lowering: " << shape_expr->values;
                 }
               }
               sz *= ((elem_type.bits() * elem_type.lanes()) + 8 - 1) / 8;
@@ -913,7 +913,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
       } else {
         // every "normal" operator is lowered to a global var in the IRModule. The Attrs for those
         // ops are handled in a pass when lowering them to TIR.
-        LOG(FATAL) << "CodeGenVMTIR cannot handle this intrinsic now:\n" << call_node->op;
+        LOG(FATAL) << "CodeGenCRTTIR cannot handle this intrinsic now:\n" << call_node->op;
       }
     } else {
       ICHECK(HasVoidStructInfo(call)) << "TODO: call return";
