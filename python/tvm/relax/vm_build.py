@@ -155,6 +155,7 @@ def _vmcodegen(
     mod: tvm.IRModule,
     config: "tvm.CompilationConfig",
     exec_mode: str = "bytecode",
+    unpacked_api: bool = False,
 ) -> tvm.IRModule:
     """Running VM codegen.
 
@@ -180,7 +181,7 @@ def _vmcodegen(
     if exec_mode == "compiled":
         return _ffi_api.VMTIRCodeGen(builder, mod)  # type: ignore
     if exec_mode == "crt":
-        return _ffi_api.CRTTIRCodeGen(builder, mod, config)  # type: ignore
+        return _ffi_api.CRTTIRCodeGen(builder, mod, config, unpacked_api)  # type: ignore
     raise ValueError(f"Unknown exec_mode {exec_mode}")
 
 
@@ -356,9 +357,14 @@ def build(
     ext_libs, constants = _extract_attrs(mod)
     params.update(dict(constants))
     builder = relax.ExecBuilder()
-    mod2 = _vmcodegen(builder, mod, config, exec_mode)
+    unpacked_api = False
+    if executor:
+        unpacked_api = executor["unpacked-api"]
+    mod2 = _vmcodegen(builder, mod, config, exec_mode, unpacked_api=unpacked_api)
     metadata = None
     if exec_mode == "crt":
+        mod2 = mod2.with_attrs({"runtime": runtime, "executor": executor})
+        # TODO: attrs for workspace_memory_pools_, constant_memory_pools_
         assert executor is not None
         # from tvm.relay.backend import Executor
         from tvm.relay.backend.aot import CreateExecutorMetadata
