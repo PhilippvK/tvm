@@ -24,6 +24,8 @@ from tvm.contrib import utils as _utils
 from tvm.ir.module import IRModule
 from tvm.tir.function import PrimFunc
 
+from tvm.relay.backend import Runtime, Executor
+
 from . import _ffi_api
 
 
@@ -182,22 +184,18 @@ def _vmcodegen(
     raise ValueError(f"Unknown exec_mode {exec_mode}")
 
 
-def _autodetect_system_lib_req(
-    target: Optional[tvm.target.Target] = None, system_lib: Optional[bool] = None
+def _check_system_lib_req(
+    runtime, target: Optional[tvm.target.Target] = None,
 ):
     """Automatically detect system lib requirement"""
+    system_lib = None
     if target is not None:
         host = target if target.host is None else target.host
-        if system_lib is None:
-            system_lib = False
-            if "wasm" in host.attrs.get("mtriple", ""):
-                system_lib = True
+        if "wasm" in host.attrs.get("mtriple", ""):
+            system_lib = True
 
-    if system_lib:
-        # use packed-func to avoid relay dep.
-        # return tvm.get_global_func("relay.backend.CreateRuntime")("cpp", {"system-lib": system_lib})
-        return tvm.get_global_func("relay.backend.CreateRuntime")("crt", {"system-lib": system_lib})
-    return None
+    if system_lib is not None:
+        assert runtime["system-lib"] == system_lib
 
 
 def _vmlink(
@@ -207,6 +205,7 @@ def _vmlink(
     ext_libs: List[tvm.runtime.Module] = None,
     params: Optional[Dict[str, list]] = None,
     *,
+    runtime: Runtime = None,  # TODO: type hint
     system_lib: Optional[bool] = None,
     metadata = None
 ):
@@ -241,6 +240,15 @@ def _vmlink(
     ex: tvm.relax.Executable
         An executable that can be loaded by virtual machine.
     """
+    if system_lib is not None:
+        logger.warning("use of system_lib arg is deprecated, pass Runtime instead")
+        if runtime is None:
+            # TODO: use non relay-specific runtime
+            runtime = tvm.relay.backend.Runtime("cpp", {"system-lib": True})
+        else:
+            assert runtime["system-lib"] == system_lib, "system-lib setting of runtime does not match system_lib arg"
+    _check_system_lib_req(runtime, target)
+
     if isinstance(target, str):
         target = tvm.target.Target(target)
     if params is None:
@@ -252,7 +260,9 @@ def _vmlink(
         lib = tvm.build(
             tir_mod,
             target=target,
-            runtime=_autodetect_system_lib_req(target, system_lib),
+            runtime=
+            # _autodetect_system_lib_req(target, system_lib),
+            runtime,
         )
     return Executable(_ffi_api.VMLink(builder, target, lib, ext_libs, params, metadata))  # type: ignore
 
@@ -263,8 +273,10 @@ def build(
     params: Optional[Dict[str, list]] = None,
     pipeline: Union[None, str, tvm.transform.Pass] = "default_build",
     exec_mode: str = "bytecode",
-    *,
     system_lib: Optional[bool] = None,
+    executor: Executor = None,  # TODO: type hint
+    runtime: Runtime = None,  # TODO: type hint
+    # *,
 ) -> Executable:
     """
     Build an IRModule to VM executable.
@@ -347,9 +359,10 @@ def build(
     mod2 = _vmcodegen(builder, mod, config, exec_mode)
     metadata = None
     if exec_mode == "crt":
-        from tvm.relay.backend import Executor
+        assert executor is not None
+        # from tvm.relay.backend import Executor
         from tvm.relay.backend.aot import CreateExecutorMetadata
-        executor = Executor("aot", {"interface-api": "packed"})
+        # executor = Executor("aot", {"interface-api": "packed"})
         metadata = CreateExecutorMetadata(mod2, "tvmgen_default", executor, 16, 1)
     linked_mod = _vmlink(
         builder=builder,
@@ -357,11 +370,13 @@ def build(
         tir_mod=_filter_tir(mod2),
         ext_libs=ext_libs,
         params=params,
+        runtime=runtime,
         system_lib=system_lib,
         metadata=metadata,
     )
     if exec_mode == "crt":
-        runtime = tvm.relay.backend.Runtime("cpp", {"system-lib": True})
+        assert runtime is not None
+        # runtime = tvm.relay.backend.Runtime("cpp", {"system-lib": True})
         from tvm.relay.backend import executor_factory as _executor_factory
         from tvm.relay.backend.aot import CreateFunctionMetadata
         func_metadata = CreateFunctionMetadata(_filter_tir(mod2), 16, 1)
