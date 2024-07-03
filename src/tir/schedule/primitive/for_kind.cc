@@ -183,14 +183,20 @@ void ParallelizeComputation(const ScheduleState& self, const StmtSRef& loop_sref
 }
 
 void Parallel(ScheduleState self, const StmtSRef& loop_sref) {
+  bool disableParallel = true;
+  if (disableParallel) return;
   ParallelizeComputation(self, loop_sref, ForKind::kParallel, NullOpt);
 }
 
 void Vectorize(ScheduleState self, const StmtSRef& loop_sref) {
+  bool disableParallel = true;
+  if (disableParallel) return;
   ParallelizeComputation(self, loop_sref, ForKind::kVectorized, NullOpt);
 }
 
 void Bind(ScheduleState self, const StmtSRef& loop_sref, const String& thread_axis) {
+  bool disableParallel = true;
+  if (disableParallel) return;
   ParallelizeComputation(self, loop_sref, ForKind::kThreadBinding, thread_axis);
 }
 

@@ -387,6 +387,8 @@ Stage& Stage::unroll(IterVar var) {  // NOLINT(*)
 }
 
 Stage& Stage::parallel(IterVar var) {  // NOLINT(*)
+  bool disableParallel = true;
+  if (disableParallel) return *this;
   With<ScheduleContext> ctx(operator->()->attach_sch, __func__);
   SetAttrIterType(operator->(), var, kParallelized);
   return *this;
