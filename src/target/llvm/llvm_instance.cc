@@ -286,6 +286,15 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const TargetJSON& target)
   // In clang, these are fed from LangOpts which describe language specific features
   // TODO(AndrewZhaoLuo): figure out how these relate to fast math flags
   target_options_.AllowFPOpFusion = llvm::FPOpFusion::Fast;
+  // triple_ cpu_
+  if (triple_ == "riscv64-unknown-elf" || triple_ == "riscv32-unknown-elf") {  // TODO
+    target_options_.EnableGlobalISel = true;
+    target_options_.GlobalISelAbort = llvm::GlobalISelAbortMode::DisableWithDiag;
+    bool BBSections = true;
+    if (BBSections) {
+      target_options_.BBSections = llvm::BasicBlockSection::Labels;
+    }
+  }
   target_options_.UnsafeFPMath = false;
   target_options_.NoInfsFPMath = false;
   target_options_.NoNaNsFPMath = true;
