@@ -287,9 +287,28 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const TargetJSON& target)
   // TODO(AndrewZhaoLuo): figure out how these relate to fast math flags
   target_options_.AllowFPOpFusion = llvm::FPOpFusion::Fast;
   // triple_ cpu_
+  auto GetBoolFlag = [&target](llvm::StringRef flag) -> bool {
+    return Downcast<Bool>(target.Get(flag.str()).value_or(Bool(false)));
+  };
   if (triple_ == "riscv64-unknown-elf" || triple_ == "riscv32-unknown-elf") {  // TODO
-    target_options_.EnableGlobalISel = true;
-    target_options_.GlobalISelAbort = llvm::GlobalISelAbortMode::DisableWithDiag;
+    if (GetBoolFlag("global-isel")) {
+      auto maybe_abort = Downcast<Integer>(target.Get("global-isel-abort"));
+      if (maybe_abort.defined()) {
+        int abort = maybe_abort->value;
+        auto abort_val = llvm::GlobalISelAbortMode::Enable;
+        if (abort == 0) {  // TODO: check
+          abort_val = llvm::GlobalISelAbortMode::Disable;
+        } else if (abort == 1) {
+          abort_val = llvm::GlobalISelAbortMode::Enable;
+        } else if (abort == 2) {
+          abort_val = llvm::GlobalISelAbortMode::DisableWithDiag;
+        }
+        target_options_.GlobalISelAbort = abort_val;
+      }
+    }
+    if (GetBoolFlag("basic-block-sections")) {
+      target_options_.EnableGlobalISel = true;
+    }
     bool BBSections = true;
     if (BBSections) {
       target_options_.BBSections = llvm::BasicBlockSection::Labels;
@@ -342,9 +361,6 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const TargetJSON& target)
 
   // Fast math options
 
-  auto GetBoolFlag = [&target](llvm::StringRef flag) -> bool {
-    return Downcast<Bool>(target.Get(flag.str()).value_or(Bool(false)));
-  };
   if (GetBoolFlag("fast-math")) {
 #if TVM_LLVM_VERSION >= 60
     fast_math_flags_.setFast();
