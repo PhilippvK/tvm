@@ -358,7 +358,7 @@ def build(
     builder = relax.ExecBuilder()
     unpacked_api = False
     if executor:
-        unpacked_api = executor["unpacked-api"]
+        unpacked_api = int(executor["unpacked-api"])
     mod2 = _vmcodegen(builder, mod, config, exec_mode, unpacked_api=unpacked_api)
     metadata = None
     if exec_mode == "crt":
@@ -385,6 +385,7 @@ def build(
         from tvm.relay.backend import executor_factory as _executor_factory
         from tvm.relay.backend.aot import CreateFunctionMetadata
         func_metadata = CreateFunctionMetadata(_filter_tir(mod2), 16, 1)
+        func_metadata["__tvm_main__"].relax_primfuncs = {target: mod["main"]}
         # func_metadata = None
         # func_metadata = CreateFunctionMetadata(linked_mod.mod.imported_modules[0], 16, 1)
         executor_factory = _executor_factory.AOTExecutorFactoryModule(
