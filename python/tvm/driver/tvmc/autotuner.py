@@ -1069,10 +1069,14 @@ def schedule_tasks_ms(
     trials: int,
     space: ms.SpaceGenerator.SpaceGeneratorType = "post-order-apply",
     strategy: ms.SearchStrategy.SearchStrategyType = "evolutionary",
-    database="json",  # TODO
+    database = "json",  # TODO
     builder = "local",  # TODO
     runner = "local",  # TODO
-
+    cost_model = "xgb",
+    scheduler = "gradient",
+    rules = "from-target",
+    postprocs = "from-target",
+    probs = "from-target",
 ):
     """TODO
 
@@ -1090,6 +1094,10 @@ def schedule_tasks_ms(
         TODO
     database : TODO
         TODO
+    cost_model : TODO
+    rules : TODO
+    postprocs : TODO
+    probs : TODO
     TODO
     """
 
@@ -1097,7 +1105,12 @@ def schedule_tasks_ms(
     # strategy = "evolutionary"  # TODO
     callbacks = "default"  # TODO
     scheduler = "gradient"  # TODO
-    cost_model = "xgb"  # TODO
+
+    # rules = "from-target"
+    # postprocs = "from-target"
+    # probs = "from_target"
+
+    space = ms.space_generator.SpaceGenerator.create(space, sch_rules=rules, postprocs=postprocs, mutator_probs=probs)
 
     tasks, task_weights = ms.relay_integration.extracted_tasks_to_tune_contexts(
         tasks,
