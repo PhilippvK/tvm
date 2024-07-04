@@ -325,6 +325,10 @@ def _build_function_memory_map(function_metadata):
         target_main_on_device = target_main_entries[int(target.get_target_device_type())]
         target_main_on_device["io_size_bytes"] = int(main_func_metadata.io_sizes[target])
 
+        if target not in main_func_metadata.relay_primfuncs:  # TODO: handle relax
+            main_relax_func = main_func_metadata.relax_primfuncs[target]
+            print("main_relax_func", main_relax_func)
+            continue
         main_relay_func = main_func_metadata.relay_primfuncs[target]
         target_main_on_device["inputs"] = {
             input_param.name_hint: _create_type_metadata(input_param.checked_type)
@@ -430,6 +434,9 @@ def _export_graph_model_library_format(
     }
     metadata["modules"] = {}
     for mod in mods:
+        print("mod.target", mod.target)
+        if not isinstance(mod.target, list):
+            mod.target = [mod.target]
         is_aot = isinstance(mod, executor_factory.AOTExecutorFactoryModule)
         executor = ["aot"] if is_aot else ["graph"]
         module_name = mod.libmod_name
