@@ -77,9 +77,12 @@ void CodeGenCHost::DefineModuleName() { decl_stream << "void* " << module_name_ 
 
 void CodeGenCHost::AddFunction(const PrimFunc& f, bool emit_fwd_func_decl) {
   auto global_symbol = f->GetAttr<String>(tvm::attr::kGlobalSymbol);
+  std::cout << "AddFunction" << std::endl;
+  std::cout << "function_names_A=" << function_names_ << std::endl;
   ICHECK(global_symbol.defined())
       << "CodeGenCHost: Expect PrimFunc to have the global_symbol attribute";
   function_names_.push_back(global_symbol.value());
+  std::cout << "function_names_B=" << function_names_ << std::endl;
 
   emit_fwd_func_decl_ = emit_fwd_func_decl;
   CodeGenC::AddFunction(f);
@@ -95,6 +98,7 @@ void CodeGenCHost::AddFunction(const PrimFunc& f, bool emit_fwd_func_decl) {
            << "(args, arg_type_ids, num_args, out_ret_value, out_ret_tcode, resource_handle);\n";
     stream << "}\n";
   }
+  std::cout << "function_names_C=" << function_names_ << std::endl;
 }
 
 void CodeGenCHost::GenerateForwardFunctionDeclarations(String global_symbol,
@@ -494,6 +498,7 @@ runtime::Module BuildCHost(IRModule mod, Target target) {
   }
 
   std::string code = cg.Finish();
+  std::cout << "cg.GetFunctionNames()=" << cg.GetFunctionNames() << std::endl;
   return CSourceModuleCreate(code, "c", cg.GetFunctionNames());
 }
 

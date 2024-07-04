@@ -375,10 +375,12 @@ class Module(object):
             The function that takes same argument as func and returns a BenchmarkResult.
             The ProfileResult reports `repeat` time costs in seconds.
         """
+        print("timeeval: func_name=", func_name)
         try:
             feval = _ffi_api.RPCTimeEvaluator(
                 self,
                 func_name,
+                # "default_function",
                 dev.device_type,
                 dev.device_id,
                 number,

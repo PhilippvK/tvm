@@ -93,7 +93,11 @@ class CSourceModuleNode : public runtime::ModuleNode {
  public:
   CSourceModuleNode(const std::string& code, const std::string& fmt,
                     const Array<String>& func_names, const Array<String>& const_vars)
-      : code_(code), fmt_(fmt), const_vars_(const_vars), func_names_(func_names) {}
+      : code_(code), fmt_(fmt), const_vars_(const_vars), func_names_(func_names) {
+    std::cout << "CSourceModuleNode" << std::endl;
+    std::cout << "func_names_=" << func_names_ << std::endl;
+
+  }
   const char* type_key() const final { return "c"; }
 
   PackedFunc GetFunction(const String& name, const ObjectPtr<Object>& sptr_to_self) final {
@@ -255,6 +259,8 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
   ConcreteCodegenSourceBase codegen_c_base_;
 
   void CreateFuncRegistry() {
+    std::cout << "CreateFuncRegistry" << std::endl;
+    std::cout << "func_names_=" << func_names_ << std::endl;
     code_ << "#include <tvm/runtime/crt/module.h>\n";
     for (const auto& fname : func_names_) {
       code_ << "#ifdef __cplusplus\n";
@@ -969,6 +975,7 @@ runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& mod
                                                runtime::metadata::Metadata aot_metadata) {
   Array<runtime::Module> final_modules(modules);
   Array<String> func_names;
+  std::cout << "func_names0=" << func_names << std::endl;
 
   if (metadata.defined()) {
     if (metadata->executor == "aot") {
@@ -982,6 +989,7 @@ runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& mod
       func_names.push_back(run_func);
     }
   }
+  std::cout << "func_names1=" << func_names << std::endl;
 
   for (runtime::Module mod : final_modules) {
     auto pf_funcs = mod.GetFunction("get_func_names");
@@ -992,6 +1000,7 @@ runtime::Module CreateCSourceCrtMetadataModule(const Array<runtime::Module>& mod
       }
     }
   }
+  std::cout << "func_names2=" << func_names << std::endl;
 
   auto n = make_object<CSourceCrtMetadataModuleNode>(func_names, "c", target, runtime, metadata);
   auto csrc_metadata_module = runtime::Module(n);

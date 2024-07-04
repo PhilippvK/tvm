@@ -316,6 +316,7 @@ void LLVMModuleNode::Init(const IRModule& mod, const Target& target) {
   bool target_c_runtime = runtime->name == "crt";
 
   for (auto kv : mod->functions) {
+    std::cout << "mod->functions=" << mod->functions << std::endl;
     if (!kv.second->IsInstance<PrimFuncNode>()) {
       // (@jroesch): we relax constraints here, Relay functions will just be ignored.
       DLOG(INFO) << "Can only lower IR Module with PrimFuncs, but got " << kv.second->GetTypeKey();
@@ -326,6 +327,8 @@ void LLVMModuleNode::Init(const IRModule& mod, const Target& target) {
     bool is_entry_func = f->HasNonzeroAttr(tir::attr::kIsEntryFunc);
 
     ICHECK(global_symbol || !is_entry_func) << "The entry func must be exposed externally.";
+    std::cout << "global_symbol=" << global_symbol << std::endl;
+    std::cout << "is_entry_func=" << is_entry_func << std::endl;
 
     if (global_symbol) {
       function_names_.push_back(global_symbol.value());
@@ -333,6 +336,7 @@ void LLVMModuleNode::Init(const IRModule& mod, const Target& target) {
         entry_func = global_symbol.value();
       }
     }
+    std::cout << "entry_func=" << entry_func << std::endl;
   }
   // TODO(@jroesch): follow up on this condition.
   // ICHECK(funcs.size() > 0);
@@ -676,7 +680,7 @@ runtime::Module CreateLLVMCrtMetadataModule(const Array<runtime::Module>& module
   auto cg = std::make_unique<CodeGenCPU>();
   cg->Init("TVMMetadataMod", llvm_target.operator->(), system_lib_prefix,
            system_lib_prefix.defined(), target_c_runtime);
-
+  std::cout << "func_names=" << func_names << std::endl;
   cg->DefineFunctionRegistry(func_names);
   auto mod = cg->Finish();
   llvm_target->SetTargetMetadata(mod.get());
