@@ -261,8 +261,14 @@ def add_tune_parser(subparsers, _, json_params):
     )
     meta_scheduler_group.add_argument(
         "--metascheduler-strategy",
-        choices=["evolutionaly_search", "replay_trace", "replay_func"],
-        default="evolutionaly_search",
+        choices=["evolutionary", "replay_trace", "replay_func"],
+        default="evolutionary",
+        help="",
+    )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-scheduler",
+        choices=["gradient", "round-robin"],
+        default="gradient",
         help="",
     )
     autotvm_group = parser.add_argument_group(
@@ -353,12 +359,20 @@ def drive_tune(args):
         repeat=args.repeat,
         number=args.number,
         parallel=args.parallel,
+        # TODO: add autoscheduler prefix?
         hardware_params=hardware_params,
         include_simple_tasks=args.include_simple_tasks,
         log_estimated_latency=args.log_estimated_latency,
         autoscheduler_strategy=args.autoscheduler_strategy,
         autoscheduler_policy=args.autoscheduler_policy,
         autoscheduler_model=args.autoscheduler_model,
+        metascheduler_space=args.metascheduler_space,
+        metascheduler_rules=args.metascheduler_rules,
+        metascheduler_postprocs=args.metascheduler_postprocs,
+        metascheduler_mutator_probs=args.metascheduler_mutator_probs,
+        metascheduler_model=args.metascheduler_model,
+        metascheduler_strategy=args.metascheduler_strategy,
+        metascheduler_scheduler=args.metascheduler_scheduler,
         additional_target_options=reconstruct_target_args(args),
         **transform_args,
     )
@@ -388,7 +402,14 @@ def tune_model(
     log_estimated_latency: bool = False,
     autoscheduler_strategy: Optional[str] = None,
     autoscheduler_policy: Optional[str] = None,
-    autoscheduler_model_type: Optional[str] = "xgb",
+    autoscheduler_model: Optional[str] = "xgb",
+    metascheduler_space: str = "post-order-apply",
+    metascheduler_rules: str = "from-target",
+    metascheduler_postprocs: str = "from-target",
+    metascheduler_mutator_probs: str = "from-target",
+    metascheduler_model: str = "xgb",
+    metascheduler_strategy: str = "evolutionaly_search",
+    metascheduler_scheduler: str = "gradient",
     additional_target_options: Optional[Dict[str, Dict[str, Any]]] = None,
     desired_layout: Optional[str] = None,
     desired_layout_ops: Optional[List[str]] = None,
@@ -455,7 +476,21 @@ def tune_model(
         TODO
     autoscheduler_policy: str, optional
         TODO
-    autoscheduler_model_type: str, optional
+    autoscheduler_model: str, optional
+        TODO
+    metascheduler_space: str
+        TODO
+    metascheduler_rules: str
+        TODO
+    metascheduler_postprocs: str
+        TODO
+    metascheduler_mutator_probs: str
+        TODO
+    metascheduler_model: str
+        TODO
+    metascheduler_strategy: str
+        TODO
+    metascheduler_scheduler: str
         TODO
     additional_target_options: Optional[Dict[str, Dict[str, Any]]]
         Additional target options in a dictionary to combine with initial Target arguments
