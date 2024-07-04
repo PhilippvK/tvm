@@ -501,6 +501,17 @@ def build(
         logger.debug("building with vm compile")
         return relay.vm.compile(mod, target=tvm_target, params=params)
     logger.debug("building with relay build")
+    optimized = relay.optimize(
+        mod,
+        target=tvm_target,
+        # params=params,
+        # executor=executor,
+        # runtime=runtime,
+        # mod_name=mod_name,
+        # workspace_memory_pools=workspace_pools,
+    )
+    print("optimized", optimized)
+    input("11")
     return relay.build(
         mod,
         target=tvm_target,
