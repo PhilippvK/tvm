@@ -21,6 +21,11 @@ import subprocess
 from anytree import Node
 from anytree import RenderTree
 
+import sys
+import logging
+logging.getLogger("te_compiler").setLevel(logging.INFO)
+logging.getLogger("te_compiler").addHandler(logging.StreamHandler(sys.stdout))
+
 class Context:
     def __init__(self) -> None:
         self.nodes = [Node("Tree", start=-1, stop=-1, handle=None, global_vars=[])]
