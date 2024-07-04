@@ -75,12 +75,12 @@ class Postproc(Object):
         return _ffi_api.PostprocClone(self)  # type: ignore # pylint: disable=no-member
 
     @staticmethod
-    def create(kind: Literal["llvm", "cuda", "cuda-tensorcore", "hexagon"]) -> List["Postproc"]:
+    def create(kind: Literal["llvm", "micro", "cuda", "cuda-tensorcore", "hexagon"]) -> List["Postproc"]:
         """Create a list of default postprocessors.
 
         Parameters
         ----------
-        kind : Literal["llvm", "cuda", "cuda-tensorcore", "hexagon"]
+        kind : Literal["llvm", "micro", "cuda", "cuda-tensorcore", "hexagon"]
             The kind of the postprocessors.
 
         Returns
@@ -91,6 +91,7 @@ class Postproc(Object):
         funcs = {
             # pylint: disable=no-member
             "llvm": _ffi_api.PostprocDefaultLLVM,  # type: ignore
+            "micro": _ffi_api.PostprocDefaultMicro,  # type: ignore
             "cuda": _ffi_api.PostprocDefaultCUDA,  # type: ignore
             "cuda-tensorcore": _ffi_api.PostprocDefaultCUDATensorCore,  # type: ignore
             "hexagon": _ffi_api.PostprocDefaultHexagon,  # type: ignore
