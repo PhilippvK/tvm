@@ -269,7 +269,8 @@ TVM_REGISTER_TARGET_KIND("llvm", kDLCPU)
     // new
     .add_attr_option<Bool>("global-isel")
     .add_attr_option<Integer>("global-isel-abort")
-    .add_attr_option<String>("basic-block-sections")
+    // .add_attr_option<String>("basic-block-sections")
+    .add_attr_option<Bool>("basic-block-sections")
     // LLVM command line flags, see below
     .add_attr_option<Array<String>>("cl-opt")
     // LLVM JIT engine mcjit/orcjit
