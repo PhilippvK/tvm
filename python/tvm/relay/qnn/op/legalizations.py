@@ -491,12 +491,34 @@ def _qnn_conv2d_legalize_arm_cpu(attrs, inputs, types):
 
 @qnn_dense_legalize.register("arm_cpu")
 def _qnn_dense_legalize_arm_cpu(attrs, inputs, types):
+    print("_qnn_dense_legalize_arm_cpu")
+    import traceback
+    traceback.print_stack()
+    input("a")
     target = tvm.target.Target.current(allow_none=False)
-    if target.features.has_asimd and not target.features.has_dotprod:
-        return helper_no_fast_int8_hw_legalization(attrs, inputs, types, relay.nn.dense)
-    # ARM prefers the dtypes to be same.
-    return helper_change_dtypes_to_be_same(attrs, inputs, types, relay.qnn.op.dense)
+    return helper_no_fast_int8_hw_legalization(attrs, inputs, types, relay.nn.dense)
 
+@qnn_dense_legalize.register("cmsis-nn")
+def _qnn_dense_legalize_cmsisnn(attrs, inputs, types):
+    print("_qnn_dense_legalize_cmsisnn")
+    input("b")
+    target = tvm.target.Target.current(allow_none=False)
+    return helper_no_fast_int8_hw_legalization(attrs, inputs, types, relay.nn.dense)
+    # if target.features.has_asimd and not target.features.has_dotprod:
+    #     return helper_no_fast_int8_hw_legalization(attrs, inputs, types, relay.nn.dense)
+    # # ARM prefers the dtypes to be same.
+    # return helper_change_dtypes_to_be_same(attrs, inputs, types, relay.qnn.op.dense)
+
+@qnn_dense_legalize.register("cmsisnn")
+def _qnn_dense_legalize_cmsisnn2(attrs, inputs, types):
+    print("_qnn_dense_legalize_cmsisnn2")
+    input("c")
+    target = tvm.target.Target.current(allow_none=False)
+    return helper_no_fast_int8_hw_legalization(attrs, inputs, types, relay.nn.dense)
+    # if target.features.has_asimd and not target.features.has_dotprod:
+    #     return helper_no_fast_int8_hw_legalization(attrs, inputs, types, relay.nn.dense)
+    # # ARM prefers the dtypes to be same.
+    # return helper_change_dtypes_to_be_same(attrs, inputs, types, relay.qnn.op.dense)
 
 ##########################
 # Intel CPU legalizations.
