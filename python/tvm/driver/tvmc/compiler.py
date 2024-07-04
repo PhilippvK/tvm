@@ -585,9 +585,10 @@ def compile_model(
             gvars = gvars.replace("tvmgen_default_", "")
             if len(gvars) > LIMIT:
                 gvars = gvars[:LIMIT-3] + "..."
-            if len(node.global_vars) > 0:
-                gvars = gvars + f" (#={len(node.global_vars)})"
-            print("%s%s [%d..%d] %s" % (pre, node.name, node.start, node.stop, gvars))
+            # if len(node.global_vars) > 0:
+            #    gvars = gvars + f" (#={len(node.global_vars)})"
+            # print("%s%s [%d..%d] %s" % (pre, node.name, node.start, node.stop, gvars))
+            print("%s%s %s" % (pre, node.name, gvars))
         print("============================")
 
 
