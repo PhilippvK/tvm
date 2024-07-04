@@ -571,7 +571,8 @@ llvm::Type* CodeGenLLVM::DTypeToLLVMType(const DataType& dtype) const {
   }
   if (dtype.lanes() != 1) {
 #if TVM_LLVM_VERSION >= 110
-    return llvm::FixedVectorType::get(etype, dtype.lanes());
+    return llvm::ScalableVectorType::get(etype, dtype.lanes());
+    // return llvm::FixedVectorType::get(etype, dtype.lanes());
 #else
     return llvm::VectorType::get(etype, dtype.lanes());
 #endif
@@ -733,7 +734,8 @@ std::unique_ptr<CodeGenLLVM::DebugInfo> CodeGenLLVM::CreateDebugInfo(llvm::Modul
 
 llvm::Value* CodeGenLLVM::CreateBroadcast(llvm::Value* value, int lanes) {
 #if TVM_LLVM_VERSION >= 110
-  llvm::Type* type = llvm::FixedVectorType::get(value->getType(), lanes);
+  llvm::Type* type = llvm::ScalableVectorType::get(value->getType(), lanes);
+  // llvm::Type* type = llvm::FixedVectorType::get(value->getType(), lanes);
 #else
   llvm::Type* type = llvm::VectorType::get(value->getType(), lanes);
 #endif
@@ -741,10 +743,12 @@ llvm::Value* CodeGenLLVM::CreateBroadcast(llvm::Value* value, int lanes) {
   llvm::Constant* zero = ConstInt32(0);
   value = builder_->CreateInsertElement(undef, value, zero);
 #if TVM_LLVM_VERSION >= 120
-  llvm::Constant* mask = llvm::ConstantVector::getSplat(llvm::ElementCount::getFixed(lanes), zero);
+  llvm::Constant* mask = llvm::ConstantVector::getSplat(llvm::ElementCount::getScalable(lanes), zero);
+  // llvm::Constant* mask = llvm::ConstantVector::getSplat(llvm::ElementCount::getFixed(lanes), zero);
 #elif TVM_LLVM_VERSION >= 110
   llvm::Constant* mask =
-      llvm::ConstantVector::getSplat(llvm::ElementCount(lanes, /*Scalable=*/false), zero);
+      llvm::ConstantVector::getSplat(llvm::ElementCount(lanes, /*Scalable=*/true), zero);
+      // llvm::ConstantVector::getSplat(llvm::ElementCount(lanes, /*Scalable=*/false), zero);
 #else
   llvm::Constant* mask = llvm::ConstantVector::getSplat(lanes, zero);
 #endif

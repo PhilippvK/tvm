@@ -34,6 +34,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <iostream>
 
 namespace tvm {
 namespace tir {
@@ -635,6 +636,7 @@ class LoopVectorizer : public StmtMutator {
  public:
   Stmt VisitStmt_(const ForNode* op) final {
     if (op->kind == ForKind::kVectorized) {
+      std::cout << "FOR" << std::endl;
       ICHECK(is_zero(op->min));
       auto* extent_as_int = op->extent.as<IntImmNode>();
       if (!extent_as_int || extent_as_int->value < 1) {
