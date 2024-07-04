@@ -17,6 +17,7 @@
 # pylint: disable=invalid-name, unused-argument
 """Arm(R) CMSIS-NN supported operators for Cortex-M."""
 import tvm.ir
+import tvm.relay as relay
 from tvm.target import Target
 from tvm.relay import transform
 from tvm.relay.build_module import bind_params_by_name
@@ -55,8 +56,11 @@ def partition_for_cmsisnn(mod, params=None, mod_name="default", **opts):
     seq = tvm.transform.Sequential(
         [
             transform.InferType(),
+            relay.qnn.transform.CanonicalizeOps(),
             transform.MergeComposite(pattern_table()),
+            relay.qnn.transform.CanonicalizeOps(),
             transform.AnnotateTarget("cmsis-nn"),
+            relay.qnn.transform.CanonicalizeOps(),
             transform.PartitionGraph(mod_name=mod_name),
             GenerateCMSISNNConstants(),
             CMSISNNFusePads(),
