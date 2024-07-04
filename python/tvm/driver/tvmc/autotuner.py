@@ -973,7 +973,7 @@ def metascheduler_get_tuning_tasks(
     params: Optional[Dict[str, tvm.nd.NDArray]],
     target: Union[Target, str],
     target_host: Optional[str] = None,
-    alter_layout: Optional[str] = None,
+    transform_args: Optional[Dict[str, Any]] = None,
 ):
     """Get the autoscheduler tuning tasks for a given relay module.
 
@@ -987,10 +987,8 @@ def metascheduler_get_tuning_tasks(
         The compilation target.
     target_host : str, optional
         The compilation target for the host.
-    alter_layout : str, optional
-        The layout to convert the graph to. Note, the convert layout
-        pass doesn't currently guarantee the whole of the graph will
-        be converted to the chosen layout.
+    transform_args: dict, optional
+        Graph transformation arguments that are applied to the relay module.
 
     Returns
     -------
@@ -999,8 +997,7 @@ def metascheduler_get_tuning_tasks(
     """
     target, target_host = Target.canon_target_and_host(target, target_host)
 
-    if alter_layout:
-        mod = convert_graph_layout(mod, alter_layout)
+    mod = apply_graph_transforms(mod, transform_args)
 
     # Extract the tasks
     tasks = ms.relay_integration.extract_tasks(
