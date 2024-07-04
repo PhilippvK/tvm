@@ -263,9 +263,13 @@ PackedFunc GraphExecutorDebug::GetFunction(const String& name,
           // We cannot send Arrays over rpc, so in order to support profiling
           // on remotes, we accept a nullptr for collectors.
           if (collectors.defined()) {
-            return this->Profile(collectors);
+            auto report = this->Profile(collectors);
+            std::cout << "REPORT2=" << report->AsJSON() << std::endl;;
+            return report;
           } else {
-            return this->Profile({});
+            auto report = this->Profile({});
+            std::cout << "REPORT=" << report->AsJSON() << std::endl;;
+            return report;
           }
         });
   } else if (name == "profile_rpc") {
@@ -275,6 +279,7 @@ PackedFunc GraphExecutorDebug::GetFunction(const String& name,
     return TypedPackedFunc<std::string()>([sptr_to_self, this]() {
       PackedFunc profile = GetFunction("profile", sptr_to_self);
       profiling::Report report = profile(Array<profiling::MetricCollector>());
+      std::cout << "REPORT3=" << report->AsJSON() << std::endl;;
       return report->AsJSON();
     });
   } else {
