@@ -246,7 +246,11 @@ def drive_run(args):
                 "i.e. when '--device micro'."
             )
 
+        # if args.profile:
+        #     raise TVMCException("--profile is not currently supported for micro devices.")
 
+        # if args.print_time:
+        #     raise TVMCException("--print-time is not currently supported for micro devices.")
 
         # Get and check options for micro targets.
         options = get_and_check_options(args.project_option, args.valid_options)
@@ -648,10 +652,11 @@ def run_module(
             if profile:
                 if device == "micro":
                     logger.debug("Creating runtime (micro) with profiling enabled.")
-                    assert tvmc_package.executor_type == "graph", "MicroTVM profiling is only available on host-driven graph executor"
+                    assert tvmc_package.executor_type == "graph", "TODO"
                     module = tvm.micro.create_local_debug_executor(
                         tvmc_package.graph, lib, dev
                     )
+                    # module = debug_executor.create(tvmc_package.graph, lib, dev)
                 else:
                     logger.debug("Creating runtime with profiling enabled.")
                     module = debug_executor.create(tvmc_package.graph, lib, dev, dump_root="./prof")
@@ -663,10 +668,9 @@ def run_module(
                     else:
                         if benchmark:
                             try:
-                                # MicroTVM on-device graph executor if available
                                 module = executor.create(tvmc_package.graph, lib, dev)
                             except AttributeError:
-                                logger.debug("Falling back to host-driven MicroTVM session.")
+                                logger.debug("Falling back to local micro session.")
                                 fallback = True
                         else:
                             fallback = True
@@ -689,7 +693,6 @@ def run_module(
                 # RPC does not support datatypes such as Array and Map,
                 # fallback to obtaining input information from graph json.
                 if tvmc_package.executor_type == "aot":
-                    # TODO: via cmdline args?
                     input_name = "input_1"
                     input_shape = (1, 640)
                     input_dtype = "int8"
@@ -709,20 +712,37 @@ def run_module(
             module.set_input(**inputs_dict)
 
             # Run must be called explicitly if profiling
-            if profile:
-                logger.info("Running the module with profiling enabled.")
-                report = module.profile()
-                # This print is intentional
-                print(report)
+            # if profile:
+            #     logger.info("Running the module with profiling enabled.")
+            #     report = module.profile()
+            #     # This print is intentional
+            #     print(report)
 
             if not benchmark:
                 module.run()
                 times = []
             else:
-                if end_to_end:
-                    assert device != "micro", "End-to-end benchmark not supported by MicroTVM device"
-                    dev = session.cpu()
-                times = module.benchmark(dev, number=number, repeat=repeat, end_to_end=end_to_end)
+                # TODO(gromero): Fix time_evaluator() for micro targets. Once it's
+                # fixed module.benchmark() can be used instead and this if/else can
+                # be removed.
+                if device == "micro":
+                    # result = graph_executor_.module.time_evaluator("run", session.device, number=number, repeat=repeat)()
+                    # aot_executor = tvm.runtime.executor.aot_executor.AotModule(session.create_aot_executor())
+                    # data_sample = np.random.rand(*input_shape).astype(input_dtype)
+                    # aot_executor.get_input(0).copyfrom(data_sample)
+                    # result = aot_executor.module.time_evaluator("run", session.device, number=number, repeat=repeat)()
+                    # times = module.module.time_evaluator("run", session.device, number=number, repeat=repeat)()
+                    times = module.benchmark(dev, number=number, repeat=repeat, end_to_end=end_to_end)
+                    # print("result", result, type(result))
+                    # module.run()
+                else:
+                    # Call the benchmarking function of the executor.
+                    # Optionally measure e2e data transfers from the
+                    # CPU to device memory overheads (e.g. PCIE
+                    # overheads if the device is a discrete GPU).
+                    if end_to_end:
+                        dev = session.cpu()
+                    times = module.benchmark(dev, number=number, repeat=repeat, end_to_end=end_to_end)
 
             logger.debug("Collecting the output tensors.")
             num_outputs = module.get_num_outputs()
