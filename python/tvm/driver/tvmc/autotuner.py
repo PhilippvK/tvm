@@ -1018,6 +1018,9 @@ def schedule_tasks(
     tuning_options: auto_scheduler.TuningOptions,
     prior_records: Optional[str] = None,
     log_estimated_latency: bool = False,
+    strategy: str = "gradient",
+    policy: str = "sketch",
+    model_type: str = "xgb",
 ):
     """Generate the schedules for the different tasks (i.e., subgraphs) contained in the module.
     Store the schedules in a json file that will be used later by the compiler.
@@ -1034,6 +1037,10 @@ def schedule_tasks(
         The json file used to preload the autoscheduler
     log_estimated_latency : bool, optional
         If true, writes the estimated runtime of the model during each step of tuning to file.
+    strategy : TODO
+        TODO
+    policy : TODO
+        TODO
     """
     if not log_estimated_latency:
         callbacks = [auto_scheduler.task_scheduler.PrintTableInfo()]
@@ -1045,13 +1052,14 @@ def schedule_tasks(
 
     # Create the scheduler
     tuner = auto_scheduler.TaskScheduler(
-        tasks, task_weights, load_log_file=prior_records, callbacks=callbacks
+        tasks, task_weights, load_log_file=prior_records, callbacks=callbacks, strategy=strategy
     )
 
     # Tune the tasks
+    search_policy = search_policy if policy == "default" else f"{policy}.{model_type}"
     tuner.tune(
         tuning_options,
-        search_policy=f"{policy[0]}.{model_type}",
+        search_policy=search_policy,
     )
 
 
