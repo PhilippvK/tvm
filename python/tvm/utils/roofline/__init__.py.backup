@@ -261,7 +261,8 @@ def roofline_analysis(
         instruments=list(pass_ctx.instruments) + [save_tir],
         config=pass_ctx.config,
     ):
-        lib = relay.vm.compile(mod, params=params, target=target)
+        # lib = relay.vm.compile(mod, params=params, target=target)
+        mod = relay.build(mod, params=params, target=target)
     # upload to remote if running over rpc
     if dev.device_type >= RPC_SESS_MASK:
         if remote is None:
@@ -271,9 +272,12 @@ def roofline_analysis(
         lib.mod.export_library(path)
         remote.upload(path)
         lib = remote.load_module("roofline_lib.tar")
-    vmexec = profiler_vm.VirtualMachineProfiler(lib, dev)
+    # vmexec = profiler_vm.VirtualMachineProfiler(lib, dev)
 
-    args = _create_args(mod, dev, remote=remote)
-    report = vmexec.profile(*args)
+    # args = _create_args(mod, dev, remote=remote)
+    # report = vmexec.profile(*args)
+    ### res = exe.profile(**input_tensor, func_name="main")
+    module = debug_executor.create(tvmc_package.graph, lib, dev, dump_root="./prof")
+    report = module.profile()
 
     return roofline_from_existing(report, save_tir.functions, target, dev, remote=remote)

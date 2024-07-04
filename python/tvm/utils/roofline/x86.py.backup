@@ -20,7 +20,9 @@ import re
 from typing import Dict, Optional, Tuple
 
 import numpy as np
-
+import tvm
+from tvm import relay
+from tvm.relay.backend import Executor
 from ... import build, get_global_func, nd, transform
 from ...contrib import utils
 from ...rpc.base import RPC_SESS_MASK
@@ -85,6 +87,11 @@ def estimate_peak_fma_vector_flops(
     """Estimate peak flops assuming vector fma instructions and no explicit
     intrinsics. See estimate_peak_fma_flops.
     """
+    # target_str = "c"
+    target_str = "llvm"
+    target = tvm.target.Target(target_str)
+    # vec_width = 4
+    # num_vector_registers = 32
 
     @T.prim_func
     def peakflops_fma_tir(
@@ -109,10 +116,8 @@ def estimate_peak_fma_vector_flops(
     )
     vec_width //= DataType(dtype).bits // 8
     iters = 1000000
-    nthreads = num_threads()
-    # nthreads = 1
-    print("vec_width", vec_width)
-    print("nthreads", nthreads)
+    # nthreads = num_threads()
+    nthreads = 1
     specialized = peakflops_fma_tir.specialize(
         {
             peakflops_fma_tir.params[1]: vec_width,
@@ -121,26 +126,66 @@ def estimate_peak_fma_vector_flops(
             peakflops_fma_tir.params[4]: nthreads,
         }
     )
-    with transform.PassContext(opt_level=3):
-        f = build(specialized, target=target)
+    runtime = relay.backend.Runtime("crt", {"system-lib": True})
+    # runtime = relay.backend.Runtime("cpp")
+    # runtime = relay.backend.Runtime("crt")
+    # executor = Executor("aot", {"link-params": True, "workspace-byte-alignment": alignment[0], "constant-byte-alignment": alignment[1], "unpacked-api": unpacked, "interface-api": api})
+    # executor = Executor("aot", {"link-params": True, "workspace-byte-alignment": alignment[0], "constant-byte-alignment": alignment[1], "unpacked-api": unpacked, "interface-api": api})
+    # executor = Executor("aot", {"link-params": True})
+    with transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True}):
+        # if not (specialized.attrs and "global_symbol" in specialized.attrs):
+        #     specialized = specialized.with_attr("global_symbol", "main")
+        #     # specialized = specialized.with_attr("global_symbol", "default_function")
+        #     specialized = specialized.with_attr("tir.noalias", True)
+        f = build(specialized, target=target, runtime=runtime)  # , executor=executor)  # params=params
+        # mod = tvm.ir.IRModule({"main": specialized})
+        # f = relay.build(mod, target=target, runtime=runtime) #, executor=executor)  # params=params
 
-    # upload to remote if running over rpc
-    if dev.device_type >= RPC_SESS_MASK:
-        if remote is None:
-            raise RuntimeError("A RPCSession must be provided when using a remote device.")
-        temp = utils.tempdir()
-        path = temp.relpath("peak_fma_flops.tar")
-        f.export_library(path)
-        remote.upload(path)
-        f = remote.load_module("peak_fma_flops.tar")
-        random_fill = remote.get_function("tvm.contrib.random.random_fill")
-    else:
-        random_fill = get_global_func("tvm.contrib.random.random_fill")
-    assert random_fill, "Please make sure USE_RANDOM is ON in config.cmake"
+    options = {}
+    project = tvm.micro.generate_project(
+        str(tvm.micro.get_microtvm_template_projects("crt")),
+        f,
+        str("/tmp/project"),
+        options=options,
+    )
+    project.build()
+    project.flash()
+    with tvm.micro.Session(project.transport()) as session:
+        random_fill = session._rpc.get_function("tvm.contrib.random.random_fill")
+        # random_fill = get_global_func("tvm.contrib.random.random_fill")
+        assert random_fill, "Please make sure USE_RANDOM is ON in config.cmake"
+        a = nd.empty((nthreads, num_vector_registers, vec_width), dtype=dtype, device=session.device)
+        random_fill(a)
+        # times = f.time_evaluator(f.entry_name, dev, repeat=100, number=1)(a)
+        # times = f.time_evaluator("default_function", session.device, repeat=100, number=1)(a)
+        f = session._rpc.get_function("runtime.SystemLib")()
+        # times = f.time_evaluator(func.entry_name, session.device, repeat=100, number=1)(a)
+        times = f.time_evaluator("default_function", session.device, repeat=100, number=1)(a)
+        print("ttiimmeess", times)
+    #     aot_executor = tvm.runtime.executor.aot_executor.AotModule(session.create_aot_executor())
+    #     aot_executor.get_input(0).copyfrom(data_sample)
+    #     result = aot_executor.module.time_evaluator("run", session.device, number=number, repeat=repeat)()
+    #     print("result", result)
+    #     # output = aot_executor.get_output(0).numpy()
+    #     # print("output", output)
 
-    a = nd.empty((nthreads, num_vector_registers, vec_width), dtype=dtype, device=dev)
-    random_fill(a)
-    times = f.time_evaluator(f.entry_name, dev, repeat=100, number=1)(a)
+    # # upload to remote if running over rpc
+    # if dev.device_type >= RPC_SESS_MASK:
+    #     if remote is None:
+    #         raise RuntimeError("A RPCSession must be provided when using a remote device.")
+    #     temp = utils.tempdir()
+    #     path = temp.relpath("peak_fma_flops.tar")
+    #     f.export_library(path)
+    #     remote.upload(path)
+    #     f = remote.load_module("peak_fma_flops.tar")
+    #     random_fill = remote.get_function("tvm.contrib.random.random_fill")
+    # else:
+    #     random_fill = get_global_func("tvm.contrib.random.random_fill")
+    # assert random_fill, "Please make sure USE_RANDOM is ON in config.cmake"
+
+    # a = nd.empty((nthreads, num_vector_registers, vec_width), dtype=dtype, device=dev)
+    # random_fill(a)
+    # times = f.time_evaluator(f.entry_name, dev, repeat=100, number=1)(a)
     flops = 2 * vec_width * num_vector_registers * nthreads * iters  # fma is two flops
     return flops / times.min
 
@@ -266,14 +311,10 @@ def estimate_peak_bandwidth_dram(
     assert random_fill, "Please make sure USE_RANDOM is ON in config.cmake"
 
     threads = num_threads()
-    # threads = 1
-    print("vec_width", vec_width)
-    print("threads", threads)
     # Data size needs to be larger than last level of cache. We don't have a
     # way of getting cache sizes, so this number should give us a large enough
     # size.
     size = 10**8 // (4 * threads * vec_width)
-    print("size", size)
     a = nd.empty((threads, size, 4, vec_width), dtype="float32", device=dev)
     random_fill(a)
     b = nd.empty((threads, 4, vec_width), dtype="float32", device=dev)
