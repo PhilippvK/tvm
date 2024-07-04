@@ -103,6 +103,7 @@ class Module(object):
     __slots__ = ["handle", "_entry", "entry_name"]
 
     def __init__(self, handle):
+        # print("Module()")
         self.handle = handle
         self._entry = None
         self.entry_name = "__tvm_main__"
@@ -125,6 +126,7 @@ class Module(object):
         """
         if self._entry:
             return self._entry
+        print("Module.entry_func", self._entry, self.entry_name)
         self._entry = self.get_function(self.entry_name)
         return self._entry
 
@@ -394,6 +396,7 @@ class Module(object):
             )
 
             def evaluator(*args):
+                # print("evaluator", args)
                 """Internal wrapped evaluator."""
                 # Wrap feval so we can add more stats in future.
                 blob = feval(*args)

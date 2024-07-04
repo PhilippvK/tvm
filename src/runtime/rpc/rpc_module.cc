@@ -381,6 +381,7 @@ TVM_REGISTER_GLOBAL("runtime.RPCTimeEvaluator")
       if (opt_mod.defined()) {
         Module m = opt_mod.value();
         std::string tkey = m->type_key();
+        std::cout << "tkey=" << tkey << std::endl;
         if (tkey == "rpc") {
           return static_cast<RPCModuleNode*>(m.operator->())
               ->GetTimeEvaluator(name, dev, number, repeat, min_repeat_ms,

@@ -515,6 +515,7 @@ def _build_func_common(measure_input, runtime=None, checks=None, build_option=No
                 config=current_config,
             ):
                 func = build(s, args, target=target, runtime=runtime)
+                print("fu", func.entry_name)
     return func, tuple((get_const_tuple(x.shape), x.dtype) for x in args)
 
 
@@ -569,8 +570,10 @@ class _WrappedBuildFunc:
                     from tvm import micro  # pylint: disable=import-outside-toplevel
                 except ImportError:
                     raise ImportError("Requires USE_MICRO")
+                print("mlf111", func.entry_name)
                 micro.export_model_library_format(func, filename)
             else:
+                print("nonmlf111", func.entry_name, self.build_func)
                 func.export_library(filename, fcompile=self.build_func)
         except Exception as e:  # pylint: disable=broad-except
             tb = traceback.format_exc()

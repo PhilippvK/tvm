@@ -35,6 +35,7 @@ _DUMP_PATH_PREFIX = "_tvmdbg_"
 
 
 def create(graph_json_str, libmod, device, dump_root=None):
+    print("de.create", libmod, device)
     """Create a runtime executor module given a graph and module.
 
     Parameters
@@ -62,8 +63,12 @@ def create(graph_json_str, libmod, device, dump_root=None):
 
     try:
         dev, num_rpc_dev, device_type_id = graph_executor.get_device(libmod, device)
+        print("dev", dev)
+        print("num_rpc_dev", num_rpc_dev)
+        print("device_type_id", device_type_id)
         if num_rpc_dev == len(dev):
             fcreate = dev[0]._rpc_sess.get_function("tvm.graph_executor_debug.create")
+            # fcreate = dev[0]._rpc_sess.get_function("tvm.graph_executor.create")
         else:
             fcreate = tvm._ffi.get_global_func("tvm.graph_executor_debug.create")
     except ValueError:
@@ -111,6 +116,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
     """
 
     def __init__(self, module, device, graph_json_str, dump_root):
+        print("GMD.__init__", module, device)
         self._dump_root = dump_root
         self._dump_path = None
         self._run_individual = module["run_individual"]
@@ -287,6 +293,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         sort_by_time=True,
         **input_dict,
     ):
+        print("GMD.run")
         """Run forward execution of the graph with debug
 
         Parameters
@@ -355,6 +362,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         cooldown_interval_ms=0,
         repeats_to_cooldown=1,
     ):
+        print("GMD.run_ind")
         """Run each operation in the graph and get the time per op for all ops.
 
         number: int
@@ -422,6 +430,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         cooldown_interval_ms=0,
         repeats_to_cooldown=1,
     ):
+        print("GMD.run_ind_node")
         """Benchmark a single node in the serialized graph.
 
         This does not do any data transfers and uses arrays already on the device.
@@ -480,6 +489,7 @@ class GraphModuleDebug(graph_executor.GraphModule):
         return BenchmarkResult(list(results))
 
     def profile(self, collectors=None, **input_dict):
+        print("GMD.profile")
         """Run forward execution of the graph and collect overall and per-op
         performance metrics.
 

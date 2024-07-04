@@ -235,6 +235,7 @@ class Handler(server.ProjectAPIHandler):
         return to_return
 
     def write_transport(self, data, timeout_sec):
+        # print("write_transport", data, len(data))
         if self._proc is None:
             raise server.TransportClosedError()
 
