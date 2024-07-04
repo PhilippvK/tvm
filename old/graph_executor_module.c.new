@@ -1,0 +1,327 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+// LINT_C_FILE
+
+/*!
+ * \file graph_executor_module.c
+ * \brief wrap graph_executor into a TVMModule for use with RPC.
+ */
+
+#include <tvm/runtime/crt/func_registry.h>
+#include <tvm/runtime/crt/graph_executor.h>
+#include <tvm/runtime/crt/graph_executor_module.h>
+#include <tvm/runtime/crt/module.h>
+
+#include "tvm/runtime/crt/internal/graph_executor/graph_executor.h"
+
+typedef struct {
+  TVMModule mod;
+  TVMGraphExecutor* executor;
+} GraphExecutorModule;
+
+static GraphExecutorModule graph_executor;
+
+int32_t TVMGraphExecutorModule_Create(TVMValue* args, int* tcodes, int nargs, TVMValue* ret_values,
+                                      int* ret_tcodes, void* resource_handle) {
+  if (graph_executor.executor != NULL) {
+    return kTvmErrorExecutorModuleAlreadyCreated;
+  }
+
+  if (nargs != 4) {
+    return kTvmErrorFunctionCallNumArguments;
+  }
+
+  if (tcodes[0] != kTVMStr || tcodes[1] != kTVMModuleHandle || tcodes[2] != kTVMArgInt ||
+      tcodes[3] != kTVMArgInt) {
+    return kTvmErrorFunctionCallWrongArgType;
+  }
+
+  if (args[2].v_int64 != kDLCPU || args[3].v_int64 != 0) {
+    return kTvmErrorExecutorModuleBadContext;
+  }
+
+  DLDevice dev = {(DLDeviceType)args[2].v_int64, (int)args[3].v_int64};
+  int ret_value =
+      TVMGraphExecutor_Create(args[0].v_str, args[1].v_handle, &dev, &graph_executor.executor);
+  if (ret_value != 0) {
+    return ret_value;
+  }
+
+  TVMModuleHandle out;
+  ret_value = TVMModCreateFromCModule(&graph_executor.mod, &out);
+  if (ret_value != 0) {
+    ret_tcodes[0] = kTVMNullptr;
+    TVMGraphExecutor_Release(&graph_executor.executor);
+    return ret_value;
+  }
+
+  ret_values[0].v_handle = out;
+  ret_tcodes[0] = kTVMModuleHandle;
+  return kTvmErrorNoError;
+}
+
+int32_t TVMGraphExecutorModule_GetInput(TVMValue* args, int* tcodes, int nargs,
+                                        TVMValue* ret_values, int* ret_tcodes,
+                                        void* resource_handle) {
+  if (nargs != 1) {
+    return kTvmErrorFunctionCallNumArguments;
+  }
+
+  if (tcodes[0] != kTVMStr) {
+    return kTvmErrorFunctionCallWrongArgType;
+  }
+
+  int index = TVMGraphExecutor_GetInputIndex(graph_executor.executor, args[0].v_str);
+  if (index < 0) {
+    return kTvmErrorExecutorModuleNoSuchInput;
+  }
+
+  uint32_t eid = TVMGraphExecutor_GetEntryId(graph_executor.executor,
+                                             graph_executor.executor->input_nodes[index], 0);
+
+  TVMNDArray* array = &graph_executor.executor->data_entry[eid];
+
+  TVMNDArray_IncrementReference(array);
+
+  ret_values[0].v_handle = (void*)(&array->dl_tensor);
+  ret_tcodes[0] = kTVMNDArrayHandle;
+  return 0;
+}
+
+int32_t TVMGraphExecutorModule_GetInputIndex(TVMValue* args, int* tcodes, int nargs,
+                                             TVMValue* ret_values, int* ret_tcodes,
+                                             void* resource_handle) {
+  int index = TVMGraphExecutor_GetInputIndex(graph_executor.executor, args[0].v_str);
+
+  if (index < 0) {
+    return kTvmErrorExecutorModuleNoSuchInput;
+  }
+
+  ret_values[0].v_int64 = index;
+  ret_tcodes[0] = kTVMArgInt;
+  return 0;
+}
+
+int32_t TVMGraphExecutorModule_GetNumInputs(TVMValue* args, int* tcodes, int nargs,
+                                            TVMValue* ret_values, int* ret_tcodes,
+                                            void* resource_handle) {
+  if (nargs != 0) {
+    return kTvmErrorFunctionCallNumArguments;
+  }
+
+  ret_values[0].v_int64 = TVMGraphExecutor_GetNumInputs();
+  ret_tcodes[0] = kTVMArgInt;
+  return 0;
+}
+
+int32_t TVMGraphExecutorModule_GetNumOutputs(TVMValue* args, int* tcodes, int nargs,
+                                             TVMValue* ret_values, int* ret_tcodes,
+                                             void* resource_handle) {
+  if (nargs != 0) {
+    return kTvmErrorFunctionCallNumArguments;
+  }
+
+  ret_values[0].v_int64 = TVMGraphExecutor_GetNumOutputs(graph_executor.executor);
+  ret_tcodes[0] = kTVMArgInt;
+  return 0;
+}
+
+int32_t TVMGraphExecutorModule_GetOutput(TVMValue* args, int* tcodes, int nargs,
+                                         TVMValue* ret_values, int* ret_tcodes,
+                                         void* resource_handle) {
+  if (nargs != 1) {
+    return kTvmErrorFunctionCallNumArguments;
+  }
+
+  if (tcodes[0] != kTVMArgInt) {
+    return kTvmErrorFunctionCallWrongArgType;
+  }
+
+  int output_index = args[0].v_int64;
+  if (output_index < 0 || output_index > TVMGraphExecutor_GetNumOutputs(graph_executor.executor)) {
+    return kTvmErrorExecutorModuleNoSuchInput;
+  }
+
+  uint32_t nid = graph_executor.executor->outputs[output_index].node_id;
+  uint32_t index = graph_executor.executor->outputs[output_index].index;
+  uint32_t eid = TVMGraphExecutor_GetEntryId(graph_executor.executor, nid, index);
+
+  TVMNDArray* array = &graph_executor.executor->data_entry[eid];
+
+  TVMNDArray_IncrementReference(array);
+
+  ret_values[0].v_handle = (void*)(&array->dl_tensor);
+  ret_tcodes[0] = kTVMNDArrayHandle;
+  return 0;
+}
+
+int32_t TVMGraphExecutorModule_LoadParams(TVMValue* args, int* tcodes, int nargs,
+                                          TVMValue* ret_values, int* ret_tcodes,
+                                          void* resource_handle) {
+  if (nargs != 1) {
+    return kTvmErrorFunctionCallNumArguments;
+  }
+
+  if (tcodes[0] != kTVMBytes) {
+    return kTvmErrorFunctionCallWrongArgType;
+  }
+
+  ret_tcodes[0] = kTVMNullptr;
+
+  TVMByteArray* arr = (TVMByteArray*)args[0].v_handle;
+  return TVMGraphExecutor_LoadParams(graph_executor.executor, arr->data, arr->size);
+}
+
+int32_t TVMGraphExecutorModule_Run(TVMValue* args, int* tcodes, int nargs, TVMValue* ret_values,
+                                   int* ret_tcodes, void* resource_handle) {
+  if (nargs != 0) {
+    return kTvmErrorFunctionCallNumArguments;
+  }
+
+  TVMGraphExecutor_Run(graph_executor.executor);
+
+  ret_tcodes[0] = kTVMNullptr;
+  return 0;
+}
+
+int32_t TVMGraphExecutorModule_RunIndividual(TVMValue* args, int* tcodes, int nargs, TVMValue* ret_values,
+                                   int* ret_tcodes, void* resource_handle) {
+  if (nargs != 0) {
+    return kTvmErrorFunctionCallNumArguments;
+  }
+
+  TVMGraphExecutor_Run(graph_executor.executor);
+  // TVMGraphExecutor_RunIndividual(graph_executor.executor);
+
+  ret_tcodes[0] = kTVMNullptr;
+  return 0;
+}
+
+int32_t TVMGraphExecutorModule_RunIndividualNode(TVMValue* args, int* tcodes, int nargs, TVMValue* ret_values,
+                                   int* ret_tcodes, void* resource_handle) {
+  if (nargs != 0) {
+    return kTvmErrorFunctionCallNumArguments;
+  }
+
+  TVMGraphExecutor_Run(graph_executor.executor);
+  // TVMGraphExecutor_RunIndividualNode(graph_executor.executor);
+
+  ret_tcodes[0] = kTVMNullptr;
+  return 0;
+}
+
+int32_t TVMGraphExecutorModule_ProfileRPC(TVMValue* args, int* tcodes, int nargs, TVMValue* ret_values,
+                                   int* ret_tcodes, void* resource_handle) {
+  TVMLogf("TVMGraphExecutorModule_ProfileRPC %d", nargs);
+  if (nargs != 0) {
+    return kTvmErrorFunctionCallNumArguments;
+  }
+  uint32_t idx;
+  for (idx = 0; idx < graph_executor.executor->op_execs_count; ++idx) {
+    if (graph_executor.executor->op_execs[idx].fexec) {
+#if TVM_CRT_DEBUG
+      printf("calling: %s (%d)\n", graph_executor.executor->op_execs[idx].name, idx);
+#endif  // TVM_CRT_DEBUG
+      graph_executor.executor->op_execs[idx].Call(&(graph_executor.executor->op_execs[idx]));
+    }
+  }
+
+  // TVMGraphExecutor_Run(graph_executor.executor);
+  // // TVMGraphExecutor_RunIndividualNode(graph_executor.executor);
+
+  ret_tcodes[0] = kTVMStr;
+  // ret_values[0].v_str = "{}";
+  // ret_values[0].v_str = "{\"calls\":[{\"Percent\":{\"percent\":1.02325334495581499},\"Count\":{\"count\":1},\"Device\":{\"string\":\"cpu0\"},\"Name\":{\"string\":\"tvmgen_default_fused_reshape_cast_subtract\"},\"Duration (us)\":{\"microseconds\":14.65000000000000036},\"Hash\":{\"string\":\"b4ad64e515782436\"},\"Argument Shapes\":{\"string\":\"int8[1, 640], int16[], int16[1, 640]\"}}],\"device_metrics\":{\"cpu0\":{\"Device\":{\"string\":\"cpu0\"},\"Name\":{\"string\":\"Total\"},\"Count\":{\"count\":1},\"Duration (us)\":{\"microseconds\":1431.70800000000008367}}},\"configuration\":{\"Number of threads\":{\"count\":8},\"Executor\":{\"string\":\"Graph\"}}}";
+  ret_values[0].v_str = "{\"calls\":[{\"Count\":{\"count\":1},\"Device\":{\"string\":\"cpu0\"},\"Name\":{\"string\":\"tvmgen_default_fused_reshape_cast_subtract\"},\"Duration (us)\":{\"microseconds\":14.65000000000000036},\"Hash\":{\"string\":\"b4ad64e515782436\"},\"Argument Shapes\":{\"string\":\"int8[1, 640], int16[], int16[1, 640]\"}}],\"device_metrics\":{\"cpu0\":{\"Device\":{\"string\":\"cpu0\"},\"Name\":{\"string\":\"Total\"},\"Count\":{\"count\":1},\"Duration (us)\":{\"microseconds\":1431.70800000000008367}}},\"configuration\":{\"Number of threads\":{\"count\":8},\"Executor\":{\"string\":\"Graph\"}}}";
+  // ret_values[0].v_str = "{\"calls\":[{\"Percent\":{\"percent\":1.02325334495581499},\"Count\":{\"count\":1},\"Device\":{\"string\":\"cpu0\"},\"Name\":{\"string\":\"tvmgen_default_fused_reshape_cast_subtract\"},\"Duration (us)\":{\"microseconds\":14.65000000000000036},\"Hash\":{\"string\":\"b4ad64e515782436\"},\"Argument Shapes\":{\"string\":\"int8[1, 640], int16[], int16[1, 640]\"}}],\"device_metrics\":{\"cpu0\":{\"Device\":{\"string\":\"cpu0\"},\"Name\":{\"string\":\"Total\"},\"Count\":{\"count\":1}}},\"configuration\":{\"Number of threads\":{\"count\":8},\"Executor\":{\"string\":\"Graph\"}}}";
+  /*
+  REPORT2={"calls":[{"Percent":{"percent":1.02325334495581499},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_reshape_cast_subtract"},"Duration (us)":{"microseconds":14.65000000000000036},"Hash":{"string":"b4ad64e515782436"},"Argument Shapes":{"string":"int8[1, 640], int16[], int16[1, 640]"}},{"Percent":{"percent":2.04434144392571637},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast"},"Duration (us)":{"microseconds":29.26899999999999835},"Hash":{"string":"554dc6271153db29"},"Argument Shapes":{"string":"int16[1, 640], int16[16, 640, 8], int32[1, 128], int32[], int8[1, 128]"},"weight_layout":{"string":"NC8n"}},{"Percent":{"percent":0.71990936699382835},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_reshape_cast_subtract_1"},"Duration (us)":{"microseconds":10.30700000000000038},"Hash":{"string":"3bf58af8a0b6542f"},"Argument Shapes":{"string":"int8[1, 128], int16[], int16[1, 128]"}},{"Percent":{"percent":1.25179156643673162},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_1"},"Duration (us)":{"microseconds":17.92200000000000060},"Hash":{"string":"db12598b46b9ae10"},"Argument Shapes":{"string":"int16[1, 128], int16[16, 128, 8], int32[1, 128], int32[], int8[1, 128]"},"weight_layout":{"string":"NC8n"}},{"Percent":{"percent":0.71446132870669143},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_reshape_cast_subtract_1"},"Duration (us)":{"microseconds":10.22899999999999920},"Hash":{"string":"3bf58af8a0b6542f"},"Argument Shapes":{"string":"int8[1, 128], int16[], int16[1, 128]"}},{"Percent":{"percent":1.29628387911501508},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_2"},"Duration (us)":{"microseconds":18.55900000000000105},"Hash":{"string":"cc19fc7572c45b66"},"Argument Shapes":{"string":"int16[1, 128], int16[16, 128, 8], int32[1, 128], int32[], int8[1, 128]"},"weight_layout":{"string":"NC8n"}},{"Percent":{"percent":0.71075945653722683},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_reshape_cast_subtract_1"},"Duration (us)":{"microseconds":10.17600000000000016},"Hash":{"string":"3bf58af8a0b6542f"},"Argument Shapes":{"string":"int8[1, 128], int16[], int16[1, 128]"}},{"Percent":{"percent":1.25682052485562679},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_3"},"Duration (us)":{"microseconds":17.99399999999999977},"Hash":{"string":"30ffd93db8a4ff21"},"Argument Shapes":{"string":"int16[1, 128], int16[16, 128, 8], int32[1, 128], int32[], int8[1, 128]"},"weight_layout":{"string":"NC8n"}},{"Percent":{"percent":0.70936252364308927},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_reshape_cast_subtract_1"},"Duration (us)":{"microseconds":10.15600000000000058},"Hash":{"string":"3bf58af8a0b6542f"},"Argument Shapes":{"string":"int8[1, 128], int16[], int16[1, 128]"}},{"Percent":{"percent":0.86588885443121077},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_4"},"Duration (us)":{"microseconds":12.39700000000000024},"Hash":{"string":"51f20386de426362"},"Argument Shapes":{"string":"int16[1, 128], int16[1, 128, 8], int32[1, 8], int32[], int8[1, 8]"},"weight_layout":{"string":"NC8n"}},{"Percent":{"percent":0.71872197403381133},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_reshape_cast_subtract_2"},"Duration (us)":{"microseconds":10.28999999999999915},"Hash":{"string":"e1eea49e6840e9d0"},"Argument Shapes":{"string":"int8[1, 8], int16[], int16[1, 8]"}},{"Percent":{"percent":1.20967403967848175},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_5"},"Duration (us)":{"microseconds":17.31899999999999906},"Hash":{"string":"b1393f61b1cfb18b"},"Argument Shapes":{"string":"int16[1, 8], int16[16, 8, 8], int32[1, 128], int32[], int8[1, 128]"},"weight_layout":{"string":"NC8n"}},{"Percent":{"percent":0.70244770581710791},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_reshape_cast_subtract_1"},"Duration (us)":{"microseconds":10.05700000000000038},"Hash":{"string":"3bf58af8a0b6542f"},"Argument Shapes":{"string":"int8[1, 128], int16[], int16[1, 128]"}},{"Percent":{"percent":1.26003347051214343},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_6"},"Duration (us)":{"microseconds":18.03999999999999915},"Hash":{"string":"03251a7fc4bc5ac5"},"Argument Shapes":{"string":"int16[1, 128], int16[16, 128, 8], int32[1, 128], int32[], int8[1, 128]"},"weight_layout":{"string":"NC8n"}},{"Percent":{"percent":0.71949028712558705},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_reshape_cast_subtract_1"},"Duration (us)":{"microseconds":10.30100000000000016},"Hash":{"string":"3bf58af8a0b6542f"},"Argument Shapes":{"string":"int8[1, 128], int16[], int16[1, 128]"}},{"Percent":{"percent":1.24403858887426777},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_7"},"Duration (us)":{"microseconds":17.81099999999999994},"Hash":{"string":"274187f2c5ed0966"},"Argument Shapes":{"string":"int16[1, 128], int16[16, 128, 8], int32[1, 128], int32[], int8[1, 128]"},"weight_layout":{"string":"NC8n"}},{"Percent":{"percent":0.71124838305017501},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_reshape_cast_subtract_1"},"Duration (us)":{"microseconds":10.18299999999999983},"Hash":{"string":"3bf58af8a0b6542f"},"Argument Shapes":{"string":"int8[1, 128], int16[], int16[1, 128]"}},{"Percent":{"percent":1.27532988570295069},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_8"},"Duration (us)":{"microseconds":18.25900000000000034},"Hash":{"string":"d46b71c4a34dd9ae"},"Argument Shapes":{"string":"int16[1, 128], int16[16, 128, 8], int32[1, 128], int32[], int8[1, 128]"},"weight_layout":{"string":"NC8n"}},{"Percent":{"percent":0.71508994850905339},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_reshape_cast_subtract_1"},"Duration (us)":{"microseconds":10.23799999999999955},"Hash":{"string":"3bf58af8a0b6542f"},"Argument Shapes":{"string":"int8[1, 128], int16[], int16[1, 128]"}},{"Percent":{"percent":1.79219505653387401},"Count":{"count":1},"Device":{"string":"cpu0"},"Name":{"string":"tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_9"},"Duration (us)":{"microseconds":25.65899999999999892},"Hash":{"string":"323eecb228ac8cde"},"Argument Shapes":{"string":"int16[1, 128], int16[80, 128, 8], int32[1, 640], int8[1, 640]"},"weight_layout":{"string":"NC8n"}}],"device_metrics":{"cpu0":{"Device":{"string":"cpu0"},"Name":{"string":"Total"},"Count":{"count":1},"Duration (us)":{"microseconds":1431.70800000000008367}}},"configuration":{"Number of threads":{"count":8},"Executor":{"string":"Graph"}}}
+  */
+  return 0;
+}
+int32_t TVMGraphExecutorModule_SetInput(TVMValue* args, int* tcodes, int nargs,
+                                        TVMValue* ret_values, int* ret_tcodes,
+                                        void* resource_handle) {
+  if (nargs != 2) {
+    return kTvmErrorFunctionCallNumArguments;
+  }
+
+  if (tcodes[0] != kTVMStr || tcodes[1] != kTVMDLTensorHandle) {
+    return kTvmErrorFunctionCallWrongArgType;
+  }
+
+  TVMGraphExecutor_SetInput(graph_executor.executor, args[0].v_str, (DLTensor*)args[1].v_handle);
+
+  ret_tcodes[0] = kTVMNullptr;
+  return 0;
+}
+
+int32_t TVMGraphExecutorModule_NotImplemented(TVMValue* args, int* tcodes, int nargs,
+                                              TVMValue* ret_values, int* ret_tcodes,
+                                              void* resource_handle) {
+  return kTvmErrorFunctionCallNotImplemented;
+}
+
+static const TVMBackendPackedCFunc graph_executor_registry_funcs[] = {
+    &TVMGraphExecutorModule_GetInput,
+    &TVMGraphExecutorModule_GetInputIndex,
+    &TVMGraphExecutorModule_NotImplemented,  // get_input_info
+    &TVMGraphExecutorModule_GetNumInputs,
+    &TVMGraphExecutorModule_GetNumOutputs,
+    &TVMGraphExecutorModule_GetOutput,
+    &TVMGraphExecutorModule_LoadParams,
+    &TVMGraphExecutorModule_Run,
+    &TVMGraphExecutorModule_RunIndividual,
+    &TVMGraphExecutorModule_RunIndividualNode,
+    &TVMGraphExecutorModule_SetInput,
+    &TVMGraphExecutorModule_NotImplemented,  // share_params
+    &TVMGraphExecutorModule_NotImplemented,  // debug_get_output
+    &TVMGraphExecutorModule_NotImplemented,  // execute_node
+    &TVMGraphExecutorModule_NotImplemented,  // get_node_output
+    &TVMGraphExecutorModule_NotImplemented,  // profile
+    &TVMGraphExecutorModule_ProfileRPC,
+};
+
+static const TVMFuncRegistry graph_executor_registry = {
+    "\x11\0get_input\0"
+    "get_input_index\0"
+    "get_input_info\0"
+    "get_num_inputs\0"
+    "get_num_outputs\0"
+    "get_output\0"
+    "load_params\0"
+    "run\0"
+    "run_individual\0"
+    "run_individual_node\0"
+    "set_input\0"
+    "share_params\0"
+    "debug_get_output\0"
+    "execute_node\0"
+    "get_node_output\0"
+    "profile\0"
+    "profile_rpc\0",
+    graph_executor_registry_funcs};
+
+tvm_crt_error_t TVMGraphExecutorModule_Register() {
+  graph_executor.mod.registry = &graph_executor_registry;
+  graph_executor.executor = NULL;
+
+  return TVMFuncRegisterGlobal("tvm.graph_executor.create", &TVMGraphExecutorModule_Create, 0);
+}
