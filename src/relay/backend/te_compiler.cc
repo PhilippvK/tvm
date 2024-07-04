@@ -1087,7 +1087,7 @@ backend::FunctionInfo UpdateMainWorkspaceSize(const IRModule& mod, const Compila
 
   backend::FunctionInfo func_info(std::move(workspace_sizes), std::move(io_sizes),
                                   std::move(constant_sizes), std::move(tir_primfuncs),
-                                  std::move(relay_primfuncs));
+                                  std::move(relay_primfuncs), {});
   VLOG(1) << "func_info: " << func_info;
   return std::move(func_info);
 }
@@ -1174,7 +1174,7 @@ void UpdateFunctionMetadata(BaseFunc func,
 
   backend::FunctionInfo fi = backend::FunctionInfo(
       std::move(workspace_sizes), std::move(io_sizes), std::move(constant_sizes),
-      std::move(tir_primfuncs), std::move(relay_primfuncs));
+      std::move(tir_primfuncs), std::move(relay_primfuncs), {});
 
   VLOG(1) << "FunctionInfo: " << PrettyPrint(prim_fn_var.value()) << " = " << PrettyPrint(fi);
 

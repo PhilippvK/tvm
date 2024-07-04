@@ -36,6 +36,8 @@
 #include <tvm/te/operation.h>
 #include <tvm/tir/usmp/utils.h>
 
+#include <tvm/relax/expr.h>
+
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -254,6 +256,7 @@ struct FunctionInfoNode : public Object {
   Map<Target, Integer> constant_sizes;
   Map<Target, tir::PrimFunc> tir_primfuncs;
   Map<Target, Function> relay_primfuncs;
+  Map<Target, relax::Function> relax_primfuncs;
 
   void VisitAttrs(tvm::AttrVisitor* v) {
     v->Visit("workspace_sizes", &workspace_sizes);
@@ -261,6 +264,7 @@ struct FunctionInfoNode : public Object {
     v->Visit("constant_sizes", &constant_sizes);
     v->Visit("tir_primfuncs", &tir_primfuncs);
     v->Visit("relay_primfuncs", &relay_primfuncs);
+    v->Visit("relax_primfuncs", &relax_primfuncs);
   }
 
   static constexpr const char* _type_key = "relay.backend.FunctionInfo";
@@ -271,7 +275,7 @@ class FunctionInfo : public ObjectRef {
  public:
   FunctionInfo(Map<Target, Integer> workspace_sizes, Map<Target, Integer> io_sizes,
                Map<Target, Integer> constant_sizes, Map<Target, tir::PrimFunc> tir_primfuncs,
-               Map<Target, Function> relay_primfuncs);
+               Map<Target, Function> relay_primfuncs, Map<Target, relax::Function> relax_primfuncs);
 
   TVM_DEFINE_MUTABLE_OBJECT_REF_METHODS(FunctionInfo, ObjectRef, FunctionInfoNode);
 };

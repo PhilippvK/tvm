@@ -71,7 +71,7 @@ Map<String, backend::FunctionInfo> CalculateFunctionInfos(const IRModule& mod,
       const auto& ws = CalculateWorkspaceBytes(pfunc, workspace_byte_alignment);
       const auto& cs = CalculateConstantBytes(pfunc, constant_byte_alignment);
       backend::FunctionInfo finfo{
-          {{tgt, ws}}, {{tgt, total_io_bytes}}, {{tgt, cs}}, {{tgt, pfunc}}, {}};
+          {{tgt, ws}}, {{tgt, total_io_bytes}}, {{tgt, cs}}, {{tgt, pfunc}}, {}, {}};
       function_metadata.Set(global_var->name_hint, finfo);
     }
   }

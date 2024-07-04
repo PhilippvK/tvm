@@ -30,6 +30,8 @@
 #include <tvm/runtime/ndarray.h>
 #include <tvm/tir/stmt_functor.h>
 
+#include <tvm/relax/expr.h>
+
 #include "../../te/operation/create_primfunc.h"
 
 namespace tvm {
@@ -172,13 +174,15 @@ TVM_REGISTER_NODE_TYPE(FunctionInfoNode);
 FunctionInfo::FunctionInfo(Map<Target, Integer> workspace_sizes, Map<Target, Integer> io_sizes,
                            Map<Target, Integer> constant_sizes,
                            Map<Target, tir::PrimFunc> tir_primfuncs,
-                           Map<Target, Function> relay_primfuncs) {
+                           Map<Target, Function> relay_primfuncs,
+                           Map<Target, relax::Function> relax_primfuncs) {
   ObjectPtr<FunctionInfoNode> n = make_object<FunctionInfoNode>();
   n->workspace_sizes = std::move(workspace_sizes);
   n->io_sizes = std::move(io_sizes);
   n->constant_sizes = std::move(constant_sizes);
   n->tir_primfuncs = std::move(tir_primfuncs);
   n->relay_primfuncs = std::move(relay_primfuncs);
+  n->relax_primfuncs = std::move(relax_primfuncs);
   data_ = std::move(n);
 }
 
@@ -189,7 +193,8 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
                 << "workspace_sizes=" << node->workspace_sizes << ",\n  io_sizes=" << node->io_sizes
                 << ",\n  constant_sizes=" << node->constant_sizes
                 << ",\n  tir_primfuncs=" << node->tir_primfuncs
-                << ",\n  relay_primfuncs=" << node->relay_primfuncs << ")";
+                << ",\n  relay_primfuncs=" << node->relay_primfuncs
+                << ",\n  relax_primfuncs=" << node->relax_primfuncs << ")";
     });
 
 ExecutorCodegenMetadata::ExecutorCodegenMetadata(

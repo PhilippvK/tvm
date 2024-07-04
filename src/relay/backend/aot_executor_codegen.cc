@@ -931,7 +931,7 @@ class AOTExecutorCodegen : public MixedModeVisitor {
                                         function_metadata[global_var->name_hint]);
           updated_function_metadata[global_var->name_hint]->workspace_sizes.Set(tgt, ws);
         } else {
-          FunctionInfo finfo{{{tgt, ws}}, {}, {}, {{tgt, pfunc}}, {}};
+          FunctionInfo finfo{{{tgt, ws}}, {}, {}, {{tgt, pfunc}}, {}, {}};
           updated_function_metadata.Set(global_var->name_hint, finfo);
         }
       }
