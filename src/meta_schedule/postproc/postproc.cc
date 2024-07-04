@@ -126,6 +126,7 @@ TVM_REGISTER_GLOBAL("meta_schedule.PostprocApply").set_body_method<Postproc>(&Po
 TVM_REGISTER_GLOBAL("meta_schedule.PostprocClone").set_body_method<Postproc>(&PostprocNode::Clone);
 TVM_REGISTER_GLOBAL("meta_schedule.PostprocPyPostproc").set_body_typed(Postproc::PyPostproc);
 TVM_REGISTER_GLOBAL("meta_schedule.PostprocDefaultLLVM").set_body_typed(Postproc::DefaultLLVM);
+TVM_REGISTER_GLOBAL("meta_schedule.PostprocDefaultMicro").set_body_typed(Postproc::DefaultMicro);
 TVM_REGISTER_GLOBAL("meta_schedule.PostprocDefaultCUDA").set_body_typed(Postproc::DefaultCUDA);
 TVM_REGISTER_GLOBAL("meta_schedule.PostprocDefaultCUDATensorCore")
     .set_body_typed(Postproc::DefaultCUDATensorCore);
