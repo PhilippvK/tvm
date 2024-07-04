@@ -761,7 +761,7 @@ def tune_model(
                 mod=mod,
                 params=params,
                 target=target,
-                alter_layout=desired_layout,
+                transform_args=transform_args,
             )
             if prior_records:
                 prior_workloads_path = f"{prior_records}_workload.json"
@@ -818,28 +818,41 @@ def tune_model(
                 log_estimated_latency,
                 strategy=autoscheduler_strategy,
                 policy=autoscheduler_policy,
-                model_type=autoscheduler_model_type,
+                model_type=autoscheduler_model,
             )
         elif enable_metascheduler:
             tuning_options = {
                 "trials": trials,
-                "space": "post-order-apply",
-                "strategy": "evolutionary",
-                # "database": "json",  # TODO
-                "database": database,  # TODO
-                # "builder": "local",  # TODO
-                "builder": builder,  # TODO
-                # "runner": "local",  # TODO
-                "runner": runner,  # TODO
+                "space": metascheduler_space,
+                "strategy": metascheduler_strategy,
+                "builder": builder,
+                "runner": runner,
+                "cost_model": metascheduler_model,
+                "scheduler": metascheduler_scheduler,
+                "rules": metascheduler_rules,
+                "postprocs": metascheduler_postprocs,
+                "probs": metascheduler_mutator_probs,
             }
             logger.info("Metascheduling with configuration: %s", tuning_options)
             with tempfile.TemporaryDirectory() as work_dir:
+                if prior_records:
+                    # Copy prior records to work_dir
+                    prior_workloads_path = f"{prior_records}_workload.json"
+                    prior_records_path = f"{prior_records}_tuning_record.json"
+                    database_workload_path = str(Path(work_dir) / "database_workload.json")
+                    database_records_path = str(Path(work_dir) / "database_tuning_record.json")
+                    shutil.copyfile(prior_workloads_path, database_workload_path)
+                    shutil.copyfile(prior_records_path, database_records_path)
+                    database = ms.database.JSONDatabase(path_workload=database_workload_path, path_tuning_record=database_records_path)
+                else:
+                    database = "json"
                 database_ = schedule_tasks_ms(
                     tasks,
                     work_dir,
+                    database=database,
                     **tuning_options,
                 )
-
+                # Copy new records to desired destination
                 workloads_path = f"{tuning_records}_workload.json"
                 records_path = f"{tuning_records}_tuning_record.json"
                 shutil.copyfile(database_.path_tuning_record, records_path)
