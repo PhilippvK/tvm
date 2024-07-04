@@ -189,7 +189,7 @@ with tarfile.open(model_tar_path, "r:*") as tar_f:
 # project in this tutorial, which simulates the device using a POSIX subprocess and pipes:
 
 template_project_path = pathlib.Path(tvm.micro.get_microtvm_template_projects("crt"))
-project_options = {}  # You can use options to provide platform-specific options through TVM.
+project_options = {"verbose": True}  # You can use options to provide platform-specific options through TVM.
 
 #  For physical hardware, you can try out the Zephyr platform by using a different template project
 #  and options:

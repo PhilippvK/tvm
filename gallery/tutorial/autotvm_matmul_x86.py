@@ -335,44 +335,44 @@ measure_option = autotvm.measure_option(builder="local", runner=autotvm.LocalRun
 # You can use alternatives like XGBTuner.
 tuner = autotvm.tuner.RandomTuner(task)
 tuner.tune(
-    n_trial=10,
+    n_trial=1,
     measure_option=measure_option,
     callbacks=[autotvm.callback.log_to_file("matmul.log")],
 )
 
-################################################################################
-# With tuning completed, we can choose the configuration from the log file that
-# has the best measured performance and compile the schedule with the
-# corresponding parameters. We also do a quick verification that the schedule is
-# producing correct answers.  We can call the function :code:`matmul` directly
-# under the :any:`autotvm.apply_history_best` context. When we call this
-# function, it will query the dispatch context with its argument and get the
-# best config with the same argument.
-
-# apply history best from log file
-with autotvm.apply_history_best("matmul.log"):
-    with tvm.target.Target("llvm"):
-        s, arg_bufs = matmul(N, L, M, "float32")
-        func = tvm.build(s, arg_bufs)
-
-# check correctness
-a_np = np.random.uniform(size=(N, L)).astype(np.float32)
-b_np = np.random.uniform(size=(L, M)).astype(np.float32)
-c_np = a_np.dot(b_np)
-
-c_tvm = tvm.nd.empty(c_np.shape)
-func(tvm.nd.array(a_np), tvm.nd.array(b_np), c_tvm)
-
-tvm.testing.assert_allclose(c_np, c_tvm.numpy(), rtol=1e-4)
-
-################################################################################
-# Final Notes and Summary
-# -----------------------
-# In this tutorial, we have shown how to build operator templates that allow
-# TVM to search a parameter space and choose optimized schedule configurations.
-# To gain a deeper understanding of how this works, we recommend expanding on
-# this example by adding new search parameters to the schedule based on
-# schedule operations demonstrated in the :ref: `Getting Started With Tensor
-# Expressions <tensor_expr_get_started>_` tutorial. In the upcoming sections, we
-# will demonstrate the AutoScheduler, a method for TVM to optimize common
-# operators without the need for the user to provide a user-defined template.
+# ################################################################################
+# # With tuning completed, we can choose the configuration from the log file that
+# # has the best measured performance and compile the schedule with the
+# # corresponding parameters. We also do a quick verification that the schedule is
+# # producing correct answers.  We can call the function :code:`matmul` directly
+# # under the :any:`autotvm.apply_history_best` context. When we call this
+# # function, it will query the dispatch context with its argument and get the
+# # best config with the same argument.
+#
+# # apply history best from log file
+# with autotvm.apply_history_best("matmul.log"):
+#     with tvm.target.Target("llvm"):
+#         s, arg_bufs = matmul(N, L, M, "float32")
+#         func = tvm.build(s, arg_bufs)
+#
+# # check correctness
+# a_np = np.random.uniform(size=(N, L)).astype(np.float32)
+# b_np = np.random.uniform(size=(L, M)).astype(np.float32)
+# c_np = a_np.dot(b_np)
+#
+# c_tvm = tvm.nd.empty(c_np.shape)
+# func(tvm.nd.array(a_np), tvm.nd.array(b_np), c_tvm)
+#
+# tvm.testing.assert_allclose(c_np, c_tvm.numpy(), rtol=1e-4)
+#
+# ################################################################################
+# # Final Notes and Summary
+# # -----------------------
+# # In this tutorial, we have shown how to build operator templates that allow
+# # TVM to search a parameter space and choose optimized schedule configurations.
+# # To gain a deeper understanding of how this works, we recommend expanding on
+# # this example by adding new search parameters to the schedule based on
+# # schedule operations demonstrated in the :ref: `Getting Started With Tensor
+# # Expressions <tensor_expr_get_started>_` tutorial. In the upcoming sections, we
+# # will demonstrate the AutoScheduler, a method for TVM to optimize common
+# # operators without the need for the user to provide a user-defined template.

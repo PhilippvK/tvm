@@ -104,7 +104,7 @@ params = {"weight": weight_sample}
 
 RUNTIME = Runtime("crt", {"system-lib": True})
 # TARGET = tvm.micro.testing.get_target("crt")
-TARGET = "c"
+TARGET = "llvm"
 
 # Compiling for physical hardware
 # --------------------------------------------------------------------------
