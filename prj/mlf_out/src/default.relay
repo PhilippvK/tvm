@@ -1,0 +1,5 @@
+def @main(%x: Tensor[(64, 10), float32]) {
+  %0 = nn.matmul(%x, meta[relay.Constant][0], units=None);
+  add(%0, meta[relay.Constant][1])
+}
+
