@@ -401,7 +401,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         // LOG(INFO) << "!prim func";
         auto tir_func = GetRef<tir::PrimFunc>(func);
         auto gsymbol = tir_func->GetAttr<String>(tvm::attr::kGlobalSymbol);
-        tir_func = WithAttr(tir_func, tvm::attr::kTarget, config->host_target);
+        tir_func = WithAttr(tir_func, tvm::attr::kTarget, {config->host_target});
         res_mod->Remove(p.first); // TODO: use ->Update()!
         res_mod->Add(GlobalVar(gsymbol.value()), tir_func);
       } else {
