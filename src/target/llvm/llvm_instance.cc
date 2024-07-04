@@ -478,6 +478,21 @@ std::string LLVMTargetInfo::str() const {
     os << " -mabi=" << target_options_.MCOptions.ABIName;
   }
 
+  if (target_options_.EnableGlobalISel) {
+    os << " -global-isel=1";
+    if (target_options_.GlobalISelAbort == llvm::GlobalISelAbortMode::Disable) {
+      os << " -global-isel-abort=0";
+    } else if (target_options_.GlobalISelAbort == llvm::GlobalISelAbortMode::Enable) {
+      os << " -global-isel-abort=1";
+    } else if (target_options_.GlobalISelAbort == llvm::GlobalISelAbortMode::DisableWithDiag) {
+      os << " -global-isel-abort=2";
+    }
+  }
+  if (target_options_.BBSections == llvm::BasicBlockSection::Labels) {
+    // os << " -basic-block-sections=labels";
+    os << " -basic-block-sections=1";
+  }
+
   bool do_individual = true;
 #if TVM_LLVM_VERSION >= 60
   if (fast_math_flags_.isFast()) {
