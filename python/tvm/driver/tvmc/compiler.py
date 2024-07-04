@@ -546,9 +546,11 @@ def compile_model(
         # print("src", graph_module.get_lib().get_source())
         dso_modules = graph_module.get_lib()._collect_dso_modules()
         # print("dso_modules", dso_modules)
-        for dso in dso_modules:
+        for i, dso in enumerate(dso_modules):
             # print("dso", dso)
-            dso_src = dso.get_source()
+            if f"dso{i}" in dump_code:
+                dso_src = dso.get_source()
+                dumps[f"dso{i}"] = dso_src
             # print("dso_src", dso_src)
         # non_dso_modules = graph_module.get_lib()._collect_from_import_tree(lambda m: m not in dso_modules)
         # print("non_dso_modules", non_dso_modules)
@@ -563,6 +565,8 @@ def compile_model(
             elif "tir" in source_type:
                 # print("dumps", dumps)
                 dumps[source_type] = "\n".join(dumps[source_type])
+            elif "dso" in source_type:
+                pass
             else:
                 lib = graph_module.lib if use_vm else graph_module.get_lib()
                 # TODO lib.get_source call have inconsistent behavior for unsupported
