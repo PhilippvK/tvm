@@ -1,0 +1,10 @@
+numpy
+scipy
+decorator
+attrs
+tornado
+cloudpickle
+psutil
+typing_extensions
+tflite
+matplotlib
