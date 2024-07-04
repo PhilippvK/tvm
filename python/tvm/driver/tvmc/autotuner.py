@@ -223,7 +223,7 @@ def add_tune_parser(subparsers, _, json_params):
     )
     auto_scheduler_group.add_argument(
         "--autoscheduler-model",
-        choices=["xgb", "mlp", "random"],
+        choices=["xgb", "random"],
         default="xgb",
         type=str,
         help="",
