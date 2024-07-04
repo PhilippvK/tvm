@@ -6,3 +6,9 @@ typing_extensions
 attrs
 tornado
 cloudpickle
+
+pytest
+
+tflite
+
+xgboost
