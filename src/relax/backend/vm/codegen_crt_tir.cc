@@ -1191,7 +1191,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   // }
 
   void EmitNormalCall(const Call& call_node, int64_t dst_reg) {
-    // LOG(INFO) << "EmitNormalCall" << "\n";
+    LOG(INFO) << "EmitNormalCall" << "\n";
     // Call call = GetRef<Call>(call_node);
     Array<PrimExpr> args = VisitArray(call_node->args);
     // A function can be a closure that comes from parent
@@ -1200,10 +1200,11 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     auto symbol = LookupFunction(call_node->op, &kind);
 
     if (symbol.defined() && kind == VMFuncInfo::FuncKind::kPackedFunc) {
-      // LOG(INFO) << "defined && kPackedFunc" << "\n";
+      LOG(INFO) << "defined && kPackedFunc" << "\n";
       // primfunc in the same module.
       // use cpacked to directly invoke without named based lookup
       if (Optional<tir::PrimFunc> prim_func = LookupPrimFunc(symbol.value())) {
+        LOG(INFO) << "defined && kPackedFunc && prim_func" << "\n";
         // this->EmitCallCPacked(prim_func.value(), args, dst_reg);
         if(unpacked_api_) {
             this->EmitCallCUnpacked2(prim_func.value(), call_node->args, call_node);
@@ -1212,6 +1213,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
 
         }
       } else {
+        LOG(INFO) << "defined && kPackedFunc && !prim_func" << "\n";
         // this->EmitCallPacked(symbol.value(), args, dst_reg);
         // this->EmitCallPacked2(symbol.value(), call->args, call);
         this->EmitCallPacked2(symbol.value(), call_node->args, call_node);

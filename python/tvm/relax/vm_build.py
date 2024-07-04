@@ -359,8 +359,10 @@ def build(
     unpacked_api = False
     if executor:
         unpacked_api = int(executor["unpacked-api"])
+        print("unpacked_api", unpacked_api, type(unpacked_api))
     mod2 = _vmcodegen(builder, mod, config, exec_mode, unpacked_api=unpacked_api)
     metadata = None
+    print("executor", executor)
     if exec_mode == "crt":
         mod2 = mod2.with_attrs({"runtime": runtime, "executor": executor})
         # TODO: attrs for workspace_memory_pools_, constant_memory_pools_
@@ -385,7 +387,14 @@ def build(
         from tvm.relay.backend import executor_factory as _executor_factory
         from tvm.relay.backend.aot import CreateFunctionMetadata
         func_metadata = CreateFunctionMetadata(_filter_tir(mod2), 16, 1)
+        # print("func_metadata['__tvm_main__']", func_metadata["__tvm_main__"])
+        # print("mod['main']", mod["main"], type(mod["main"]), dir(mod["main"]))
+        # print("mod2['main']", mod2["main"], type(mod2["main"]), dir(mod2["main"]))
+        # print("func_metadata['add']", func_metadata["add"])
+        # print("mod['add']", mod["add"], type(mod["add"]), dir(mod["add"]))
+        # print("mod2['add']", mod2["add"], type(mod2["add"]), dir(mod2["add"]))
         func_metadata["__tvm_main__"].relax_primfuncs = {target: mod["main"]}
+        # input("A")
         # func_metadata = None
         # func_metadata = CreateFunctionMetadata(linked_mod.mod.imported_modules[0], 16, 1)
         executor_factory = _executor_factory.AOTExecutorFactoryModule(

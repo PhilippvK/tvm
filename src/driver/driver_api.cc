@@ -615,7 +615,7 @@ transform::Sequential MixedModulePassManager(IRModule mixed_mod, Target target) 
                           .value_or(relay::Executor::Create("graph", {}))
                           ->GetAttr<Bool>("unpacked-api")
                           .value_or(Bool(false));
-  // LOG(INFO) << "unpacked_api=" << unpacked_api;
+  LOG(INFO) << "unpacked_api=" << unpacked_api;
   if (unpacked_api) {
     mixed_pass_list.push_back(tir::transform::MakeUnpackedAPI());
   } else {
