@@ -39,6 +39,7 @@ from tvm.target import Target
 
 from . import TVMCException, composite_target, frontends
 from .pass_config import parse_configs
+from .pass_list import parse_pass_list_str
 from .main import register_parser
 from .model import TVMCModel
 from .target import target_from_cli, generate_target_args, reconstruct_target_args
