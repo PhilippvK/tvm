@@ -1,7 +1,9 @@
 import sys
+import argparse
 import tempfile
 from pathlib import Path
 from types import MappingProxyType
+from collections import defaultdict
 
 import numpy as np
 
@@ -13,6 +15,17 @@ from tvm.relay.backend import Executor
 from tvm.tir.analysis import estimate_tir_flops
 
 
+parser = argparse.ArgumentParser(description="TODO")
+parser.add_argument("--workload", default="conv2d_relay", help="TODO")
+parser.add_argument("--database", "--db", default=None, help="TODO")
+parser.add_argument("--print-ir-mod", action="store_true", help="TODO")
+parser.add_argument("--trivial-schedule", action="store_true", help="TODO")
+parser.add_argument("--fallback-schedule", action="store_true", help="TODO")
+parser.add_argument("--database-trials", "--trials", type=int, action="append", default=[], help="TODO")
+parser.add_argument("--database-topk", "--topk", type=int, default=0, help="TODO")
+args = parser.parse_args()
+
+# TODO: move to workloads.py
 # pylint: disable=invalid-name,no-member,line-too-long,too-many-nested-blocks,no-self-argument
 # fmt: off
 @tvm.script.ir_module
@@ -29,25 +42,6 @@ class Matmul:
                 with T.init():
                     C[vi, vj] = 0.0
                 C[vi, vj] = C[vi, vj] + A[vi, vk] * B[vk, vj]
-
-
-def _schedule_matmul(sch):
-    return True
-    # block = sch.get_block("matmul")
-    # i, j, k = sch.get_loops(block=block)
-    # i_tiles = [1, 1, 2, 512]
-    # j_tiles = [1, 512, 1, 2]
-    # k_tiles = [256, 4]
-    # i_0, i_1, i_2, i_3 = sch.split(loop=i, factors=i_tiles)
-    # j_0, j_1, j_2, j_3 = sch.split(loop=j, factors=j_tiles)
-    # k_0, k_1 = sch.split(loop=k, factors=k_tiles)
-    # sch.reorder(i_0, j_0, i_1, j_1, k_0, i_2, j_2, k_1, i_3, j_3)
-
-
-def _create_schedule(mod, sch_fn):
-    sch = tir.Schedule(mod=mod, debug_mask="all")
-    sch_fn(sch)
-    return sch
 
 
 def create_relay_module():
@@ -82,22 +76,99 @@ def create_relay_module():
     return mod, params, model_info
 
 
+if args.workload == "matmul_tir":
+    ir_mod = Matmul
+elif args.workload == "conv2d_relay":
+    ir_mod, params, model_info = create_relay_module()
+else:
+    raise ValueError(f"Unsupported workload: {args.workload}")
+
+if args.print_ir_mod:
+    print("ir_mod", ir_mod)
+    # TODO: fancy print?
+
+
+schedules = []  # stores tuples (mode, record, trial_idx)
+if args.trivial_schedule:
+    schedules.append(("trivial", None, None))
+if args.fallback_schedule:
+    schedules.append(("fallback", None, None))
+if args.database:
+    db_path = Path(args.database)
+    path_workload = db_path / "database_workload.json"
+    path_tuning_record = db_path / "database_tuning_record.json"
+    database = ms.database.JSONDatabase(path_workload=str(path_workload), path_tuning_record=str(path_tuning_record))
+    records = database.get_all_tuning_records()
+    workload2records = defaultdict(list)
+    for i, record in enumerate(records):
+        workload = record.workload
+        workload2records[workload].append(records[i])
+    print("workload2records", workload2records)
+    main_workloads = [workload for workload, records in workload2records.items() if len(records) > 1]
+    print("main_workloads", main_workloads)
+    assert len(main_workloads) == 1
+    main_workload = main_workloads[0]
+    records_ = workload2records[main_workload]
+    for trial_idx in args.database_trials:
+        if trial_idx >= len(records_):
+            break
+        record = records_[trial_idx]
+        schedules.append(("meta_schedule", record, trial_idx))
+    if args.database_topk:
+        topk_records = database.get_top_k(main_workload, args.database_topk)
+        for k in range(min(len(topk_records), args.database_topk)):
+            record = topk_records[k]
+            trial_idx = records_.index(record)
+            schedules.append(("meta_schedule", record, trial_idx))
+
+print("schedules", schedules)
+input("1")
+
+
+def _schedule_trivial(sch):
+    return True
+    # block = sch.get_block("matmul")
+    # i, j, k = sch.get_loops(block=block)
+    # i_tiles = [1, 1, 2, 512]
+    # j_tiles = [1, 512, 1, 2]
+    # k_tiles = [256, 4]
+    # i_0, i_1, i_2, i_3 = sch.split(loop=i, factors=i_tiles)
+    # j_0, j_1, j_2, j_3 = sch.split(loop=j, factors=j_tiles)
+    # k_0, k_1 = sch.split(loop=k, factors=k_tiles)
+    # sch.reorder(i_0, j_0, i_1, j_1, k_0, i_2, j_2, k_1, i_3, j_3)
+
+
+def _create_schedule(mod, sch_fn):
+    sch = tir.Schedule(mod=mod, debug_mask="all")
+    sch_fn(sch)
+    return sch
+
+
+
+
 assert len(sys.argv) == 2
 db_path = Path(sys.argv[1])
 path_workload = db_path / "database_workload.json"
 path_tuning_record = db_path / "database_tuning_record.json"
 # mod = Matmul
 mod, params, model_info = create_relay_module()
-print("mod", mod)
+# print("mod", mod)
 
 link_params = True
 
-runtime = relay.backend.Runtime("crt", {"system-lib": True})
-executor = Executor("aot", {"link-params": link_params})
+if args.runtime == "crt":
+    runtime = relay.backend.Runtime("crt", {"system-lib": True})
+else:
+    raise ValueError(f"Unsupported runtime: {args.runtime}")
+if args.executor == "aot":
+    executor = Executor("aot", {"link-params": link_params})
+else:
+    raise ValueError(f"Unsupported executor: {args.executor}")
+
 # This line is necessary for link-params to take effect during
 # task extraction and relay.build(...).
 mod = mod.with_attr("executor", executor)
-print("mod2", mod)
+# print("mod2", mod)
 
 # trace = _create_schedule(mod, _schedule_matmul).trace
 database = ms.database.JSONDatabase(path_workload=str(path_workload), path_tuning_record=str(path_tuning_record))
