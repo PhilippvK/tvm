@@ -85,7 +85,12 @@ void SendToRunner(TaskRecordNode* self, const Runner& runner) {
           /*f_done=*/[]() -> bool { return true; },
           /*f_result=*/
           [msg = builder_result->error_msg]() -> RunnerResult {
-            return RunnerResult(NullOpt, msg);
+            using namespace std::chrono;
+            Optional<FloatImm> timestamp;
+            auto tp = system_clock::now() + 0ns;
+            double t1 = tp.time_since_epoch().count();
+            timestamp = FloatImm(DataType::Float(64), t1);
+            return RunnerResult(NullOpt, msg, timestamp);
           }));
     } else {
       results.push_back(futures[j++]);
