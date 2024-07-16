@@ -42,7 +42,8 @@ class ScheduleFnDatabaseNode : public DatabaseNode {
                           /*workload=*/Workload(mod, 0),  //
                           /*run_secs=*/NullOpt,           //
                           /*target=*/target,              //
-                          /*arg_info=*/NullOpt);
+                          /*arg_info=*/NullOpt,           //
+                          /*timestamp=*/NullOpt);
     }
     return NullOpt;
   }
