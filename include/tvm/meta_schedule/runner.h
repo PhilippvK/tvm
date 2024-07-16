@@ -74,10 +74,13 @@ class RunnerResultNode : public runtime::Object {
   Optional<Array<FloatImm>> run_secs;
   /*! \brief The error message, if any. */
   Optional<String> error_msg;
+  /*! \brief TODO. */
+  Optional<FloatImm> timestamp;
 
   void VisitAttrs(tvm::AttrVisitor* v) {
     v->Visit("run_secs", &run_secs);
     v->Visit("error_msg", &error_msg);
+    v->Visit("timestamp", &timestamp);
   }
 
   static constexpr const char* _type_key = "meta_schedule.RunnerResult";
@@ -95,7 +98,7 @@ class RunnerResult : public runtime::ObjectRef {
    * \brief The run time in seconds.
    * \brief The error message, if any.
    */
-  TVM_DLL explicit RunnerResult(Optional<Array<FloatImm>> run_secs, Optional<String> error_msg);
+  TVM_DLL explicit RunnerResult(Optional<Array<FloatImm>> run_secs, Optional<String> error_msg, Optional<FloatImm> timestamp);
   TVM_DEFINE_NOTNULLABLE_OBJECT_REF_METHODS(RunnerResult, runtime::ObjectRef, RunnerResultNode);
 };
 
