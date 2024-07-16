@@ -72,13 +72,14 @@ Workload Workload::FromJSON(const ObjectRef& json_obj) {
 /******** TuningRecord ********/
 
 TuningRecord::TuningRecord(tir::Trace trace, Workload workload, Optional<Array<FloatImm>> run_secs,
-                           Optional<Target> target, Optional<Array<ArgInfo>> args_info) {
+                           Optional<Target> target, Optional<Array<ArgInfo>> args_info, Optional<FloatImm> timestamp) {
   ObjectPtr<TuningRecordNode> n = make_object<TuningRecordNode>();
   n->trace = trace;
   n->workload = workload;
   n->run_secs = run_secs;
   n->target = target;
   n->args_info = args_info;
+  n->timestamp = timestamp;
   this->data_ = n;
 }
 
@@ -110,7 +111,8 @@ ObjectRef TuningRecordNode::AsJSON() const {
   return Array<ObjectRef>{trace->AsJSON(false),  //
                           run_secs,              //
                           json_target,           //
-                          json_args_info};
+                          json_args_info,        //
+                          timestamp};
 }
 
 bool TuningRecordNode::IsValid() const {
@@ -133,6 +135,7 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
   Optional<Array<FloatImm>> run_secs{nullptr};
   Optional<Target> target{nullptr};
   Optional<Array<ArgInfo>> args_info{nullptr};
+  Optional<FloatImm> timestamp;
   try {
     const ArrayNode* json_array = json_obj.as<ArrayNode>();
     CHECK(json_array && json_array->size() == 4);
@@ -154,6 +157,11 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
       }
       args_info = info;
     }
+    // Load json[4] => timestamp
+    if (json_array->at(4).defined()) {
+      const auto* float_imm = json_array->at(4).as<FloatImmNode>();
+      timestamp = FloatImm(DataType::Float(32), float_imm->value);
+    }
     // Load json[0] => trace
     {
       const ObjectRef& json_trace = json_array->at(0);
@@ -167,7 +175,7 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
     LOG(FATAL) << "ValueError: Unable to parse the JSON object: " << json_obj
                << "\nThe error is: " << e.what();
   }
-  return TuningRecord(trace, workload, run_secs, target, args_info);
+  return TuningRecord(trace, workload, run_secs, target, args_info, timestamp);
 }
 
 /******** Database ********/
@@ -229,7 +237,8 @@ void DatabaseNode::DumpPruned(Database destination) {
     destination->CommitTuningRecord(TuningRecord(/*trace=*/record->trace, /*workload=*/workload,
                                                  /*run_secs=*/record->run_secs,
                                                  /*target=*/record->target,
-                                                 /*args_info=*/record->args_info));
+                                                 /*args_info=*/record->args_info,
+                                                 /*timestamp=*/record->timestamp));
   }
 }
 
@@ -290,8 +299,8 @@ TVM_REGISTER_GLOBAL("meta_schedule.WorkloadAsJSON")
 TVM_REGISTER_GLOBAL("meta_schedule.WorkloadFromJSON").set_body_typed(&Workload::FromJSON);
 TVM_REGISTER_GLOBAL("meta_schedule.TuningRecord")
     .set_body_typed([](tir::Trace trace, Workload workload, Optional<Array<FloatImm>> run_secs,
-                       Optional<Target> target, Optional<Array<ArgInfo>> args_info) {
-      return TuningRecord(trace, workload, run_secs, target, args_info);
+                       Optional<Target> target, Optional<Array<ArgInfo>> args_info, Optional<FloatImm> timestamp) {
+      return TuningRecord(trace, workload, run_secs, target, args_info, timestamp);
     });
 TVM_REGISTER_GLOBAL("meta_schedule.TuningRecordAsMeasureCandidate")
     .set_body_method<TuningRecord>(&TuningRecordNode::AsMeasureCandidate);

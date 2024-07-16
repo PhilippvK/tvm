@@ -15,11 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 """RPC Runner"""
+import time
 import concurrent.futures
 import os.path as osp
 from contextlib import contextmanager
 from typing import Callable, List, Optional, Union
 
+import tvm
 from tvm.contrib.popen_pool import PopenPoolExecutor
 from tvm.rpc import RPCSession
 from tvm.runtime import Device, Module
@@ -116,19 +118,23 @@ class RPCRunnerFuture(PyRunnerFuture):
         return self.future.done()
 
     def result(self) -> RunnerResult:
+        timestamp = time.time()
+        timestamp = tvm.tir.FloatImm("float64", timestamp)
         try:
             run_secs: List[float] = self.future.result()
         except TimeoutError:
             return RunnerResult(
                 None,
                 error_msg=f"RPCRunner: Timeout, killed after {self.timeout_sec} seconds",
+                timestamp=timestamp,
             )
         except Exception as exception:  # pylint: disable=broad-except
             return RunnerResult(
                 None,
                 error_msg="RPCRunner: An exception occurred\n" + str(exception),
+                timestamp=timestamp,
             )
-        return RunnerResult(run_secs, None)
+        return RunnerResult(run_secs, None, timestamp)
 
 
 @derived_object
