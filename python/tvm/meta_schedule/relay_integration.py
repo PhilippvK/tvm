@@ -34,7 +34,7 @@ from tvm.target import Target
 
 from .builder import Builder
 from .cost_model import CostModel
-from .database import Database
+from .database import Database, MemoryDatabase
 from .extracted_task import ExtractedTask
 from .logging import get_loggers_from_work_dir
 from .measure_callback import MeasureCallback
@@ -441,7 +441,10 @@ def compile_relay(
     mod, target, params, pass_config, executor, runtime = _normalize_params(
         mod, target, params, pass_config, executor, runtime
     )
-    pass_config.setdefault("relay.backend.use_meta_schedule_dispatch", True)
+    if database is None:
+        database = MemoryDatabase()
+    else:
+        pass_config.setdefault("relay.backend.use_meta_schedule_dispatch", True)
     with Profiler.timeit("PostTuningCompilation"):
         with target, _autotvm_silencer(), database:
             with transform.PassContext(
