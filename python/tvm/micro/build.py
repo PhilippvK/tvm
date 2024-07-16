@@ -94,7 +94,11 @@ def get_microtvm_template_projects(platform: str) -> str:
         Path to template project directory for platform.
     """
     if platform not in MicroTVMTemplateProject.list():
-        raise ValueError(f"platform {platform} is not supported.")
+        # raise ValueError(f"platform {platform} is not supported.")
+        # lookup via path
+        if not Path(platform).is_dir():
+            raise ValueError(f"platform {platform} not found")
+        return platform
 
     microtvm_template_projects = None
     for path in libinfo.find_lib_path():
