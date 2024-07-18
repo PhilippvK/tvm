@@ -291,17 +291,17 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const TargetJSON& target)
     return Downcast<Bool>(target.Get(flag.str()).value_or(Bool(false)));
   };
   // if (triple_ == "riscv64-unknown-elf" || triple_ == "riscv32-unknown-elf") {  // TODO
-  LOG(INFO) << "triple=" << triple_;
+  // LOG(INFO) << "triple=" << triple_;
   if (true) {  // TODO
-    LOG(INFO) << "triple ok";
+    // LOG(INFO) << "triple ok";
     if (GetBoolFlag("global-isel")) {
-      LOG(INFO) << "global-isel true";
+      // LOG(INFO) << "global-isel true";
       target_options_.EnableGlobalISel = true;
       auto maybe_abort = Downcast<Integer>(target.Get("global-isel-abort"));
       if (maybe_abort.defined()) {
-        LOG(INFO) << "abort defined";
+        // LOG(INFO) << "abort defined";
         int abort = maybe_abort->value;
-        LOG(INFO) << "abort=" << abort;
+        // LOG(INFO) << "abort=" << abort;
         auto abort_val = llvm::GlobalISelAbortMode::Enable;
         if (abort == 0) {  // TODO: check
           abort_val = llvm::GlobalISelAbortMode::Disable;
@@ -314,7 +314,7 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const TargetJSON& target)
       }
     }
     if (GetBoolFlag("basic-block-sections")) {
-      LOG(INFO) << "bb true";
+      // LOG(INFO) << "bb true";
       target_options_.BBSections = llvm::BasicBlockSection::Labels;
     }
   }
@@ -926,7 +926,7 @@ bool LLVMTarget::modified_llvm_state_ = false;
 
 LLVMTarget::LLVMTarget(LLVMInstance& instance, const LLVMTargetInfo& target_info)
     : LLVMTargetInfo(target_info), instance_(instance), ctx_(instance.GetContext()) {
-  LOG(INFO) << "LLVMTarget";
+  // LOG(INFO) << "LLVMTarget";
   // Populate the list of saved options with the current values.
   for (const Option& opt : GetCommandLineOptions()) {
     GetOptionValue(&saved_llvm_options_.emplace_back(opt));
@@ -941,16 +941,16 @@ LLVMTarget::LLVMTarget(LLVMInstance& instance, const LLVMTargetInfo& target_info
 
 LLVMTarget::LLVMTarget(LLVMInstance& instance, const Target& target)
     : LLVMTarget(instance, LLVMTargetInfo(instance, target)) {
-  LOG(INFO) << "LLVMTarget2";
+  // LOG(INFO) << "LLVMTarget2";
 }
 
 LLVMTarget::LLVMTarget(LLVMInstance& scope, const std::string& target_str)
     : LLVMTarget(scope, Target(target_str)) {
-  LOG(INFO) << "LLVMTarget3";
+  // LOG(INFO) << "LLVMTarget3";
 }
 
 LLVMTarget::~LLVMTarget() {
-  LOG(INFO) << "~LLVMTarget";
+  // LOG(INFO) << "~LLVMTarget";
   // Revert all applied LLVM options.
   if (ApplyLLVMOptions(false)) {
     modified_llvm_state_ = false;
@@ -983,9 +983,9 @@ void LLVMTarget::SetTargetMetadata(llvm::Module* module) const {
 }
 
 bool LLVMTarget::ApplyLLVMOptions(bool apply_otherwise_revert, bool dry_run) {
-  LOG(INFO) << "ApplyLLVMOptions";
-  LOG(INFO) << "apply_otherwise_revert=" << apply_otherwise_revert;
-  LOG(INFO) << "dry_run=" << dry_run;
+  // LOG(INFO) << "ApplyLLVMOptions";
+  // LOG(INFO) << "apply_otherwise_revert=" << apply_otherwise_revert;
+  // LOG(INFO) << "dry_run=" << dry_run;
   llvm::StringMap<llvm::cl::Option*>& options = llvm::cl::getRegisteredOptions();
   bool changed = false;
 
