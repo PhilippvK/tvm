@@ -171,6 +171,9 @@ else:
 if args.executor == "aot":
     link_params = True
     executor = Executor("aot", {"link-params": link_params})
+elif args.executor == "graph":
+    link_params = True
+    executor = Executor("graph", {"link-params": link_params})
 else:
     raise ValueError(f"Unsupported executor: {args.executor}")
 
@@ -239,17 +242,23 @@ def eval_single_record(mod, mode, record, target, pass_config, disabled_pass, ru
         )
         project.build()
         project.flash()
+        # input(">>>")
         with tvm.micro.Session(project.transport()) as session:
-            aot_executor = tvm.runtime.executor.aot_executor.AotModule(session.create_aot_executor())
-            if not skip_io:
-                data_sample = None  # TODO
-                aot_executor.get_input(0).copyfrom(data_sample)
-            result = aot_executor.module.time_evaluator("run", session.device, number=1)()
+            if args.executor == "aot":
+                aot_executor = tvm.runtime.executor.aot_executor.AotModule(session.create_aot_executor())
+                if not skip_io:
+                    data_sample = None  # TODO
+                    aot_executor.get_input(0).copyfrom(data_sample)
+                result = aot_executor.module.time_evaluator("run", session.device, number=1)()
+                if not skip_io:
+                    output = aot_executor.get_output(0).numpy()
+                    print(output)
+            elif args.executor == "graph":
+                from tvm.contrib import graph_executor as executor
+                graph_executor = executor.create(ms_mod.get_graph_json(), session.get_system_lib(), session.device)
+                result = graph_executor.module.time_evaluator("run", session.device, number=1)()
             print("result", result)
             print("mean: ", result.mean)
-            if not skip_io:
-                output = aot_executor.get_output(0).numpy()
-                print(output)
         return result.mean, flops_
 
 
