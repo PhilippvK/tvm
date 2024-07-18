@@ -16,7 +16,7 @@ from tvm.relay.backend import Executor
 from tvm.tir.analysis import estimate_tir_flops
 
 
-parser = argparse.ArgumentParser(description="TODO")
+parser = argparse.ArgumentParser(description="TODO", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--workload", default="conv2d_relay", help="TODO")
 parser.add_argument("--database", "--db", default=None, help="TODO")
 parser.add_argument("--out", "-o", default=None, help="TODO")
@@ -29,6 +29,7 @@ parser.add_argument("--project-options", default=None, help="TODO")
 parser.add_argument("--runtime", default="crt", help="TODO")
 parser.add_argument("--executor", default="aot", help="TODO")
 parser.add_argument("--alter-op", action="store_true", help="TODO")
+parser.add_argument("--label", default="default", help="TODO")
 args = parser.parse_args()
 
 # TODO: move to workloads.py
@@ -184,12 +185,13 @@ ir_mod = ir_mod.with_attr("executor", executor)
 
 # target = tvm.target.Target("c")
 # target = "c"
-target = "llvm -num-cores 1 -mcpu generic-rv64 -mtriple=riscv64-unknown-elf -mabi lp64d -mattr=+d,+f,+m,+64bit -model=etiss-rv64gc"
-# target = "llvm -num-cores 1 -mcpu generic-rv64 -mtriple=riscv64-unknown-elf -mabi lp64d -mattr=+d,+f,+m,+64bit -model=etiss-rv64gc -global-isel=1 -global-isel-abort=2 -basic-block-sections=1"
+# target = "llvm -num-cores 1 -mcpu generic-rv64 -mtriple=riscv64-unknown-elf -mabi lp64d -mattr=+d,+f,+m,+64bit -model=etiss-rv64gc"
+target = "llvm -num-cores 1 -mcpu generic-rv64 -mtriple=riscv64-unknown-elf -mabi lp64d -mattr=+d,+f,+m,+64bit -model=etiss-rv64gc -global-isel=1 -global-isel-abort=2 -basic-block-sections=1"
 print("target", target)
 
 pass_config = {
-    "tir.disable_vectorize": True
+    # "tir.disable_vectorize": True
+    "tir.disable_vectorize": False
 }
 disabled_pass = []
 if not args.alter_op:
@@ -217,6 +219,7 @@ def eval_single_record(mod, mode, record, target, pass_config, disabled_pass, ru
         # TODO: skip db and just use mod from trace/workload?
     else:
         raise ValueError(f"Invalid mode: {mode}")
+    # print("AAA")
     ms_mod: tvm.runtime.Module = ms.relay_integration.compile_relay(
         database=db,
         mod=mod,
@@ -234,9 +237,12 @@ def eval_single_record(mod, mode, record, target, pass_config, disabled_pass, ru
         executor=executor,
         runtime=runtime,
     )
+    # print("BBB")
+    # input("?")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         work_dir = Path(tmpdir)
+        print("work_dir", work_dir)
         project = tvm.micro.generate_project(
             str(tvm.micro.get_microtvm_template_projects(platform)),
             ms_mod,
@@ -308,6 +314,7 @@ print("unique_flops", unique_flops)
 assert len(unique_flops) == 1
 df["flops"].fillna(unique_flops[0], inplace=True)
 df["flops_per_s"] = df["flops"] / df["mean_s"]
+df["label"] = args.label
 print("df")
 print(df)
 if args.out:
