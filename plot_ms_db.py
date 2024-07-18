@@ -18,6 +18,7 @@ parser.add_argument("--zero-time", action="store_true", help="TODO")
 parser.add_argument("--print-df", action="store_true", help="TODO")
 parser.add_argument("--invert", action="store_true", help="TODO")
 parser.add_argument("--no-scatter", action="store_true", help="TODO")
+parser.add_argument("--boxplot", action="store_true", help="TODO")
 parser.add_argument("--compare-scatter", action="store_true", help="TODO")
 parser.add_argument("--quantile", type=float, default=0.95, help="TODO")
 parser.add_argument("--batch-size", type=int, default=1, help="TODO")
@@ -106,7 +107,17 @@ if args.quantile > 0:
 
 
 if args.out:
-    if args.topk_bars is not None:
+    if args.boxplot:
+        full_compare_df = pd.DataFrame()
+        for j, df_ in enumerate(compare_dfs):
+            temp = df_.copy()
+            temp["compare"] = f"{j} (len={len(df_)})"
+            full_compare_df = pd.concat([full_compare_df, temp])
+        # full_compare_df["compare"] = full_compare_df["compare"].astype(str)
+        combined_df = pd.concat([df, full_compare_df], axis=0)
+        combined_df["compare"] = combined_df["compare"].fillna(f"ref (len={len(df)})")
+        fig = px.box(combined_df, x="compare", y=args.scatter_y, points="all")
+    elif args.topk_bars is not None:
         topk, total = args.topk_bars
         total = max(min(len(df), total), 0)
         assert 0 <= topk <= total
