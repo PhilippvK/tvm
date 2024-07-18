@@ -110,7 +110,7 @@ if args.database:
         workload = record.workload
         workload2records[workload].append(records[i])
     print("workload2records", workload2records)
-    main_workloads = [workload for workload, records in workload2records.items() if len(records) > 1]
+    main_workloads = [workload for workload, records in workload2records.items() if len(records) > 2]
     print("main_workloads", main_workloads)
     assert len(main_workloads) == 1
     main_workload = main_workloads[0]
