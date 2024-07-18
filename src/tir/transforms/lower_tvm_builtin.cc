@@ -26,12 +26,21 @@
 #include <tvm/tir/expr.h>
 #include <tvm/tir/stmt_functor.h>
 #include <tvm/tir/transform.h>
+#include <tvm/ir/transform.h>
 
 #include <unordered_set>
 
 #include "ir_utils.h"
 
+
 namespace tvm {
+
+/*!
+ * \brief TODO
+ */
+constexpr const char* kMaxStackAllocaOverride = "tir.max_stack_alloca";
+TVM_REGISTER_PASS_CONFIG_OPTION(kMaxStackAllocaOverride, Integer);
+
 namespace tir {
 
 // Calculate the statistics of packed function.
@@ -248,7 +257,9 @@ class BuiltinLower : public StmtExprMutator {
       auto storage_scope = Downcast<PointerType>(op->buffer_var->type_annotation)->storage_scope;
       if (storage_scope == "global") {
         size_t constant_size = op->ConstantAllocationSize();
-        if (constant_size > 0 && constant_size * nbytes < runtime::kMaxStackAlloca) {
+        transform::PassContext pass_ctx = transform::PassContext::Current();
+        auto max_stack_alloca = pass_ctx->GetConfig<Integer>(kMaxStackAllocaOverride, Integer(runtime::kMaxStackAlloca)).value();
+        if (constant_size > 0 && constant_size * nbytes < max_stack_alloca.IntValue()) {
           return stmt;
         }
       }
