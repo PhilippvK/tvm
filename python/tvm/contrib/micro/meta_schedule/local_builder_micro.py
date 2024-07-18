@@ -32,12 +32,13 @@ from tvm.tir.transform import RemoveWeightLayoutRewriteBlock
 
 
 def get_local_builder_micro():
+    # print("get_local_builder_micro")
     """Return micro-compatible Builder for meta schedule."""
 
     def _micro_build(
         mod: IRModule, target: Target, _params: Optional[Dict[str, NDArray]]
     ) -> OperatorModule:
-        print("_micro_build")
+        # print("_micro_build")
         """Build function for micro targets.
 
         Parameters
@@ -55,15 +56,18 @@ def get_local_builder_micro():
             The built Module.
         """
 
-        print("A")
+        # print("A")
         # Note: tvm_build assigns "global_symbol" to the name of generated C function
         # changing it is necessary for micro targets,
         # since the generated projects already include a main function.
         prim_func = mod["main"].with_attr("global_symbol", "default_function")
+        # print("B")
         mod = IRModule({"main": prim_func})
-        print("C")
+        # print("C")
         runtime = Runtime("crt", {"system-lib": True})
+        # print("D")
         mod = RemoveWeightLayoutRewriteBlock(skip_ndarray_rewrite=True)(mod)
+        # print("E")
         # TODO
         # opt_level = 3
         # config = {
@@ -76,9 +80,11 @@ def get_local_builder_micro():
         # ):
         #     rt_mod = tvm_build(mod, target=target, runtime=runtime)
         rt_mod = tvm_build(mod, target=target, runtime=runtime)
+        # print("F")
         return rt_mod
 
     def _micro_export(mod: OperatorModule) -> str:
+        # print("_micro_export")
         """Export function for micro targets.
 
         Parameters
