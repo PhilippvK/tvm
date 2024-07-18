@@ -143,6 +143,13 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
         "cpu_arch": "RV64IMACFD",
         "cpu_freq": 100000000,
     }
+    opt_level = 3
+    pass_config = {
+        "tir.disable_vectorize": True
+    }
+    disabled_pass = []
+    if not alter_op:
+        disabled_pass += ["AlterOpLayout"]
 
     KEEP = True
     if KEEP:
@@ -154,28 +161,19 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
                 x = str(x)
             x = x.replace(" ", "").replace(",", "").replace("/", "").replace(";", "").replace("=", "-").replace("+", "")
             return x
-        fields = [target, toolchain, alter_op, num_trials_per_iter, max_trials_per_task, max_trials_global, ts]
+        fields = [target, toolchain, alter_op, num_trials_per_iter, max_trials_per_task, max_trials_global, ts, opt_level, *sum(map(list, pass_config.items()), []), *[f"no{x}" for x in disabled_pass]]
         label = "-".join([sanitize(x) for x in fields])
         work_dir_path = base_dir / label
-        print("work_dir_path", work_dir_path)
     else:
         work_dir = utils.tempdir()
         work_dir_path = work_dir.path
-        print("work_dir_path", work_dir_path)
-    # print("work_dir", work_dir.path)
+    print("work_dir_path", work_dir_path)
     # input("1")
     mod, params, model_info = create_relay_module()
     input_name = model_info["in_tensor"]
     input_shape = model_info["in_shape"]
     input_dtype = model_info["in_dtype"]
     data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    opt_level = 3
-    pass_config = {
-        "tir.disable_vectorize": True
-    }
-    disabled_pass = []
-    if not alter_op:
-        disabled_pass += ["AlterOpLayout"]
     link_params = True
 
     runtime = relay.backend.Runtime("crt", {"system-lib": True})
