@@ -108,7 +108,7 @@ if args.quantile > 0:
 if args.out:
     if args.topk_bars is not None:
         topk, total = args.topk_bars
-        total = max(min(len(df), 100), 0)
+        total = max(min(len(df), total), 0)
         assert 0 <= topk <= total
         topk_df = df.sort_values(args.scatter_y, ascending=False).head(total)[[args.x, args.scatter_y]]
         topk_df[f"top{topk}"] = False
