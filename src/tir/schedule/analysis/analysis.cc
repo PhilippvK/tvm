@@ -2095,7 +2095,7 @@ bool CheckAutoTensorizeApplicable(const ScheduleState& state, const tir::StmtSRe
   // std::unordered_set<const tir::VarNode*> desc_loop_vars;
 
   bool ret = extractor->VisitStmt(block->block, desc_info.desc_block->block);
-  LOG(INFO) << "ret=" << ret;
+  // LOG(INFO) << "ret=" << ret;
   return ret;
 }
 
