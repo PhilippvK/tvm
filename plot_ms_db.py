@@ -136,7 +136,7 @@ if args.out:
                 temp["compare"] = j
                 full_compare_df = pd.concat([full_compare_df, temp])
             full_compare_df["compare"] = full_compare_df["compare"].astype(str)
-            print("full_compare_df", full_compare_df)
+            # print("full_compare_df", full_compare_df)
             # input(">")
             # cm = px.colors.sequential.gray
             # cm = px.colors.qualitative.Plotly
