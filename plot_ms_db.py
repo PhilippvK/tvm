@@ -41,7 +41,7 @@ def database_to_df(db_path):
         workload = record.workload
         workload2records[workload].append(records[i])
     # print("workload2records", workload2records)
-    main_workloads = [workload for workload, records in workload2records.items() if len(records) > 1]
+    main_workloads = [workload for workload, records in workload2records.items() if len(records) > 2]
     # print("main_workloads", main_workloads)
     if len(main_workloads) == 0:
         raise RuntimeError(f"Empty DB encountered: {db_path}")
