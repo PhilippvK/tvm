@@ -182,7 +182,10 @@ else:
 ir_mod = ir_mod.with_attr("executor", executor)
 # print("mod2", mod)
 
-target = tvm.target.Target("c")
+# target = tvm.target.Target("c")
+# target = "c"
+target = "llvm -num-cores 1 -mcpu generic-rv64 -mtriple=riscv64-unknown-elf -mabi lp64d -mattr=+d,+f,+m,+64bit -model=etiss-rv64gc"
+# target = "llvm -num-cores 1 -mcpu generic-rv64 -mtriple=riscv64-unknown-elf -mabi lp64d -mattr=+d,+f,+m,+64bit -model=etiss-rv64gc -global-isel=1 -global-isel-abort=2 -basic-block-sections=1"
 print("target", target)
 
 pass_config = {
