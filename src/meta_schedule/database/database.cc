@@ -138,7 +138,7 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
   Optional<FloatImm> timestamp;
   try {
     const ArrayNode* json_array = json_obj.as<ArrayNode>();
-    CHECK(json_array && json_array->size() == 4);
+    CHECK(json_array && json_array->size() == 5);
     // Load json[1] => run_secs
     if (json_array->at(1).defined()) {
       run_secs = AsFloatArray(json_array->at(1));
@@ -160,7 +160,7 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
     // Load json[4] => timestamp
     if (json_array->at(4).defined()) {
       const auto* float_imm = json_array->at(4).as<FloatImmNode>();
-      timestamp = FloatImm(DataType::Float(32), float_imm->value);
+      timestamp = FloatImm(DataType::Float(64), float_imm->value);
     }
     // Load json[0] => trace
     {
