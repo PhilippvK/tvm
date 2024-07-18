@@ -18,6 +18,7 @@ parser.add_argument("--zero-time", action="store_true", help="TODO")
 parser.add_argument("--print-df", action="store_true", help="TODO")
 parser.add_argument("--invert", action="store_true", help="TODO")
 parser.add_argument("--no-scatter", action="store_true", help="TODO")
+parser.add_argument("--compare-scatter", action="store_true", help="TODO")
 parser.add_argument("--quantile", type=float, default=0.95, help="TODO")
 parser.add_argument("--batch-size", type=int, default=1, help="TODO")
 parser.add_argument("--ref-y", type=float, default=None, help="TODO")
@@ -77,8 +78,8 @@ if args.print_df:
     print(df)
 
 
+compare_dfs = []
 if args.compare:
-    compare_dfs = []
     for compare_path in args.compare:
         df_ = database_to_df(compare_path)
         compare_dfs.append(df_)
@@ -129,9 +130,26 @@ if args.out:
         fig.update_xaxes(rangeslider=dict(visible=False))
 
         if len(compare_dfs) > 0:
-            for df_ in compare_dfs:
-                fig2 = px.line(df_, x=args.x, y=args.y, color_discrete_sequence=["gray"])
-                fig.add_trace(fig2.data[0])
+            full_compare_df = pd.DataFrame()
+            for j, df_ in enumerate(compare_dfs):
+                temp = df_.copy()
+                temp["compare"] = j
+                full_compare_df = pd.concat([full_compare_df, temp])
+            full_compare_df["compare"] = full_compare_df["compare"].astype(str)
+            print("full_compare_df", full_compare_df)
+            # input(">")
+            # cm = px.colors.sequential.gray
+            # cm = px.colors.qualitative.Plotly
+            # cm = ["gray", "lightgray", "darkgray"]
+            cm = ["#444444", "#555555", "#666666", "#777777", "#888888", "#999999"]
+
+            fig2 = px.line(full_compare_df, x=args.x, y=args.y, color="compare", color_discrete_sequence=cm)
+            for data in fig2.data:
+                fig.add_trace(data)
+            if not args.no_scatter and args.compare_scatter:
+                fig1 = px.scatter(full_compare_df, x=args.x, y=args.scatter_y, title="Title", color="compare", color_discrete_sequence=cm)
+                for data in fig1.data:
+                    fig.add_trace(data)
 
         fig2 = px.line(df, x=args.x, y=args.y)  # , color_discrete_sequence=["blue"])
         fig.add_trace(fig2.data[0])
