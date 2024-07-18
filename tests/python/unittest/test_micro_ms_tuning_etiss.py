@@ -14,14 +14,17 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from datetime import datetime
+from pathlib import Path
 import numpy as np
-# import pytest
+import pytest
 from types import MappingProxyType
 import tvm
 import tvm.testing
 from tvm import relay
 from tvm.relay.backend import Executor
-from tvm.contrib import graph_executor, utils
+# from tvm.contrib import graph_executor
+from tvm.contrib import utils
 from tvm import meta_schedule as ms
 
 ###
@@ -29,7 +32,18 @@ import tvm.micro.testing
 from tvm.meta_schedule.runner import EvaluatorConfig
 
 ###
-from tvm.tir.tensor_intrin.x86 import VNNI_DOT_16x4_INTRIN as VNNI_INTRIN
+# from tvm.tir.tensor_intrin.x86 import VNNI_DOT_16x4_INTRIN as VNNI_INTRIN
+
+import logging
+logging.basicConfig(level=logging.ERROR)
+
+
+def _schedule_dummy():
+
+    def schedule_fn(sch, block=None) -> bool:
+        return True
+
+    return schedule_fn
 
 
 def create_relay_module():
@@ -49,6 +63,7 @@ def create_relay_module():
     mod = tvm.IRModule.from_expr(f)
     mod = relay.transform.InferType()(mod)
 
+    np.random.seed(seed=1234)
     weight_sample = np.random.rand(
         weight_shape[0], weight_shape[1], weight_shape[2], weight_shape[3]
     ).astype("float32")
@@ -64,47 +79,107 @@ def create_relay_module():
 ###
 
 
+@pytest.mark.parametrize("alter_op", [
+    # False,
+    True
+])
+@pytest.mark.parametrize("toolchain", [
+    "gcc",
+    # "llvm",
+])
+@pytest.mark.parametrize("target", [
+    # "c",
+    # "llvm -num-cores 1 -mcpu generic-rv64 -mtriple=riscv64-unknown-elf -mabi lp64d -mattr=+d,+f,+m,+64bit -model=etiss-rv64gc",
+    "llvm -num-cores 1 -mcpu generic-rv64 -mtriple=riscv64-unknown-elf -mabi lp64d -mattr=+d,+f,+m,+64bit -model=etiss-rv64gc -global-isel=1 -global-isel-abort=2 -basic-block-sections=1",
+])
+@pytest.mark.parametrize("num_trials_per_iter,max_trials_per_task,max_trials_global", [
+    # (0, 0, 0),
+    # (1, 1, 3),
+    # (5, 10, 3 * 10),
+    # (5, 50, 3 * 50),
+    # (5, 100, 3 * 100),
+    # (5, 200, 3 * 200),
+    # (5, 400, 3 * 400),
+    # (5, 800, 3 * 800),
+    (5, 1600, 3 * 800),
+])
 @tvm.testing.requires_micro
-def test_micro_tuning_with_meta_schedule():
+def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials_per_iter, max_trials_per_task, max_trials_global):
+    print()
     # from tests.micro.zephyr.test_ms_tuning import create_relay_module
     from tvm.contrib.micro.meta_schedule.local_builder_micro import get_local_builder_micro
     from tvm.contrib.micro.meta_schedule.rpc_runner_micro import get_rpc_runner_micro
 
     # platform = "crt"
     # platform = "etiss"
-    platform = "/var/tmp/ga87puy/microtvm/mlonmcu/workspace_default/deps/src/microtvm_etiss/template_project"
-    print("platform", platform)
-    target = tvm.target.target.micro(model="host")
+    platform = "/work/git/tvmtests/microtvm-etiss-template/template_project"
+    # print("platform", platform)
+    # target = tvm.target.target.micro(model="host")
     # target = tvm.target.target.cpu("c")
-    target = "llvm -num-cores 1 -mcpu generic-rv32 -mtriple=riscv32-unknown-elf -mabi ilp32d -mattr=+a,+c,+d,+f,+m -model=etiss-rv32gc"
+    # target = "llvm -num-cores 1 -mcpu generic-rv32 -mtriple=riscv32-unknown-elf -mabi ilp32d -mattr=+a,+c,+d,+f,+m -model=etiss-rv32gc"
+    # target = "llvm -num-cores 1 -mcpu generic-rv64 -mtriple=riscv64-unknown-elf -mabi lp64d -mattr=+d,+f,+m -model=etiss-rv64gc"
     # target = "c"
     # options = {}
     options = {
-        "verbose": False,
+        "verbose": True,
         "quiet": True,
-        "gcc_prefix": "/var/tmp/ga87puy/microtvm/mlonmcu/workspace_default/deps/install/riscv_gcc",
-        "gcc_name": "riscv32-unknown-elf",
-        "llvm_dir": "/var/tmp/ga87puy/microtvm/mlonmcu/workspace_default/deps/install/llvm",
-        "toolchain": "gcc",
-        "etiss_script": "/var/tmp/ga87puy/microtvm/mlonmcu/workspace_default/deps/install/etiss/bin/run_helper.sh",
+        # "gcc_prefix": "/var/tmp/ga87puy/microtvm/mlonmcu/workspace_default/deps/install/riscv_gcc",
+        "gcc_prefix": "/tmp/riscv_tools_rv64imfd_lp64d_medany/gnu",
+        # "gcc_name": "riscv32-unknown-elf",
+        "gcc_name": "riscv64-unknown-elf",
+        # "llvm_dir": "/var/tmp/ga87puy/microtvm/mlonmcu/workspace_default/deps/install/llvm",
+        "llvm_dir": "/tmp/seal5_llvm_corev/.seal5/build/release_assertions",
+        # "toolchain": "gcc",
+        # "toolchain": "llvm",
+        "toolchain": toolchain,
+        # "etiss_script": "/var/tmp/ga87puy/microtvm/mlonmcu/workspace_default/deps/install/etiss/bin/run_helper.sh",
+        "etiss_script": "/work/git/mlonmcu/mlonmcu/workspace_default/deps/install/etiss/bin/run_helper.sh",
         "etiss_args": "",
-        "arch": "rv32gc_zicsr_zifencei",
-        "abi": "ilp32d",
-        "cpu_arch": "RV32IMACFD",
+        # "arch": "rv32gc_zicsr_zifencei",
+        "arch": "rv64imfd",
+        # "abi": "ilp32d",
+        "abi": "lp64d",
+        # "cpu_arch": "RV32IMACFD",
+        "cpu_arch": "RV64IMACFD",
         "cpu_freq": 100000000,
     }
 
-    work_dir = utils.tempdir()
-    print("work_dir", work_dir.path)
+    KEEP = True
+    if KEEP:
+        base_dir = Path("/tmp/base")
+        now = datetime.now()
+        ts = now.strftime("%Y%m%dT%H%M%S")
+        def sanitize(x):
+            if not isinstance(x, str):
+                x = str(x)
+            x = x.replace(" ", "").replace(",", "").replace("/", "").replace(";", "").replace("=", "-").replace("+", "")
+            return x
+        fields = [target, toolchain, alter_op, num_trials_per_iter, max_trials_per_task, max_trials_global, ts]
+        label = "-".join([sanitize(x) for x in fields])
+        work_dir_path = base_dir / label
+        print("work_dir_path", work_dir_path)
+    else:
+        work_dir = utils.tempdir()
+        work_dir_path = work_dir.path
+        print("work_dir_path", work_dir_path)
+    # print("work_dir", work_dir.path)
     # input("1")
     mod, params, model_info = create_relay_module()
     input_name = model_info["in_tensor"]
     input_shape = model_info["in_shape"]
     input_dtype = model_info["in_dtype"]
     data_sample = np.random.rand(*input_shape).astype(input_dtype)
+    opt_level = 3
+    pass_config = {
+        "tir.disable_vectorize": True
+    }
+    disabled_pass = []
+    if not alter_op:
+        disabled_pass += ["AlterOpLayout"]
+    link_params = True
 
     runtime = relay.backend.Runtime("crt", {"system-lib": True})
-    executor = Executor("aot", {"link-params": True})
+    executor = Executor("aot", {"link-params": link_params})
     # This line is necessary for link-params to take effect during
     # task extraction and relay.build(...).
     mod = mod.with_attr("executor", executor)
@@ -112,6 +187,7 @@ def test_micro_tuning_with_meta_schedule():
     builder = get_local_builder_micro()
 
     with ms.Profiler() as profiler:
+        # print("a1")
         evaluator_config = EvaluatorConfig(
             number=1,
             repeat=1,
@@ -121,9 +197,9 @@ def test_micro_tuning_with_meta_schedule():
         with get_rpc_runner_micro(
             platform=platform, options=options, session_timeout_sec=120, evaluator_config=evaluator_config,
         ) as runner:
-            print("runner", runner)
+            # print("runner", runner)
             # if True:
-            if False:
+            if max_trials_global > 0:
                 db: ms.Database = ms.relay_integration.tune_relay(
                     mod=mod,
                     params=params,
@@ -132,103 +208,28 @@ def test_micro_tuning_with_meta_schedule():
                     runner=runner,
                     strategy="evolutionary",
                     # num_trials_per_iter=2,
-                    num_trials_per_iter=1,
+                    num_trials_per_iter=num_trials_per_iter,
                     # max_trials_per_task=10,
-                    max_trials_per_task=1,
+                    max_trials_per_task=max_trials_per_task,
                     # max_trials_global=100,
-                    max_trials_global=3,
-                    work_dir=str(work_dir.path),
+                    max_trials_global=max_trials_global,
+                    work_dir=str(work_dir_path),
                     module_equality="ignore-ndarray",
                     pass_config=MappingProxyType(
-                        {
-                            "tir.disable_vectorize": True,
-                            "tir.enable_debug": True,
-                        }
+                        pass_config,
+                        # {
+                        #     "tir.disable_vectorize": True,
+                        #     # "tir.enable_debug": True,
+                        # }
                     ),
+                    disabled_pass=disabled_pass,
                 )
             else:
-                tune_tasks = ms.relay_integration.extract_tasks(
-                    mod,
-                    params=params,
-                    target=target,
-                    # new!
-                    module_equality="ignore-ndarray",
-                    pass_config=MappingProxyType(
-                        {
-                            "tir.disable_vectorize": True,
-                            "tir.enable_debug": True,
-                        }
-                    ),
-                )
-                intrin = VNNI_INTRIN
-                postprocs = [
-                    ms.postproc.DisallowDynamicLoop(),
-                    ms.postproc.RewriteParallelVectorizeUnroll(),
-                    ms.postproc.RewriteReductionBlock(),
-                    ms.postproc.RewriteTensorize(vectorize_init_loop=True),
-                ]
-                sch_rules = [
-                    ms.schedule_rule.ApplyCustomRule(),
-                    ms.schedule_rule.AutoInline(
-                        into_producer=False,
-                        into_consumer=True,
-                        inline_const_tensor=True,
-                        disallow_if_then_else=True,
-                        require_injective=True,
-                        require_ordered=True,
-                        disallow_op=["tir.exp"],
-                    ),
-                    ms.schedule_rule.AddRFactor(max_jobs_per_core=16, max_innermost_factor=64),
-                    ms.schedule_rule.MultiLevelTilingWithIntrin(
-                        intrin,
-                        structure="SSRSRS",
-                        tile_binds=None,
-                        max_innermost_factor=64,
-                        vector_load_lens=None,
-                        reuse_read=None,
-                        reuse_write=ms.schedule_rule.ReuseType(
-                            req="may",
-                            levels=[1, 2],
-                            scope="global",
-                        ),
-                    ),
-                    ms.schedule_rule.MultiLevelTiling(
-                        structure="SSRSRS",
-                        tile_binds=None,
-                        max_innermost_factor=64,
-                        vector_load_lens=None,
-                        reuse_read=None,
-                        reuse_write=ms.schedule_rule.ReuseType(
-                            req="may",
-                            levels=[1, 2],
-                            scope="global",
-                        ),
-                    ),
-                    ms.schedule_rule.ParallelizeVectorizeUnroll(
-                        max_jobs_per_core=16,
-                        max_vectorize_extent=64,
-                        unroll_max_steps=[0, 16, 64, 512],
-                        unroll_explicit=True,
-                    ),
-                    ms.schedule_rule.RandomComputeLocation(),
-                ]
-                tasks, task_weights = ms.relay_integration.extracted_tasks_to_tune_contexts(
-                    extracted_tasks=tune_tasks,
-                    work_dir=str(work_dir.path),
-                    space=ms.space_generator.PostOrderApply(
-                        sch_rules=sch_rules,
-                        postprocs=postprocs,
-                    ),
-                )
-                db: ms.Database = ms.tune.tune_tasks(
-                    tasks=tasks,
-                    task_weights=task_weights,
-                    work_dir=str(work_dir.path),
-                    max_trials_global=32,
+                # db = ms.database.MemoryDatabase()
+                db = ms.database.ScheduleFnDatabase(
+                    _schedule_dummy()
                 )
 
-        import time
-        time.sleep(60)
         #  Build model using meta_schedule logs
         ms_mod: tvm.runtime.Module = ms.relay_integration.compile_relay(
             database=db,
@@ -237,53 +238,104 @@ def test_micro_tuning_with_meta_schedule():
             params=params,
             pass_config=MappingProxyType(
                 {
+                    **pass_config,
                     "relay.backend.use_meta_schedule": True,
                     "relay.backend.tir_converter": "default",
-                    "tir.disable_vectorize": True,
+                    "relay.backend.use_meta_schedule_dispatch": 2,
+                    # "tir.disable_vectorize": True,
                     # "tir.enable_debug": True,
                 }
             ),
+            disabled_pass=disabled_pass,
+            executor=executor,
+            runtime=runtime,
+        )
+        non_ms_mod: tvm.runtime.Module = ms.relay_integration.compile_relay(
+            None,
+            mod=mod,
+            target=target,
+            params=params,
+            pass_config=MappingProxyType(
+                {
+                    **pass_config,
+                    "relay.backend.use_meta_schedule_dispatch": 2,
+                }
+            ),
+            disabled_pass=disabled_pass,
             executor=executor,
             runtime=runtime,
         )
     print(profiler.table())
+    import time
+    print("sleeping")
+    time.sleep(10)
 
+    # TUNED
+    # TODO: wrap in helper
     project = tvm.micro.generate_project(
         str(tvm.micro.get_microtvm_template_projects(platform)),
         ms_mod,
-        str(work_dir / "project"),
+        str(work_dir_path / "project"),
         options=options,
     )
     project.build()
     project.flash()
     with tvm.micro.Session(project.transport()) as session:
         aot_executor = tvm.runtime.executor.aot_executor.AotModule(session.create_aot_executor())
-        aot_executor.get_input(0).copyfrom(data_sample)
-        result = aot_executor.module.time_evaluator("run", session.device, number=3)()
+        # aot_executor.get_input(0).copyfrom(data_sample)
+        # result = aot_executor.module.time_evaluator("run", session.device, number=3)()
+        result = aot_executor.module.time_evaluator("run", session.device, number=1)()
         print("result", result)
-        output = aot_executor.get_output(0).numpy()
+        print("mean: ", result.mean)
+        # output = aot_executor.get_output(0).numpy()
+
+    # UNTUNED
+    # TODO: wrap in helper
+    project = tvm.micro.generate_project(
+        str(tvm.micro.get_microtvm_template_projects(platform)),
+        non_ms_mod,
+        str(work_dir_path / "project2"),
+        options=options,
+    )
+    project.build()
+    project.flash()
+    with tvm.micro.Session(project.transport()) as session:
+        aot_executor = tvm.runtime.executor.aot_executor.AotModule(session.create_aot_executor())
+        # aot_executor.get_input(0).copyfrom(data_sample)
+        # result = aot_executor.module.time_evaluator("run", session.device, number=3)()
+        result2 = aot_executor.module.time_evaluator("run", session.device, number=1)()
+        print("result2", result2)
+        print("mean2:", result2.mean)
+        # import time
+        # time.sleep(100)
+        # output = aot_executor.get_output(0).numpy()
+    rel = result.mean / result2.mean
+    print("rel:  ", rel)
 
     # Build reference model (without tuning)
-    dev = tvm.cpu()
-    target = tvm.target.target.micro(model="host")
-    with tvm.transform.PassContext(
-        opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=["AlterOpLayout"]
-    ):
-        ref_mod = relay.build(
-            mod,
-            target=target,
-            params=params,
-            runtime=runtime,
-        )
-    ref_mod.export_library(work_dir / "compiled_lib2.so")
-    mod2: tvm.runtime.Module = tvm.runtime.load_module(work_dir / "compiled_lib2.so")
-    graph_mod = graph_executor.GraphModule(mod2["default"](dev))
-    graph_mod.set_input(input_name, data_sample)
-    graph_mod.run()
-    ref_output = graph_mod.get_output(0).numpy()
+    # dev = tvm.cpu()
+    # target = tvm.target.target.micro(model="host")
+    # with tvm.transform.PassContext(
+    #     opt_level=opt_level,
+    #     config=pass_config,
+    #     disabled_pass=disabled_pass,
+    # ):
+    #     ref_mod = relay.build(
+    #         mod,
+    #         target=target,
+    #         params=params,
+    #         runtime=runtime,
+    #     )
+    # ref_mod.export_library(work_dir / "compiled_lib2.so")
+    # mod2: tvm.runtime.Module = tvm.runtime.load_module(work_dir / "compiled_lib2.so")
+    # graph_mod = graph_executor.GraphModule(mod2["default"](dev))
+    # graph_mod.set_input(input_name, data_sample)
+    # graph_mod.run()
+    # ref_output = graph_mod.get_output(0).numpy()
 
-    assert np.allclose(output, ref_output, rtol=1e-4, atol=2e-4), "FAILED"
-    # work_dir.remove()
+    # assert np.allclose(output, ref_output, rtol=1e-4, atol=2e-4), "FAILED"
+    # if not KEEP:
+    #     work_dir.remove()
 
 
 if __name__ == "__main__":
