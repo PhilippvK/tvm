@@ -173,6 +173,7 @@ if args.out:
             fig.add_scatter(x=[x0], y=[args.ref_y], marker=dict(color="red", size=8, symbol="x"), name="ref")
             fig.add_annotation(x=x0, y=ymax, text=text, showarrow=True)
             fig.add_scatter(x=[x0], y=[ymax], marker=dict(color="red", size=8, symbol="square"), name="best")
+        fig.update_layout(showlegend=False)
     dest = Path(args.out)
     fmt = dest.suffix[1:].lower()
     if fmt in ["pdf", "png", "jpg"]:
