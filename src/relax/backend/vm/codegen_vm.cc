@@ -484,13 +484,14 @@ Module VMLink(ExecBuilder builder, Target target, Optional<Module> lib, Array<Mo
   //     Bool(false) /* unpacked_api */
   // );
 
-  // LOG(INFO) << "metadata=" << metadata;
+  LOG(INFO) << "metadata123=" << metadata;
   Module combined_lib = codegen::CreateMetadataModule(
       conv_params, lib.value(), ext_libs, target,
 
       // TODO(@sunggg): Currently, CRT uses relay-specific executor for uTVM support.
       // Before jumping into details, only support cpp runtime for now.
-      relay::Runtime::Create("cpp"),
+      // relay::Runtime::Create("cpp"),
+      relay::Runtime::Create("crt"),  // TODO: pass as arg
       // relay::Executor::Create("graph"),  // TODO(@sunggg): pass arbitrarily executor. CPP runtime
       //                                    // won't use this anyways.
       relay::Executor::Create("aot"),  // TODO(@sunggg): pass arbitrarily executor. CPP runtime
