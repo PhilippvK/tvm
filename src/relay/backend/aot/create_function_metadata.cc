@@ -78,7 +78,7 @@ Map<String, backend::FunctionInfo> CalculateFunctionInfos(const IRModule& mod,
   return function_metadata;
 }
 
-Map<String, backend::FunctionInfo> CreateFunctionMetadata(const IRModule& mod,
+Map<String, backend::FunctionInfo> CreateFunctionMetadata(const IRModule& mod, Optional<IRModule> orig_mod,
                                                           Integer workspace_byte_alignment,
                                                           Integer constant_byte_alignment) {
   // First calculate the FunctionInfos from the buffers that are explicitly allocated
@@ -111,6 +111,29 @@ Map<String, backend::FunctionInfo> CreateFunctionMetadata(const IRModule& mod,
         }
       }
     }
+  }
+  if (orig_mod.defined()) {
+    for (const auto& kv : main_func_info->tir_primfuncs) {
+      Target tgt = kv.first;
+      for (const auto& kv : orig_mod.value()->functions) {
+        GlobalVar global_var = kv.first;
+        BaseFunc base_func = kv.second;
+        if (base_func->IsInstance<tir::PrimFuncNode>()) {
+        } else if (base_func->IsInstance<relay::FunctionNode>()) {
+        } else if (base_func->IsInstance<relax::FunctionNode>()) {
+          auto* func = base_func.as<relax::FunctionNode>();
+          auto relax_primfunc = GetRef<relax::Function>(func);
+          if (global_var->name_hint == "main") {
+            main_func_info->relax_primfuncs.Set(tgt, relax_primfunc);
+
+          } else {
+          }
+        } else {
+        }
+      }
+      break;
+    }
+  } else {
   }
   function_metadata.Set(runtime::symbol::tvm_module_main, main_func_info);
   return function_metadata;

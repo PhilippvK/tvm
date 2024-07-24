@@ -37,7 +37,7 @@ namespace aot {
  * \param constant_byte_alignment The alignment of the constant pool.
  * \return A map between function names and FunctionInfos.
  */
-Map<String, FunctionInfo> CreateFunctionMetadata(const IRModule& mod,
+Map<String, FunctionInfo> CreateFunctionMetadata(const IRModule& mod, Optional<IRModule> orig_mod,
                                                  Integer workspace_byte_alignment,
                                                  Integer constant_byte_alignment);
 
