@@ -219,6 +219,13 @@ def _create_type_metadata(input_type):
     }
 
 
+def _create_type_metadata_relax(input_type, input_shape):
+    return {
+        "size": int(_shape_to_size(input_shape, input_type.dtype)),
+        "dtype": str(input_type.dtype),
+    }
+
+
 def _flatten_tuple_outputs(ret_type, predefined_names, offset=0):
     if isinstance(ret_type, tvm.ir.tensor_type.TensorType):
         name = predefined_names[offset] if predefined_names else f"output{offset}"
@@ -240,6 +247,14 @@ def _get_outputs_from_ret_type(ret_type, predefined_names):
         name = predefined_names[0] if predefined_names else "output"
         return {name: ret_type}
     return _flatten_tuple_outputs(ret_type, predefined_names)
+
+
+def _get_outputs_from_ret_type_relax(ret_struct_info, predefined_names):
+    if isinstance(ret_struct_info, tvm.relax.struct_info.TensorStructInfo):
+        name = predefined_names[0] if predefined_names else "output"
+        return {name: ret_struct_info}
+    # TODO: else?
+    return _flatten_tuple_outputs_relax(ret_type, predefined_names)
 
 
 def _build_function_memory_map(function_metadata):
@@ -325,26 +340,46 @@ def _build_function_memory_map(function_metadata):
         target_main_on_device = target_main_entries[int(target.get_target_device_type())]
         target_main_on_device["io_size_bytes"] = int(main_func_metadata.io_sizes[target])
 
-        if target not in main_func_metadata.relay_primfuncs:  # TODO: handle relax
+        if target not in main_func_metadata.relay_primfuncs:  # TODO: handle relax detection
             main_relax_func = main_func_metadata.relax_primfuncs[target]
             print("main_relax_func", main_relax_func)
-            continue
-        main_relay_func = main_func_metadata.relay_primfuncs[target]
-        target_main_on_device["inputs"] = {
-            input_param.name_hint: _create_type_metadata(input_param.checked_type)
-            for input_param in main_relay_func.params
-        }
-        predefined_names = (
-            main_relay_func.attrs["output_tensor_names"]
-            if "output_tensor_names" in main_relay_func.attrs
-            else None
-        )
-        target_main_on_device["outputs"] = {
-            name: _create_type_metadata(output_type)
-            for name, output_type in _get_outputs_from_ret_type(
-                main_relay_func.ret_type, predefined_names
-            ).items()
-        }
+            print("dir(main_relax_func)", dir(main_relax_func))
+            input("?!")
+            # continue
+            print("main_relax_func.params[0]", main_relax_func.params[0], type(main_relax_func.params[0]), dir(main_relax_func.params[0]))
+            target_main_on_device["inputs"] = {
+                input_param.name_hint: _create_type_metadata_relax(input_param.checked_type, input_param.struct_info.shape)
+                for input_param in main_relax_func.params
+            }
+            predefined_names = (
+                main_relax_func.attrs["output_tensor_names"]
+                if "output_tensor_names" in main_relax_func.attrs
+                else None
+            )
+            target_main_on_device["outputs"] = {
+                name: _create_type_metadata_relax(ret, ret.shape)
+                for name, ret in _get_outputs_from_ret_type_relax(
+                    main_relax_func.struct_info.ret, predefined_names
+                ).items()
+            }
+        else:
+            main_relay_func = main_func_metadata.relay_primfuncs[target]
+            print("main_relay_func.params[0]", main_relay_func.params[0], type(main_relay_func.params[0]), dir(main_relay_func.params[0]))
+            target_main_on_device["inputs"] = {
+                input_param.name_hint: _create_type_metadata(input_param.checked_type)
+                for input_param in main_relay_func.params
+            }
+            predefined_names = (
+                main_relay_func.attrs["output_tensor_names"]
+                if "output_tensor_names" in main_relay_func.attrs
+                else None
+            )
+            target_main_on_device["outputs"] = {
+                name: _create_type_metadata(output_type)
+                for name, output_type in _get_outputs_from_ret_type(
+                    main_relay_func.ret_type, predefined_names
+                ).items()
+            }
 
     ret = {
         "operator_functions": func_entries,
