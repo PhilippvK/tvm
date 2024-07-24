@@ -208,7 +208,7 @@ def _vmlink(
     *,
     runtime: Runtime = None,  # TODO: type hint
     system_lib: Optional[bool] = None,
-    metadata = None
+    metadata = None,
 ):
     """
     Internal codegen function to make executable.
