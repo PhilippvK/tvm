@@ -143,13 +143,13 @@ def micro2_build_pipeline():
                 transform.LegalizeOps(),
                 # TODO: try this out
                 # ---
-                # transform.AnnotateTIROpPattern(),
+                transform.AnnotateTIROpPattern(),
                 # transform.FoldConstant(),
-                # transform.FuseOps(),
-                # transform.FuseTIR(),
-                # transform.DeadCodeElimination(),
+                transform.FuseOps(),
+                transform.FuseTIR(),
+                transform.DeadCodeElimination(),
                 # ---
-                transform.RewriteDataflowReshape(),
+                # transform.RewriteDataflowReshape(),
                 transform.ToNonDataflow(),
                 transform.RemovePurityChecking(),
                 transform.CallTIRRewrite(),
