@@ -37,6 +37,7 @@ from tvm.target import Target
 from tvm.relay.backend import Executor, Runtime
 from tvm.relay.analysis.operations_distribution import analyze_operations_distribution
 from tvm.relay.transform.suffixes import tag_suffixes
+from tvm.relax.testing import relay_translator
 
 from . import composite_target, frontends, TVMCException
 from .model import TVMCModel, TVMCPackage
@@ -130,6 +131,11 @@ def add_compile_parser(subparsers, _, json_params):
     #     can be improved in future to add integration with a modelzoo
     #     or URL, for example.
     parser.add_argument("FILE", help="path to the input model file.")
+    parser.add_argument(
+        "--relax",
+        action="store_true",
+        help="TODO",
+    )
     parser.add_argument(
         "-O",
         "--opt-level",
@@ -234,6 +240,7 @@ def drive_compile(args):
         print_pass_times=args.print_pass_times,
         print_ir_before=args.print_ir_before,
         print_ir_after=args.print_ir_after,
+        relax_mode=args.relax,
         **transform_args,
     )
 
@@ -270,6 +277,7 @@ def compile_model(
     mixed_precision_ops: Optional[List[str]] = None,
     mixed_precision_calculation_type: Optional[str] = None,
     mixed_precision_acc_type: Optional[str] = None,
+    relax_mode: bool = False,
 ):
     """Compile a model from a supported framework into a TVM module.
 
@@ -354,6 +362,7 @@ def compile_model(
         The compiled TVMCModel ready to be run.
 
     """
+    print("relax_mode", relax_mode)
     mod, params = tvmc_model.mod, tvmc_model.params
 
     if dump_code is None:
@@ -395,70 +404,80 @@ def compile_model(
         )
         instruments = [print_ir_instr] if instruments is None else [print_ir_instr] + instruments
 
+
     with tvm.transform.PassContext(
         opt_level=opt_level,
         config=config,
         disabled_pass=disabled_pass,
         instruments=instruments,
     ):
-        transform_args = parse_graph_transform_args(locals())
-        mod = apply_graph_transforms(mod, transform_args)
-
-        for partition_function, opts in zip(partition_functions, partition_opts):
-            mod = partition_function(mod, params, mod_name=mod_name, **opts)
-
-        if initial_relay:
-            # dump which operations are offloaded to which backend
-            dump_operation_offloads(mod, initial_relay, dump_offloads)
-
-        if tuning_records and os.path.exists(tuning_records):
-            logger.debug("tuning records file provided: %s", tuning_records)
-
-            use_autoscheduler = True
-            try:
-                auto_scheduler.load_records(tuning_records)
-            except tvm._ffi.base.TVMError:
-                use_autoscheduler = False
-
-            if use_autoscheduler:
-                with auto_scheduler.ApplyHistoryBest(tuning_records):
-                    config["relay.backend.use_auto_scheduler"] = True
-                    logger.debug("building relay graph with autoscheduler")
-                    graph_module = build(
-                        mod,
-                        tvm_target=tvm_target,
-                        executor=executor,
-                        runtime=runtime,
-                        params=params,
-                        use_vm=use_vm,
-                        mod_name=mod_name,
-                        workspace_pools=workspace_pools,
-                    )
-            else:
-                with autotvm.apply_history_best(tuning_records):
-                    logger.debug("building relay graph with tuning records")
-                    graph_module = build(
-                        mod,
-                        tvm_target=tvm_target,
-                        executor=executor,
-                        runtime=runtime,
-                        params=params,
-                        use_vm=use_vm,
-                        mod_name=mod_name,
-                        workspace_pools=workspace_pools,
-                    )
+        if relax_mode:
+            relax_mod = relay_translator.from_relay(mod["main"], target, params)
+            print("relax_mod", relax_mod)
+            micro_pipeline = "micro2_build"
+            crt_exec_mode = "crt"
+            ex = tvm.relax.build(relax_mod, target=target, pipeline=micro_pipeline, exec_mode=crt_exec_mode, executor=executor, runtime=runtime)
+            print("ex", ex)
+            input(">")
         else:
-            logger.debug("building relay graph (no tuning records provided)")
-            graph_module = build(
-                mod,
-                tvm_target=tvm_target,
-                executor=executor,
-                runtime=runtime,
-                params=params,
-                use_vm=use_vm,
-                mod_name=mod_name,
-                workspace_pools=workspace_pools,
-            )
+            transform_args = parse_graph_transform_args(locals())
+            mod = apply_graph_transforms(mod, transform_args)
+
+            for partition_function, opts in zip(partition_functions, partition_opts):
+                mod = partition_function(mod, params, mod_name=mod_name, **opts)
+
+            if initial_relay:
+                # dump which operations are offloaded to which backend
+                dump_operation_offloads(mod, initial_relay, dump_offloads)
+
+            if tuning_records and os.path.exists(tuning_records):
+                logger.debug("tuning records file provided: %s", tuning_records)
+
+                use_autoscheduler = True
+                try:
+                    auto_scheduler.load_records(tuning_records)
+                except tvm._ffi.base.TVMError:
+                    use_autoscheduler = False
+
+                if use_autoscheduler:
+                    with auto_scheduler.ApplyHistoryBest(tuning_records):
+                        config["relay.backend.use_auto_scheduler"] = True
+                        logger.debug("building relay graph with autoscheduler")
+                        graph_module = build(
+                            mod,
+                            tvm_target=tvm_target,
+                            executor=executor,
+                            runtime=runtime,
+                            params=params,
+                            use_vm=use_vm,
+                            mod_name=mod_name,
+                            workspace_pools=workspace_pools,
+                        )
+                else:
+                    with autotvm.apply_history_best(tuning_records):
+                        logger.debug("building relay graph with tuning records")
+                        graph_module = build(
+                            mod,
+                            tvm_target=tvm_target,
+                            executor=executor,
+                            runtime=runtime,
+                            params=params,
+                            use_vm=use_vm,
+                            mod_name=mod_name,
+                            workspace_pools=workspace_pools,
+                        )
+            else:
+                logger.debug("building relay graph (no tuning records provided)")
+                graph_module = build(
+                    mod,
+                    tvm_target=tvm_target,
+                    executor=executor,
+                    runtime=runtime,
+                    params=params,
+                    use_vm=use_vm,
+                    mod_name=mod_name,
+                    workspace_pools=workspace_pools,
+                )
 
         # Generate output dump files with sources
         for source_type in dump_code:
@@ -467,21 +486,29 @@ def compile_model(
             elif source_type == "tir":
                 dumps[source_type] = "\n".join(dumps[source_type])
             else:
-                lib = graph_module.lib if use_vm else graph_module.get_lib()
-                # TODO lib.get_source call have inconsistent behavior for unsupported
-                #      formats (@leandron).
-                dumps[source_type] = lib.get_source(source_type)
-                for smod in lib.imported_modules:
-                    dumps[smod.type_key] = smod.get_source()
+                if relax_mode:
+                    pass
+                else:
+                    lib = graph_module.lib if use_vm else graph_module.get_lib()
+                    # TODO lib.get_source call have inconsistent behavior for unsupported
+                    #      formats (@leandron).
+                    dumps[source_type] = lib.get_source(source_type)
+                    for smod in lib.imported_modules:
+                        dumps[smod.type_key] = smod.get_source()
 
         # Create a new tvmc model package object from the graph definition.
-        package_path = tvmc_model.export_package(
-            graph_module, package_path, cross, cross_options, output_format
-        )
+        if relax_mode:
+            package_path = tvmc_model.export_package(
+                ex, package_path, cross, cross_options, output_format
+            )
+        else:
+            package_path = tvmc_model.export_package(
+                graph_module, package_path, cross, cross_options, output_format
+            )
 
         # Write dumps to file.
         if dumps:
-            save_dumps(package_path, dumps)
+            save_dumps(str(package_path), dumps)
 
         # Print compilation times per pass
         if print_pass_times:
