@@ -159,8 +159,9 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
     }
     // Load json[4] => timestamp
     if (json_array->at(4).defined()) {
-      const auto* float_imm = json_array->at(4).as<FloatImmNode>();
-      timestamp = FloatImm(DataType::Float(64), float_imm->value);
+      if (const auto* float_imm = json_array->at(4).as<FloatImmNode>()) {
+        timestamp = FloatImm(DataType::Float(64), float_imm->value);
+      }
     }
     // Load json[0] => trace
     {
