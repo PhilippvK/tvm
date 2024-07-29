@@ -259,7 +259,7 @@ class BuiltinLower : public StmtExprMutator {
         size_t constant_size = op->ConstantAllocationSize();
         transform::PassContext pass_ctx = transform::PassContext::Current();
         auto max_stack_alloca = pass_ctx->GetConfig<Integer>(kMaxStackAllocaOverride, Integer(runtime::kMaxStackAlloca)).value();
-        if (constant_size > 0 && constant_size * nbytes < max_stack_alloca.IntValue()) {
+        if (constant_size > 0 && constant_size * nbytes < (unsigned int)max_stack_alloca.IntValue()) {
           return stmt;
         }
       }
