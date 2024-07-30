@@ -46,8 +46,8 @@ static runtime::Module CreateCrtMetadataModule(
     Array<runtime::Module> non_crt_exportable_modules,
     Array<runtime::Module> crt_exportable_modules,
     const std::unordered_map<std::string, runtime::NDArray>& const_var_ndarray) {
-    std::cout << "CreateCrtMetadataModule" << std::endl;
-    std::cout << "target_module=" << target_module << std::endl;
+    // std::cout << "CreateCrtMetadataModule" << std::endl;
+    // std::cout << "target_module=" << target_module << std::endl;
   if (!non_crt_exportable_modules.empty()) {
     std::string non_exportable_modules;
     for (unsigned int i = 0; i < non_crt_exportable_modules.size(); i++) {
@@ -84,9 +84,9 @@ static runtime::Module CreateCrtMetadataModule(
     LOG(FATAL) << "TVM was not built with LLVM enabled.";
 #endif  // TVM_LLVM_VERSION
   }
-  std::cout << "non_crt_exportable_modules=" << non_crt_exportable_modules << std::endl;
-  std::cout << "crt_exportable_modules=" << crt_exportable_modules << std::endl;
-    std::cout << "target_module2=" << target_module << std::endl;
+  // std::cout << "non_crt_exportable_modules=" << non_crt_exportable_modules << std::endl;
+  // std::cout << "crt_exportable_modules=" << crt_exportable_modules << std::endl;
+    // std::cout << "target_module2=" << target_module << std::endl;
 
   return target_module;
 }
