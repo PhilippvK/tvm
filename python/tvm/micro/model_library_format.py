@@ -502,6 +502,8 @@ def _export_graph_model_library_format(
 
         with open(src_dir / f"{mod.libmod_name}.relay", "w") as f:
             f.write(str(mod.ir_mod))
+        with open(src_dir / f"{mod.libmod_name}.relay2", "w") as f:
+            f.write(mod.ir_mod.astext(show_meta_data=True))
 
         if not is_aot:
             if not graph_config_dir.exists():
