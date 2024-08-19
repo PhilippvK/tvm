@@ -515,7 +515,10 @@ std::vector<Schedule> EvolutionarySearchNode::State::SampleInitPopulation(int nu
       const IRModule& mod = data.mod;
       Schedule& result = results.at(trace_id);
       ICHECK(!result.defined());
-      int design_space_index = tir::SampleInt(rand_state, 0, design_spaces.size());
+      int design_space_index = 0;
+      if (trace_id > 0)
+        design_space_index = tir::SampleInt(rand_state, 0, design_spaces.size());
+
       tir::Trace trace(design_spaces[design_space_index]->insts, {});
       if (Optional<Schedule> sch = pp.Apply(mod, trace, rand_state)) {
         result = sch.value();
