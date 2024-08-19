@@ -323,7 +323,9 @@ class Module(object):
         f_preproc="",
     ):
         # print("time_evaluator", func_name)
-        func_name = "default_function"
+        if func_name == "__tvm_main__":
+            func_name = "default_function"
+        # func_name = "default_function"
         """Get an evaluator that measures time cost of running function.
 
         Parameters
