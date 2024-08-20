@@ -315,6 +315,18 @@ struct ThreadedTraceApply {
   /*! \brief Destructor */
   ~ThreadedTraceApply() { delete[] items_; }
 
+  static Optional<Integer> ParseLoopExtent(const tir::Schedule& sch, const tir::Instruction& inst) {
+    static tir::InstructionKind inst_kind = tir::InstructionKind::Get("SamplePerfectTile");
+    if (!inst->kind.same_as(inst_kind)) {
+      return NullOpt;
+    }
+    ICHECK_EQ(inst->inputs.size(), 1);
+    // ICHECK_EQ(inst->attrs.size(), 2);
+    // String thread_axis = Downcast<String>(inst->attrs[0]);
+    return Downcast<Integer>(sch->Get(Downcast<tir::LoopRV>(inst->inputs[0]))->extent);
+  }
+
+
   /*!
    * \brief Apply the trace and postprocessors to an IRModule
    * \param mod The IRModule to be applied
@@ -330,6 +342,41 @@ struct ThreadedTraceApply {
                               /*debug_mode=*/0,
                               /*error_render_level=*/tir::ScheduleErrorRenderLevel::kNone);
 
+
+    int trace_space_size = 1;
+    static const tir::InstructionKind& inst_sample_categorical = tir::InstructionKind::Get("SampleCategorical");
+    static const tir::InstructionKind& inst_sample_perfect_tile = tir::InstructionKind::Get("SamplePerfectTile");
+    LOG(INFO) << "AAA";
+    for (const tir::Instruction& inst : trace->insts) {
+        LOG(INFO) << "inst=" << inst;
+        if (inst->kind.same_as(inst_sample_categorical)) {
+          ICHECK_EQ(inst->outputs.size(), 1);
+          ICHECK_EQ(inst->attrs.size(), 2);
+          std::vector<int> candidates = support::AsVector<IntImm, int>(Downcast<Array<IntImm>>(inst->attrs[0]));
+          // TVM_PY_LOG(INFO, self->ctx_->logger) << "candidates.size()=" << candidates.size();
+          ICHECK_GT(candidates.size(), 0);
+          trace_space_size *= candidates.size();
+        } else if (inst->kind.same_as(inst_sample_perfect_tile)) {
+          // ICHECK_EQ(inst->attrs.size(), 2);
+          // int n_splits = Downcast<IntImm>(inst->attrs[0])->value;
+          // ICHECK_EQ(inst->outputs.size(), n_splits);
+          // // TVM_PY_LOG(INFO, self->ctx_->logger) << "n_splits=" << n_splits;
+          // ICHECK_GT(n_splits, 0);
+          // int max_innermost_factor = Downcast<IntImm>(inst->attrs[1])->value;
+          // // TVM_PY_LOG(INFO, self->ctx_->logger) << "max_innermost_factor=" << max_innermost_factor;
+          // ICHECK_EQ(inst->inputs.size(), 1);
+          // ICHECK(inst->inputs[0].defined());
+          // const tir::LoopRV& loop_rv = Downcast<tir::LoopRV>(inst->inputs[0]);
+          // tir::StmtSRef block_sref = sch->GetSRef(loop_rv);
+          if (Optional<Integer> extent = ParseLoopExtent(sch, inst)) {
+            LOG(INFO) << "extent=" << extent;
+          }
+          // int64_t fused_extent = -1;
+          // if (const int64_t* extent = tir::GetLoopIntExtent(sch->Get(loop_rv).get())) {
+          //   fused_extent = *extent;
+          // }
+        }
+    }
     trace->ApplyToSchedule(sch, /*remove_postproc=*/true);
     sch->EnterPostproc();
 

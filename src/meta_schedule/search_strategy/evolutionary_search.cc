@@ -506,6 +506,64 @@ std::vector<Schedule> EvolutionarySearchNode::State::SampleInitPopulation(int nu
   ThreadedTraceApply pp(self->postprocs_);
   std::vector<Schedule> out_schs;
   int fail_count = 0;
+  int total_trace_space_size = 0;
+  for (const tir::Trace& space : design_spaces) {
+    tir::Trace trace(space->insts, {});
+    PerThreadData& data = this->per_thread_data_.at(0);
+    TRandState* rand_state = &data.rand_state;
+    const IRModule& mod = data.mod;
+    // if (Optional<Schedule> sch_ = pp.Apply(mod, trace, rand_state)) {
+    if (true) {
+      tir::Schedule sch = tir::Schedule::Traced(mod, /*rand_state=*/ForkSeed(rand_state), /*debug_mode=*/0, /*error_render_level=*/tir::ScheduleErrorRenderLevel::kNone);
+      trace->ApplyToSchedule(sch, /*remove_postproc=*/true);
+      // Schedule sch = sch_.value();
+      // TVM_PY_LOG(INFO, self->ctx_->logger) << "trace->insts.size()=" << trace->insts.size();
+      static const tir::InstructionKind& inst_sample_categorical = tir::InstructionKind::Get("SampleCategorical");
+      static const tir::InstructionKind& inst_sample_perfect_tile = tir::InstructionKind::Get("SamplePerfectTile");
+      int trace_space_size = 1;
+      // for (const tir::Instruction& inst : sch->insts) {
+      for (const tir::Instruction& inst : trace->insts) {
+      // for (const tir::Instruction& inst : space->insts) {
+        if (inst->kind.same_as(inst_sample_categorical)) {
+          ICHECK_EQ(inst->outputs.size(), 1);
+          ICHECK_EQ(inst->attrs.size(), 2);
+          std::vector<int> candidates = support::AsVector<IntImm, int>(Downcast<Array<IntImm>>(inst->attrs[0]));
+          // TVM_PY_LOG(INFO, self->ctx_->logger) << "candidates.size()=" << candidates.size();
+          ICHECK_GT(candidates.size(), 0);
+          trace_space_size *= candidates.size();
+        } else if (inst->kind.same_as(inst_sample_perfect_tile)) {
+          ICHECK_EQ(inst->attrs.size(), 2);
+          int n_splits = Downcast<IntImm>(inst->attrs[0])->value;
+          ICHECK_EQ(inst->outputs.size(), n_splits);
+          TVM_PY_LOG(INFO, self->ctx_->logger) << "n_splits=" << n_splits;
+          ICHECK_GT(n_splits, 0);
+          int max_innermost_factor = Downcast<IntImm>(inst->attrs[1])->value;
+          TVM_PY_LOG(INFO, self->ctx_->logger) << "max_innermost_factor=" << max_innermost_factor;
+          ICHECK_EQ(inst->inputs.size(), 1);
+          ICHECK(inst->inputs[0].defined());
+          // const tir::LoopRV& loop_rv = Downcast<tir::LoopRV>(inst->inputs[0]);
+          // // tir::StmtSRef block_sref = sch->GetSRef(loop_rv);
+          // int64_t fused_extent = -1;
+          // if (const int64_t* extent = tir::GetLoopIntExtent(sch->Get(loop_rv).get())) {
+          //   fused_extent = *extent;
+          // }
+          // tir::StmtSRef block_sref = space->GetSRef(loop_rv);
+          // tir::LoopRV loop = Downcast<tir::LoopRV>(inst->attrs[0]);
+          // int loop = Downcast<IntImm>(inst->attrs[0])->value;
+          // TVM_PY_LOG(INFO, self->ctx_->logger) << "loop_rv=" << loop_rv;
+          // tir::StmtSRef& loop_sref = (tir::StmtSRef)loop;
+          // const ForNode* loop = TVM_SREF_TO_FOR(loop_sref);
+          // const int64_t* extent = tir::GetLoopIntExtent(loop);
+          // TVM_PY_LOG(INFO, self->ctx_->logger) << "extent=" << extent;
+          // trace_space_size *= n_splits;
+        }
+        // TODO: sample_partitioned_tile, sample_compute_location,
+      }
+      TVM_PY_LOG(INFO, self->ctx_->logger) << "trace_space_size=" << trace_space_size;
+      total_trace_space_size += trace_space_size;
+    }
+  }
+  TVM_PY_LOG(INFO, self->ctx_->logger) << "total_trace_space_size=" << total_trace_space_size;
   while (static_cast<int>(out_schs.size()) < self->init_min_unmeasured &&
          fail_count < self->max_fail_count) {
     std::vector<Schedule> results(num, Schedule{nullptr});
@@ -515,11 +573,12 @@ std::vector<Schedule> EvolutionarySearchNode::State::SampleInitPopulation(int nu
       const IRModule& mod = data.mod;
       Schedule& result = results.at(trace_id);
       ICHECK(!result.defined());
-      int design_space_index = 0;
-      if (trace_id > 0)
-        design_space_index = tir::SampleInt(rand_state, 0, design_spaces.size());
+      // int design_space_index = 0;
+      // if (trace_id > 0)
+      int design_space_index = tir::SampleInt(rand_state, 0, design_spaces.size());
 
       tir::Trace trace(design_spaces[design_space_index]->insts, {});
+      // TVM_PY_LOG(INFO, self->ctx_->logger) << "trace->decisions.size()=" << trace->decisions.size();
       if (Optional<Schedule> sch = pp.Apply(mod, trace, rand_state)) {
         result = sch.value();
       }

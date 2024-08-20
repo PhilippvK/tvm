@@ -237,18 +237,47 @@ def extracted_tasks_to_tune_contexts(
         get_loggers_from_work_dir(work_dir, [t.task_name for t in extracted_tasks]),
         fork_seed(seed, n=len(extracted_tasks)),
     ):
-        tasks.append(
-            TuneContext(
-                mod=task.dispatched[0],
-                target=task.target,
-                space_generator=space,
-                search_strategy=strategy,
-                task_name=task.task_name,
-                logger=logger,
-                rand_state=rand_state,
-                num_threads=num_tuning_cores,
-            ).clone()
-        )
+        context = TuneContext(
+            mod=task.dispatched[0],
+            target=task.target,
+            space_generator=space,
+            search_strategy=strategy,
+            task_name=task.task_name,
+            logger=logger,
+            rand_state=rand_state,
+            num_threads=num_tuning_cores,
+        ).clone()
+        search_spaces = context.generate_design_space()
+        # print("search_spaces", search_spaces)
+        # for search_space in search_spaces:
+        #     print("search_space", search_space)
+        #     print("dir(search_space)", dir(search_space))
+        #     print("search_space.trace", search_space.trace)
+        #     print("dir(search_space.trace)", dir(search_space.trace))
+        #     input("a")
+        #     # print("search_space.trace.insts", search_space.trace.insts)
+        #     # print("dir(search_space.trace.insts)", dir(search_space.trace.insts))
+        #     for inst in search_space.trace.insts:
+        #         # print("inst", inst)
+        #         print("type(inst)", type(inst))
+        #         print("dir(inst)", dir(inst))
+        #         print("attrs", inst.attrs)
+        #         print("inputs", inst.inputs)
+        #         for inp in inst.inputs:
+        #             print("inp", inp)
+        #             print("dir(inp)", dir(inp))
+        #             if inst.kind.name == "SamplePerfectTile":
+        #                 print("SPT!")
+        #                 # sref = search_space.trace.get_sref(inp)
+        #                 # print("sref", sref)
+        #         # print("kind", inst.kind)
+        #         print("kind.name", inst.kind.name)
+        #         print("outputs", inst.outputs)
+        #         for outp in inst.outputs:
+        #             print("outp", outp)
+        #             print("dir(outp)", dir(outp))
+        # input("A")
+        tasks.append(context)
         task_weights.append(task.weight)
     return tasks, task_weights
 

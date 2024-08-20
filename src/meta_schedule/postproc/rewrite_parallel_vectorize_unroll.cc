@@ -411,6 +411,37 @@ class RewriteParallelVectorizeUnrollNode : public PostprocNode {
   void InitializeWithTuneContext(const TuneContext& context) final {}
 
   bool Apply(const Schedule& sch) final {
+    tir::Trace trace = sch->trace().value();
+    // int trace_space_size = 1;
+    // static const tir::InstructionKind& inst_sample_categorical = tir::InstructionKind::Get("SampleCategorical");
+    // static const tir::InstructionKind& inst_sample_perfect_tile = tir::InstructionKind::Get("SamplePerfectTile");
+    // for (const tir::Instruction& inst : trace->insts) {
+    //     if (inst->kind.same_as(inst_sample_categorical)) {
+    //       ICHECK_EQ(inst->outputs.size(), 1);
+    //       ICHECK_EQ(inst->attrs.size(), 2);
+    //       std::vector<int> candidates = support::AsVector<IntImm, int>(Downcast<Array<IntImm>>(inst->attrs[0]));
+    //       // TVM_PY_LOG(INFO, self->ctx_->logger) << "candidates.size()=" << candidates.size();
+    //       ICHECK_GT(candidates.size(), 0);
+    //       trace_space_size *= candidates.size();
+    //     } else if (inst->kind.same_as(inst_sample_perfect_tile)) {
+    //       ICHECK_EQ(inst->attrs.size(), 2);
+    //       int n_splits = Downcast<IntImm>(inst->attrs[0])->value;
+    //       ICHECK_EQ(inst->outputs.size(), n_splits);
+    //       // TVM_PY_LOG(INFO, self->ctx_->logger) << "n_splits=" << n_splits;
+    //       ICHECK_GT(n_splits, 0);
+    //       int max_innermost_factor = Downcast<IntImm>(inst->attrs[1])->value;
+    //       // TVM_PY_LOG(INFO, self->ctx_->logger) << "max_innermost_factor=" << max_innermost_factor;
+    //       ICHECK_EQ(inst->inputs.size(), 1);
+    //       ICHECK(inst->inputs[0].defined());
+    //       const tir::LoopRV& loop_rv = Downcast<tir::LoopRV>(inst->inputs[0]);
+    //       tir::StmtSRef block_sref = sch->GetSRef(loop_rv);
+    //       // int64_t fused_extent = -1;
+    //       // if (const int64_t* extent = tir::GetLoopIntExtent(sch->Get(loop_rv).get())) {
+    //       //   fused_extent = *extent;
+    //       // }
+    //     }
+    // }
+    std::vector<std::function<void()>> tasks;
     tir::ParsedAnnotation parsed_root;
     tir::BlockRV root_rv{nullptr};
     while (tir::FindAnnotatedRootBlock(sch, &parsed_root, &root_rv)) {
