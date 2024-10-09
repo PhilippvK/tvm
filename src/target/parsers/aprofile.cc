@@ -92,6 +92,7 @@ static TargetFeatures GetFeatures(TargetJSON target) {
   auto llvm_instance = std::make_unique<codegen::LLVMInstance>();
   codegen::LLVMTargetInfo llvm_backend(*llvm_instance, {{"kind", String("llvm")}});
   Array<String> targets = llvm_backend.GetAllLLVMTargets();
+  LOG(INFO) << "targets=" << targets;
   if ((IsAArch64(mtriple) && !CheckContains(targets, "aarch64")) ||
       (IsAArch32(mtriple, mcpu) && !CheckContains(targets, "arm"))) {
     LOG(WARNING) << "Cannot parse target features for target: " << target

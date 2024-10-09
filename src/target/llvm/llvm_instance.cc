@@ -203,11 +203,15 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const Target& target)
     : LLVMTargetInfo(instance, target->Export()) {}
 
 LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const TargetJSON& target) {
+  LOG(INFO) << "LLVMTargetInfo";
   triple_ = Downcast<String>(target.Get("mtriple").value_or(String("default")));
+  LOG(INFO) << "B triple_=" << triple_;
   if (triple_.empty() || triple_ == "default") {
     triple_ = llvm::sys::getDefaultTargetTriple();
   }
+  LOG(INFO) << "C triple_=" << triple_;
   cpu_ = Downcast<String>(target.Get("mcpu").value_or(String(defaults::cpu)));
+  LOG(INFO) << "cpu_=" << cpu_;
 
   if (const auto& v = Downcast<Optional<Array<String>>>(target.Get("mattr"))) {
     for (const String& s : v.value()) {
@@ -217,7 +221,10 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const TargetJSON& target)
   // llvm module target
   if (Downcast<String>(target.Get("kind")) == "llvm") {
     // legalize -mcpu with the target -mtriple
+    LOG(INFO) << "iffi";
     auto arches = GetAllLLVMTargetArches();
+    LOG(INFO) << "cpu_=" << cpu_;
+    LOG(INFO) << "arches=" << arches;
     bool has_arch =
         std::any_of(arches.begin(), arches.end(), [&](const auto& var) { return var == cpu_; });
     if (!has_arch) {
@@ -377,6 +384,9 @@ LLVMTargetInfo::~LLVMTargetInfo() = default;
 
 static const llvm::Target* CreateLLVMTargetInstance(const std::string triple,
                                                     const bool allow_missing = true) {
+  LOG(INFO) << "CreateLLVMTargetInstance";
+  LOG(INFO) << "D triple=" << triple;
+  LOG(INFO) << "allow_missing=" << allow_missing;
   std::string error;
   // create LLVM instance
   // required mimimum: llvm::InitializeAllTargets()
@@ -398,6 +408,12 @@ static std::unique_ptr<llvm::TargetMachine> CreateLLVMTargetMachine(
 #else
     const llvm::CodeGenOptLevel& opt_level = llvm::CodeGenOptLevel(0)) {
 #endif
+  LOG(INFO) << "CreateLLVMTargetMachine";
+  LOG(INFO) << "E triple=" << triple;
+  LOG(INFO) << "cpu=" << cpu;
+  LOG(INFO) << "features=" << features;
+  LOG(INFO) << "llvm_instance=" << llvm_instance;
+  LOG(INFO) << "target_options=" << &target_options;
   llvm::TargetMachine* tm = llvm_instance->createTargetMachine(
       triple, cpu, features, target_options, reloc_model, code_model, opt_level);
   ICHECK(tm != nullptr);
@@ -406,8 +422,11 @@ static std::unique_ptr<llvm::TargetMachine> CreateLLVMTargetMachine(
 }
 
 llvm::TargetMachine* LLVMTargetInfo::GetOrCreateTargetMachine(bool allow_missing) {
+  LOG(INFO) << "GetOrcreateTargetMachine";
+  LOG(INFO) << "allow_missing=" << allow_missing;
   if (target_machine_) return target_machine_.get();
 
+  LOG(INFO) << "qqq";
   std::string error;
   if (const llvm::Target* llvm_instance = CreateLLVMTargetInstance(triple_, allow_missing)) {
     target_machine_ =
@@ -801,11 +820,13 @@ void LLVMTargetInfo::GetOptionValue(LLVMTargetInfo::Option* opt) const {
 }
 
 const Array<String> LLVMTargetInfo::GetAllLLVMTargets() const {
+  LOG(INFO) << "LLVMTargetInfo::GetAllLLVMTargets";
   Array<String> llvm_targets;
   // iterate all archtypes
   for (auto a = llvm::Triple::ArchType(llvm::Triple::ArchType::UnknownArch + 1);
        a < llvm::Triple::ArchType::LastArchType; a = llvm::Triple::ArchType(a + 1)) {
     std::string target_name = llvm::Triple::getArchTypeName(a).str();
+    LOG(INFO) << "target_name=" << target_name;
     // get valid target
     if (CreateLLVMTargetInstance(target_name + "--", true)) {
       llvm_targets.push_back(target_name);
@@ -816,12 +837,15 @@ const Array<String> LLVMTargetInfo::GetAllLLVMTargets() const {
 }
 
 const Array<String> LLVMTargetInfo::GetAllLLVMTargetArches() const {
+  LOG(INFO) << "LLVMTargetInfo::GetAllLLVMTargetArches()";
+  LOG(INFO) << "A triple_=" << triple_;
   Array<String> cpu_arches;
   // get the subtarget info module
   auto llvm_instance = CreateLLVMTargetInstance(triple_, true);
   std::unique_ptr<llvm::TargetMachine> target_machine =
       CreateLLVMTargetMachine(llvm_instance, triple_, "", "");
   const auto MCInfo = target_machine->getMCSubtargetInfo();
+  LOG(INFO) << "AAA!";
 
   if (!MCInfo) {
     return cpu_arches;

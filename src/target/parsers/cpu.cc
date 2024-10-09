@@ -39,13 +39,19 @@ Optional<String> DetectSystemTriple() {
 }
 
 TargetJSON ParseTarget(TargetJSON target) {
+  LOG(INFO) << "cpu::ParseTarget";
   String kind = Downcast<String>(target.Get("kind"));
+  LOG(INFO) << "kind=" << kind;
   Optional<String> mtriple = Downcast<Optional<String>>(target.Get("mtriple"));
+  LOG(INFO) << "mtriple=" << mtriple;
   Optional<String> mcpu = Downcast<Optional<String>>(target.Get("mcpu"));
+  LOG(INFO) << "mcpu=" << mcpu;
 
   // Try to fill in the blanks by detecting target information from the system
   if (kind == "llvm" && !mtriple.defined() && !mcpu.defined()) {
+    LOG(INFO) << "if";
     String system_triple = DetectSystemTriple().value_or("");
+    LOG(INFO) << "system_triple=" << system_triple;
     target.Set("mtriple", system_triple);
   }
 
