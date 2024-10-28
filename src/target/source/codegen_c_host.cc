@@ -66,6 +66,15 @@ void CodeGenCHost::Init(bool output_ssa, bool emit_asserts, bool emit_fwd_func_d
     decl_stream << "#include <arm_nn_types.h>\n";
     decl_stream << "#include <arm_nn_math_types.h>\n";
   }
+  decl_stream << "static int argsort_cmpfunc ( const void *pa, const void *pb ) " << "\n";
+  decl_stream << "{" << "\n";
+  decl_stream << "    const float *a = pa;" << "\n";
+  decl_stream << "    const float *b = pb;" << "\n";
+  decl_stream << "    if(a[0] > b[0]) return -1;" << "\n";
+  decl_stream << "    if(a[0] == b[0]) return 0;" << "\n";
+  decl_stream << "    return 1;" << "\n";
+  decl_stream << "}  " << "\n\n";
+  decl_stream << "#define ARGSORT_CMPFUNC() argsort_cmpfunc" << "\n\n";
   CodeGenC::Init(output_ssa);
 }
 
@@ -113,6 +122,8 @@ void CodeGenCHost::GenerateForwardFunctionDeclarations(String global_symbol,
   if (!emit_fwd_func_decl_) {
     return;
   }
+  LOG(INFO) << "global_symbol=" << global_symbol;
+  if (global_symbol == "qsort" || global_symbol == "ARGSORT_CMPFUNC") return;
   for (auto& func_already_defined : GetFunctionNames()) {
     if (global_symbol == func_already_defined) {
       return;
