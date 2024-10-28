@@ -19,6 +19,7 @@
 Provides support to compile networks both AOT and JIT.
 """
 import logging
+import tempfile
 import os.path
 import re
 import itertools
@@ -28,6 +29,7 @@ from pathlib import Path
 from collections import defaultdict
 
 import tvm
+from tvm import meta_schedule as ms
 from tvm import autotvm, auto_scheduler
 from tvm import relay
 from tvm.driver.tvmc.registry import generate_registry_args, reconstruct_registry_entity
@@ -394,6 +396,28 @@ def compile_model(
             print_before_pass_names=print_ir_before, print_after_pass_names=print_ir_after
         )
         instruments = [print_ir_instr] if instruments is None else [print_ir_instr] + instruments
+
+    print("mod", mod)
+    print("params", params)
+
+    module_equality = "ignore-ndarray"
+    extracted_tasks = ms.relay_integration.extract_tasks(
+        mod, target=tvm_target, params=params, module_equality=module_equality
+    )
+    print("extracted_tasks", extracted_tasks)
+    with tempfile.TemporaryDirectory() as work_dir:
+        tasks, task_weights = ms.relay_integration.extracted_tasks_to_tune_contexts(
+            extracted_tasks, work_dir, strategy="replay-trace"
+        )
+        database = ms.tune.tune_tasks(
+            tasks=tasks,
+            task_weights=task_weights,
+            work_dir=work_dir,
+            max_trials_global=4,
+            module_equality=module_equality,
+        )
+
+    input(">>>")
 
     with tvm.transform.PassContext(
         opt_level=opt_level,
