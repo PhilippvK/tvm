@@ -1373,6 +1373,7 @@ class PerStoreFeatureNode : public FeatureExtractorNode {
   }
 
   void ExtractSingle(IRModule mod, bool is_gpu, std::vector<std::vector<double>>* results) {
+    LOG(INFO) << "ExtractSingle";
     static transform::Sequential passes = tir::transform::PassListForPerStoreFeature();
     mod = passes(std::move(mod));
     std::vector<tir::Feature> features = tir::PerStoreFeatureCollector::Collect(
@@ -1380,6 +1381,7 @@ class PerStoreFeatureNode : public FeatureExtractorNode {
     int n_features = features.size();
     results->resize(n_features);
     for (int i = 0; i < n_features; ++i) {
+      LOG(INFO) << "i=" << i;
       const tir::Feature& feature = features[i];
       std::vector<double>& result = (*results)[i];
       result.reserve(feature_vector_length);
@@ -1388,6 +1390,9 @@ class PerStoreFeatureNode : public FeatureExtractorNode {
       feature.group3->Export(&result);
       feature.group4->Export(&result, feature.group5->outer_prod);
       feature.group5->Export(&result);
+      for (auto x : result) {
+        LOG(INFO) << "x=" << x;
+      }
     }
   }
 
