@@ -45,6 +45,8 @@ class TaskRecordNode : public runtime::Object {
   double task_weight{1.0};
   /*! \brief The FLOP count of the task */
   double flop{1.0};
+  double flop_int{1.0};
+  double flop_float{1.0};
   /*! \brief Whether the tuning task has been stopped or finished. */
   bool is_terminated = false;
   /*! \brief Builder errors happens in the task */
@@ -64,6 +66,8 @@ class TaskRecordNode : public runtime::Object {
     v->Visit("ctx", &ctx);
     v->Visit("task_weight", &task_weight);
     v->Visit("flop", &flop);
+    v->Visit("flop_int", &flop_int);
+    v->Visit("flop_float", &flop_float);
     v->Visit("is_terminated", &is_terminated);
     v->Visit("build_error_count", &build_error_count);
     v->Visit("run_error_count", &run_error_count);

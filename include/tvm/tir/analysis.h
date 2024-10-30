@@ -85,6 +85,7 @@ inline void VisitPrimFuncs(const IRModule& mod, FLambda fvisit) {
  * \return The estimated FLOPs.
  */
 TVM_DLL double EstimateTIRFlops(const Stmt& stmt);
+TVM_DLL double EstimateTIRFlops2(const Stmt& stmt, int mode);
 
 /*!
  * \brief Estimate the FLOPs of TIRs in an IRModule.
@@ -92,6 +93,7 @@ TVM_DLL double EstimateTIRFlops(const Stmt& stmt);
  * \return The estimated FLOPs.
  */
 TVM_DLL double EstimateTIRFlops(const IRModule& mod);
+TVM_DLL double EstimateTIRFlops2(const IRModule& mod, int mode);
 
 /*!
  * \brief Find undefined vars in the statement.

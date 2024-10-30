@@ -26,6 +26,8 @@ TaskRecord::TaskRecord(TuneContext ctx, double task_weight) {
   n->ctx = ctx;
   n->task_weight = task_weight;
   n->flop = 1.0;
+  n->flop_int = 1.0;
+  n->flop_float = 1.0;
   auto _ = Profiler::TimedScope("InitializeTask");
   CHECK(ctx->mod.defined()) << "ValueError: Require `context.mod`, but it is not defined";
   CHECK(ctx->space_generator.defined())
@@ -35,6 +37,8 @@ TaskRecord::TaskRecord(TuneContext ctx, double task_weight) {
   TVM_PY_LOG(INFO, ctx->logger) << "\n" << ctx->mod;
   ctx->Initialize();
   n->flop = std::max(1.0, tir::EstimateTIRFlops(ctx->mod.value()));
+  n->flop_int = std::max(1.0, tir::EstimateTIRFlops2(ctx->mod.value(), 1+8+16));
+  n->flop_float = std::max(1.0, tir::EstimateTIRFlops2(ctx->mod.value(), 2+8+16));
   this->data_ = std::move(n);
 }
 
@@ -271,6 +275,8 @@ void TaskSchedulerNode::PrintTuningStatistics() {
   p.Row() << "ID"
           << "Name"
           << "FLOP"
+          << "FLOP [int]"
+          << "FLOP [float]"
           << "Weight"
           << "Speed (GFLOPS)"
           << "Latency (us)"
@@ -284,6 +290,8 @@ void TaskSchedulerNode::PrintTuningStatistics() {
     int trials = task->latency_ms.size();
     row << /*id=*/i << /*name=*/task->ctx->task_name.value()  //
         << /*flops=*/static_cast<int64_t>(task->flop)
+        << /*flops_int=*/static_cast<int64_t>(task->flop_int)
+        << /*flops_float=*/static_cast<int64_t>(task->flop_float)
         << /*weight=*/static_cast<int>(task->task_weight);
     double latency_ms = 1e9;
     if (!task->latency_ms.empty()) {

@@ -206,16 +206,62 @@ class FlopEstimator : private ExprFunctor<TResult(const PrimExpr& n)>,
 };
 
 double PostprocessResults(const TResult& result) {
+  LOG(INFO) << "PostprocessResults";
   double cnt = 0.0;
   for (const auto& kv : result.data_) {
+    LOG(INFO) << "kv.first=" << kv.first;
+    LOG(INFO) << "Int2DataTypeStr(kv.first)=" << Int2DataTypeStr(kv.first);
+    LOG(INFO) << "kv.second=" << kv.second;
     cnt += kv.second;
   }
+  LOG(INFO) << "cnt=" << cnt;
+  return cnt;
+}
+
+double PostprocessResults2(const TResult& result, int mode) {
+  LOG(INFO) << "PostprocessResults2";
+  union {
+    DLDataType dst;
+    int32_t src;
+  } converter;
+  double cnt = 0.0;
+  for (const auto& kv : result.data_) {
+    LOG(INFO) << "kv.first=" << kv.first;
+    LOG(INFO) << "Int2DataTypeStr(kv.first)=" << Int2DataTypeStr(kv.first);
+    LOG(INFO) << "kv.second=" << kv.second;
+    converter.src = kv.first;
+    bool is_int = converter.dst.code >= 0 && converter.dst.code < 2;
+    bool is_float = converter.dst.code == 2 || converter.dst.code == 4;
+    bool is_handle = converter.dst.code == 3;
+    bool is_scalar = converter.dst.lanes == 1;
+    bool is_vector = converter.dst.lanes != 1;
+    LOG(INFO) << "code" << converter.dst.code;
+    LOG(INFO) << "is_int=" << is_int;
+    LOG(INFO) << "is_float=" << is_float;
+    LOG(INFO) << "is_handle=" << is_handle;
+    LOG(INFO) << "is_scalar=" << is_scalar;
+    LOG(INFO) << "is_vector=" << is_vector;
+    int dtype_mask = (is_int * 1) + (is_float * 2) + (is_handle * 4) + (is_scalar * 8) + (is_vector * 16);
+    LOG(INFO) << "mask=" << mode;
+    LOG(INFO) << "dtype_mask=" << dtype_mask;
+    LOG(INFO) << "mode & dtype_mask=" << (mode & dtype_mask);
+    if ((mode & dtype_mask) == dtype_mask) {
+      LOG(INFO) << "if";
+      cnt += kv.second;
+    }
+  }
+  LOG(INFO) << "cnt=" << cnt;
   return cnt;
 }
 
 double EstimateTIRFlops(const Stmt& stmt) {
   FlopEstimator counter;
   return PostprocessResults(counter.VisitStmt(stmt));
+}
+
+double EstimateTIRFlops2(const Stmt& stmt, int mode) {
+  FlopEstimator counter;
+  return PostprocessResults2(counter.VisitStmt(stmt), mode);
 }
 
 double EstimateTIRFlops(const IRModule& mod) {
@@ -232,11 +278,38 @@ double EstimateTIRFlops(const IRModule& mod) {
   return PostprocessResults(result) + cached_result;
 }
 
+double EstimateTIRFlops2(const IRModule& mod, int mode) {
+  FlopEstimator counter;
+  TResult result;
+  double cached_result = 0;
+  VisitPrimFuncs(mod, [&result, &counter, &cached_result](const PrimFuncNode* f) {
+    // if (auto cached = f->attrs.GetAttr<Integer>("estimated_flops")) {
+    //   cached_result += cached.value()->value;
+    // } else {
+    result += counter.VisitStmt(f->body);  //
+    // }
+  });
+  // return PostprocessResults2(result, mode) + cached_result;
+  return PostprocessResults2(result, mode);
+}
+
 TVM_REGISTER_GLOBAL("tir.analysis.EstimateTIRFlops").set_body_typed([](ObjectRef obj) -> double {
   if (auto mod = obj.as<IRModule>()) {
     return EstimateTIRFlops(mod.value());
   } else if (auto stmt = obj.as<Stmt>()) {
     return EstimateTIRFlops(stmt.value());
+  } else {
+    LOG(FATAL) << "TypeError: Expect the input to be either IRModule or Stmt, but gets: "
+               << obj->GetTypeKey();
+    throw;
+  }
+});
+
+TVM_REGISTER_GLOBAL("tir.analysis.EstimateTIRFlops2").set_body_typed([](ObjectRef obj, int mode) -> double {
+  if (auto mod = obj.as<IRModule>()) {
+    return EstimateTIRFlops2(mod.value(), mode);
+  } else if (auto stmt = obj.as<Stmt>()) {
+    return EstimateTIRFlops2(stmt.value(), mode);
   } else {
     LOG(FATAL) << "TypeError: Expect the input to be either IRModule or Stmt, but gets: "
                << obj->GetTypeKey();
