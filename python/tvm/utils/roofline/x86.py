@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 """Estimate peak flops and bandwidth for x86 devices"""
+import tvm
 import functools
 import re
 from typing import Dict, Optional, Tuple
@@ -108,7 +109,8 @@ def estimate_peak_fma_vector_flops(
         target, vec_width, num_vector_registers
     )
     vec_width //= DataType(dtype).bits // 8
-    iters = 1000000
+    # iters = 1000000
+    iters = 1000
     nthreads = num_threads()
     specialized = peakflops_fma_tir.specialize(
         {
@@ -118,8 +120,16 @@ def estimate_peak_fma_vector_flops(
             peakflops_fma_tir.params[4]: nthreads,
         }
     )
-    with transform.PassContext(opt_level=3):
-        f = build(specialized, target=target)
+    with transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True, "tir.usmp.enable": False}):
+        f = build(specialized, target=target, runtime=tvm.relay.backend.Runtime("crt", {"system-lib": False}))
+    print("f", f)
+    dso_modules = f._collect_dso_modules()
+    # print("dso_modules", dso_modules)
+    for dso in dso_modules:
+        print("dso", dso)
+        dso_src = dso.get_source()
+        print("dso_src", dso_src)
+    print("lib.get_source", f.get_source("c"))
 
     # upload to remote if running over rpc
     if dev.device_type >= RPC_SESS_MASK:
@@ -213,40 +223,55 @@ def estimate_peak_fma_flops(
     return flops, peak_flops, f"{dtype} FMA"
 
 
-@T.prim_func
-def peak_bandwidth_tir(a: T.handle, b: T.handle, threads: T.int32, vec_width: T.int32) -> None:
-    # pylint: disable=invalid-name, missing-function-docstring
-    N = T.int32()
-    A = T.match_buffer(a, [threads, N, 4, vec_width], "float32")
-    B = T.match_buffer(b, [threads, 4, vec_width], "float32")
-    # Parallelism is necessary to hit all cores/nodes
-    for i in T.parallel(threads):
-        for k in T.serial(N):
-            for l in T.unroll(4):
-                # vectorized load is necessary to hit peak bandwidth
-                for j in T.vectorized(vec_width):
-                    # += is necessary to introduce a data dependency for all
-                    # elements of A, preventing the backend from removing the
-                    # `k` loop and setting `k` to the loop extent.
-                    B[i, l, j] += A[i, k, l, j]
-
-
 @functools.lru_cache(maxsize=None)
 def estimate_peak_bandwidth_dram(
     target: Target,
     dev: Device,
     remote: Optional[RPCSession],
     vec_width: Optional[int] = None,
+    dtype: Optional[str] = "float32"
 ) -> float:
+    # TODO: calculate number of bytes from dtype
+    @T.prim_func
+    def peak_bandwidth_tir(a: T.handle, b: T.handle, N: T.int32(), threads: T.int32, vec_width: T.int32) -> None:
+        # pylint: disable=invalid-name, missing-function-docstring
+        # N = T.int32()
+        A = T.match_buffer(a, [threads, N, 4, vec_width], dtype)
+        B = T.match_buffer(b, [threads, 4, vec_width], dtype)
+        # Parallelism is necessary to hit all cores/nodes
+        for i in T.parallel(threads):
+            for k in T.serial(N):
+                for l in T.unroll(4):
+                    # vectorized load is necessary to hit peak bandwidth
+                    for j in T.vectorized(vec_width):
+                        # += is necessary to introduce a data dependency for all
+                        # elements of A, preventing the backend from removing the
+                        # `k` loop and setting `k` to the loop extent.
+                        B[i, l, j] += A[i, k, l, j]
+
+
     """Estimate peak bandwidth for DRAM. See estimate_peak_bandwidth."""
     vec_width, _ = _detect_vec_width_registers(target, vec_width, 1)
+    threads = num_threads()
+    # size = 10**8 // (4 * threads * vec_width)
+    size = 10**6 // (4 * threads * vec_width)
     specialized = peak_bandwidth_tir.specialize(
         {
-            peak_bandwidth_tir.params[3]: vec_width,
+            peak_bandwidth_tir.params[2]: size,
+            peak_bandwidth_tir.params[3]: threads,
+            peak_bandwidth_tir.params[4]: vec_width,
         }
     )
-    with transform.PassContext(opt_level=3):
-        f = build(specialized, target=target)
+    with transform.PassContext(opt_level=3, config={"tir.disable_vectorize": True, "tir.usmp.enable": False}):
+        f = build(specialized, target=target, runtime=tvm.relay.backend.Runtime("crt", {"system-lib": False}))
+    print("f", f)
+    dso_modules = f._collect_dso_modules()
+    # print("dso_modules", dso_modules)
+    for dso in dso_modules:
+        print("dso", dso)
+        dso_src = dso.get_source()
+        print("dso_src", dso_src)
+    print("lib.get_source", f.get_source("c"))
 
     # upload to remote if running over rpc
     if dev.device_type >= RPC_SESS_MASK:
@@ -262,16 +287,15 @@ def estimate_peak_bandwidth_dram(
         random_fill = get_global_func("tvm.contrib.random.random_fill")
     assert random_fill, "Please make sure USE_RANDOM is ON in config.cmake"
 
-    threads = num_threads()
     # Data size needs to be larger than last level of cache. We don't have a
     # way of getting cache sizes, so this number should give us a large enough
     # size.
-    size = 10**8 // (4 * threads * vec_width)
     a = nd.empty((threads, size, 4, vec_width), dtype="float32", device=dev)
     random_fill(a)
     b = nd.empty((threads, 4, vec_width), dtype="float32", device=dev)
     random_fill(b)
     times = f.time_evaluator(f.entry_name, dev, repeat=10, number=1)(a, b, threads)
+    # times = f.time_evaluator("__tvm_main__", dev, repeat=10, number=1)(a, b, threads)
     return a.numpy().size * 4 / times.min  # 4 bytes per float32
 
 

@@ -78,6 +78,7 @@ def roofline_from_existing(
     dev: Device,
     remote: Optional[RPCSession] = None,
 ) -> profiling.Report:
+    print("roofline_from_existing")
     """Add roofline and other estimated statistics to an existing profiling report.
 
     :py:func:`roofline_analysis` should always be used instead of this function
@@ -144,12 +145,15 @@ def roofline_from_existing(
         for name, prim in tir_functions.items()
         if isinstance(prim, tir.PrimFunc) and "hash" in prim.attrs.keys()
     }
+    print("all_features", all_features)
 
     new_configuration = dict(report.configuration.items())
     new_calls = []
     for call in report.calls:
+        print("call", call)
         if "Hash" in call.keys() and call["Hash"] in all_features:
             _, prim, features = all_features[call["Hash"]]
+            print("features", features)
             if features is None:
                 continue
 
