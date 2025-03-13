@@ -1,0 +1,230 @@
+# TODO: make .j2 template
+# FILE: tuning.yml
+deps:
+  gcc:
+    install_dir: &gcc_dir "/tmp/riscv_tools_rv64imfd_lp64d_medany/gnu"
+  llvm:
+    install_dir: &llvm_dir "/tmp/seal5_llvm_corev/.seal5/build/release_assertions"
+  etiss:
+    script: &etiss_exe "/work/git/mlonmcu/mlonmcu/workspace_default/deps/install/etiss/bin/run_helper.sh"
+session:
+  cwd: null
+  temp_dir: null
+  logs_dir: null
+  datetime: null
+workload:
+  name: foo
+  lang: relay
+  source: abc.relay
+  # lang: tir
+  # source: abc.tir
+tasks:
+- name: bar
+  inputs:
+  - kind: "TENSOR"
+    dtype: "float32",
+    shape: [1, 3, 16, 16]
+  - kind: "TENSOR"
+    dtype: "float32",
+    shape: [1, 1, 16, 16, 3]
+  flops: null
+microtvm:
+  template: "/work/git/tvmtests/microtvm-etiss-template/template_project"
+  options: &microtvm_options
+    verbose: true
+    quiet: true
+    gcc_prefix: &gcc_dir
+    gcc_name: &gcc_name "riscv64-unknown-elf"
+    llvm_dir: *llvm_dir
+    toolchain: "gcc"
+    etiss_script: &etiss_exe
+    etiss_args: ""
+    arch: "rv64imfd"
+    abi: &abi "lp64d"
+    cpu_arch: "RV64IMACFD"
+    cpu_freq: 100000000
+databases:
+- &database0
+  kind: json
+  path: /path/to/db0
+  num_records: 100
+  num_tasks: 3
+  # tasks: ?
+- &database1
+  kind: json
+  path: /path/to/db1
+  num_records: 10
+  num_tasks: 3
+  # tasks: ?
+- &database2
+  kind: union
+  of:
+  - *database0
+  - *database1
+  num_records: 10
+  num_tasks: 3
+  # tasks: ?
+records:
+- &record0
+  database: *database0
+  pick:
+    method: "topk"
+    topk: 1
+- &record1
+  database: *database0
+  pick:
+    method: "index"
+    index: 10
+schedules:
+- &default_schedule
+  mode: "default"  # x86?
+- &fallback_schedule
+  mode: "trivial"
+- &tuned_schedule
+  mode: "tuned"
+- &database_schedule
+  mode: "database"
+  database: *database2
+  # extract:
+  #   method: "topk"
+  #   attrs:
+  #     k: 1
+- &records_schedule
+  mode: "records"
+  records:
+  - *record0
+  - *record1
+tvm:
+  target:
+    kind: "c"
+  # target:
+  #   kind: "llvm"
+  #   num-cores: 1
+  #   mcpu: generic-rv64
+  #   mtriple: *gcc_name
+  #   mabi: *abi
+  #   mattr: "+d,+f,+m"
+  #   model: "etiss-rv64gc"
+  runtime:
+    name: "crt"
+    attrs:
+      system_lib: True  # TODO - vs. _
+  executor:
+    name: "aot"
+    attrs:
+      link_params: True  # TODO: try false
+  pass_config:
+    tir.disable_vectorize: true
+  disabled_pass: []
+  schedule: *manual_schedule
+  rpc: &tvm_rpc
+    tracker:
+      host: localhost
+      port: 9090
+      key: etiss
+  meta_schedule:
+    database:
+      name: "json"
+      attrs:
+        module_equality: "structural"
+        # work_dir: TODO
+    space_generator:
+      name: "post-order-apply"
+      attrs:
+        sch_rules: "from-target"  # *sch_rules TODO
+        postprocs: "from-target"  # *post_procs TODO
+        mutator_probs: "from-target"  # *mutator_probs TODO
+    cost_model:
+      name: "xgb"
+      attrs:
+        extractor: "per-store-feature"
+        config: null
+        num_warmup_samples: 100
+        early_stopping_rounds: 50
+        verbose_eval: 25
+        average_peak_n: 32
+        adaptive_training: true
+        num_tuning_cores: null
+        tree_method: null
+    strategy:
+      name: "evolutionary"
+      attrs:
+        population_size: 512
+        init_measured_ratio: 0.2
+        init_min_unmeasured: 50
+        max_fail_count: 5
+        genetic_num_iters: 4
+        genetic_mutate_prob: 0.85
+        genetic_max_fail_count: 10
+        eps_greedy: 0.05
+    task_scheduler:
+      name: "gradient"
+      attrs:
+        alpha: 0.2
+        window_size: 3
+        seed: -1
+    measure_callbacks:
+    - name: wandb
+      attrs:
+        project: "TVM"
+        name: null
+        config:
+          foo: bar
+    evaluator:
+      number: 1
+      repeat: 1
+      min_repeat_ms: 0
+      enable_cpu_cache_flush: false
+    builder:
+      name: "micro"
+      attrs: {}
+    runner:
+      name: "micro"
+      attrs:
+        session_timeout_sec: 120
+        options: *microtvm_options
+        rpc_config: *tvm_rpc
+      max_trials_global: 100
+      max_trials_per_task: 100
+      num_trials_per_iter: 5
+# constraints:
+#   rom_kb:
+#     lower: null
+#     upper: 100
+#   mflops:
+#     lower: 100
+#     upper: null
+# FILE: search.yml
+# TODO: maxmiso,...
+# FILE: experiments.yml
+candidates:
+- name: result0
+  sources:
+    mir: result0.mir
+    cdsl: result0.core_desc
+    seal5_yaml: result0.yml
+- name: result1
+  sources:
+    mir: result1.mir
+    cdsl: result1.core_desc
+    seal5_yaml: result1.yml
+experiments:
+- name: experiment0
+  selected: "00"
+  baseline: true
+- name: experiment1
+  selected: "01"
+- name: experiment2
+  selected: "10"
+- name: experiment3
+  selected: "11"
+metrics:
+- name: flops
+  rel: true
+- name: text_kb
+  rel: true
+score:
+  func: "default"
+  limits:
+    lower: 1.0
+    upper: null
