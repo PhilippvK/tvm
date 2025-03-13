@@ -18,6 +18,10 @@
 """
 Provides support to compile networks both AOT and JIT.
 """
+import subprocess
+import tempfile
+from anytree import Node
+from anytree import RenderTree
 import logging
 import os.path
 import re
@@ -31,7 +35,7 @@ import tvm
 from tvm import autotvm, auto_scheduler
 from tvm import relay
 from tvm.driver.tvmc.registry import generate_registry_args, reconstruct_registry_entity
-from tvm.ir.instrument import PassInstrument, PassTimingInstrument, PassPrintingInstrument
+from tvm.ir.instrument import PassInstrument, PassTimingInstrument, PassPrintingInstrument, PrintAfterAll, pass_instrument
 from tvm.ir.memory_pools import WorkspaceMemoryPools
 from tvm.target import Target
 from tvm.relay.backend import Executor, Runtime
@@ -51,6 +55,33 @@ from .workspace_pools import generate_workspace_pools_args, workspace_pools_reco
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("TVMC")
+
+
+class Context:
+    def __init__(self) -> None:
+        self.nodes = [Node("Tree", start=-1, stop=-1, handle=None, global_vars=[])]
+        self.parent_stack = [0]
+        self.layer = 0
+
+    @property
+    def parent(self):
+        return self.nodes[self.parent_stack[-1]]
+
+    @property
+    def tree(self):
+        return self.nodes[0]
+
+    def push(self, node):
+        self.layer += 1
+        self.parent_stack.append(len(self.nodes))
+        self.nodes.append(node)
+
+    def pop(self):
+        self.layer -= 1
+        return self.parent_stack.pop()
+
+
+context = Context()
 
 
 @register_parser
@@ -209,12 +240,101 @@ def drive_compile(args):
     tvmc_model = frontends.load_model(args.FILE, args.model_format, args.input_shapes)
 
     dump_code = [x.strip() for x in args.dump_code.split(",")] if args.dump_code else None
+    dump_code = ["tir"]
 
     dump_offloads = args.dump_offloads if args.dump_offloads else ""
 
     additional_targets = reconstruct_target_args(args)
     workspace_pools_target, extra_targets = target_from_cli(args.target, additional_targets)
     transform_args = parse_graph_transform_args(args)
+
+    @pass_instrument
+    class TestInstrument:
+
+        def __init__(self):
+            print("init")
+            # input("1")
+            self.dumps = {}
+            self.count_before = {}
+            self.count_after = {}
+            # self.count_before_total = 0
+            # self.count_after_total = 0
+            self.count_total = 0
+
+        def run_before_pass(self, mod, info):
+            print("before")
+            # input("1")
+            # print("run_before_pass", info.name, type(mod))
+            # print("dir(mod)", dir(mod))
+            # print("mod.attrs", mod.attrs)
+            # print("mod.functions", mod.functions)
+            # # print("mod.global_type_var_map", mod.global_type_var_map_)
+            # print("mod.global_var_map", mod.global_var_map_)
+            # print("mod.handle", mod.handle)
+            handle = mod.handle
+            g = dict(mod.global_var_map_)
+            g_ = list(g.keys())
+            # 'astext', 'attrs', 'from_expr', 'functions', 'get_attr', 'get_constructor', 'get_global_type_var', 'get_global_type_vars', 'get_global_var', 'get_global_vars', 'get_type', 'global_type_var_map_', 'global_var_map_', 'handle', 'import_from_std', 'legacy_repr', 'same_as', 'script', 'show', 'source_map', 'type_definitions', 'update', 'update_func', 'with_attr']
+            # input("?")
+            # print("mod.functions", mod.functions)
+            # print("info.opt_level", info.opt_level)
+            # print("info.required", info.required)
+            # print("dir(info)", dir(info))
+            if info.name in self.count_before:
+                self.count_before[info.name] += 1
+            else:
+                self.count_before[info.name] = 1
+            self.count_total += 1
+            # print(f"=== Before: {info.name} [{self.count_before[info.name]-1}, {self.count_total-1}] ===")
+            # input(">")
+            s = str(mod)
+            key = f"pass_{self.count_total-1}_{info.name}_x"
+            key2 = f"{self.count_total-1} - {info.name}"
+            assert key not in self.dumps
+            self.dumps[key] = s
+            # print(s)
+            # print("===")
+            # context.push(Node(info.name + " " + str(self.count_total), parent=context.parent, key=key, start=self.count_total-1))
+            context.push(Node(key2, parent=context.parent, key=key, start=self.count_total-1, handle=handle, global_vars=g_))
+
+        def run_after_pass(self, mod, info):
+            print("after")
+            # input("1")
+            # print("run_after_pass", info.name, type(mod))
+            if info.name in self.count_after:
+                self.count_after[info.name] += 1
+            else:
+                self.count_after[info.name] = 1
+            self.count_total += 1
+            # print(f"=== After: {info.name} [{self.count_after[info.name]-1}, {self.count_total-1}] ===")
+            s = str(mod)
+            key = f"pass_{self.count_total-1}_{info.name}_y"
+            key_ = context.parent.key
+            # context.parent.name += f"..{self.count_total}"
+            context.parent.stop = self.count_total-1
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                tmpdirname = Path(tmpdirname)
+                with open(tmpdirname / key_, "w") as f:
+                    f.write(self.dumps[key_])
+                with open(tmpdirname / key, "w") as f:
+                    f.write(s)
+                # args = ["git", "diff", "--no-index", str(tmpdirname / key_), str(tmpdirname / key)]
+                args = ["git", "diff", "--no-index", key_, key]
+                # print("args", " ".join(args))
+                # input(">")
+                out = subprocess.run(args, check=False, stdout=subprocess.PIPE, cwd=tmpdirname).stdout
+                self.dumps[key + ".diff"] = out.decode("utf-8")
+                # print("out", out)
+            assert key not in self.dumps
+            self.dumps[key] = s
+            # print(s)
+            # print("---")
+            # print("mod", type(mod), dir(mod))
+            context.pop()
+
+    test_instrument = TestInstrument()
+
+    instruments = [test_instrument]
 
     compile_model(
         tvmc_model,
@@ -237,6 +357,7 @@ def drive_compile(args):
         workspace_pools=(
             workspace_pools_recombobulate(args, [workspace_pools_target], extra_targets)
         ),
+        instruments=instruments,
         print_pass_times=args.print_pass_times,
         print_ir_before=args.print_ir_before,
         print_ir_after=args.print_ir_after,
@@ -404,6 +525,8 @@ def compile_model(
         )
         instruments = [print_ir_instr] if instruments is None else [print_ir_instr] + instruments
 
+    # instruments = [PrintAfterAll()]
+
 
     with tvm.transform.PassContext(
         opt_level=opt_level,
@@ -411,6 +534,7 @@ def compile_model(
         disabled_pass=disabled_pass,
         instruments=instruments,
     ):
+        print("instruments", instruments)
         if relax_mode:
             relax_mod = relay_translator.from_relay(mod["main"], target, params)
             print("relax_mod", relax_mod)
@@ -418,7 +542,6 @@ def compile_model(
             crt_exec_mode = "crt"
             ex = tvm.relax.build(relax_mod, target=target, pipeline=micro_pipeline, exec_mode=crt_exec_mode, executor=executor, runtime=runtime)
             print("ex", ex)
-            input(">")
         else:
             transform_args = parse_graph_transform_args(locals())
             mod = apply_graph_transforms(mod, transform_args)
@@ -480,6 +603,7 @@ def compile_model(
                 )
 
         # Generate output dump files with sources
+        dumps.update(instruments[0].dumps)
         for source_type in dump_code:
             if source_type == "relay":
                 dumps[source_type] = str(mod)
@@ -509,6 +633,22 @@ def compile_model(
         # Write dumps to file.
         if dumps:
             save_dumps(str(package_path), dumps)
+        print("============================")
+        text = ""
+        for pre, fill, node in RenderTree(context.tree):
+            gvars = ",".join(node.global_vars)
+            LIMIT = 40
+            # gvars = gvars.replace("tvmgen_", "")
+            gvars = gvars.replace("tvmgen_default_", "")
+            if len(gvars) > LIMIT:
+                gvars = gvars[:LIMIT-3] + "..."
+            # if len(node.global_vars) > 0:
+            #    gvars = gvars + f" (#={len(node.global_vars)})"
+            # print("%s%s [%d..%d] %s" % (pre, node.name, node.start, node.stop, gvars))
+            print("%s%s %s" % (pre, node.name, gvars))
+        print("============================")
+        input("DUMP DONE>>>>")
+
 
         # Print compilation times per pass
         if print_pass_times:

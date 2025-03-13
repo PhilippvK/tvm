@@ -282,6 +282,10 @@ class PrintAfterAll:
     def run_after_pass(self, mod, info):
         print(f"After Running Pass: {info}")
         print(mod)
+        import traceback
+        traceback.print_stack()
+        print(f"^^^After Running Pass: {info}")
+        input(">>>")
 
 
 @pass_instrument
