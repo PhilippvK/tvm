@@ -144,7 +144,7 @@ def micro2_build_pipeline():
                 # TODO: try this out
                 # ---
                 transform.AnnotateTIROpPattern(),
-                # transform.FoldConstant(),
+                transform.FoldConstant(),
                 transform.FuseOps(),
                 transform.FuseTIR(),
                 transform.DeadCodeElimination(),
