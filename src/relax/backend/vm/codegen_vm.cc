@@ -484,7 +484,7 @@ Module VMLink(ExecBuilder builder, Target target, Optional<Module> lib, Array<Mo
   //     Bool(false) /* unpacked_api */
   // );
 
-  LOG(INFO) << "metadata123=" << metadata;
+  // LOG(INFO) << "metadata123=" << metadata;
   Module combined_lib = codegen::CreateMetadataModule(
       conv_params, lib.value(), ext_libs, target,
 
