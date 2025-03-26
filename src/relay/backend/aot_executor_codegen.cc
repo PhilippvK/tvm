@@ -58,6 +58,125 @@ namespace tvm {
 namespace relay {
 namespace backend {
 
+  /*!
+   * \brief Gets module workspace alignment from supplied executor or defaults to 16
+   */
+  Integer GetModuleWorkspaceByteAlignment(const IRModule& mod) {
+    Executor executor_config = mod->GetAttr<Executor>(tvm::attr::kExecutor).value();
+    return executor_config->GetAttr<Integer>("workspace-byte-alignment").value_or(16);
+  }
+
+
+  /*!
+   * \brief Calculate workspace sizes for PrimFuncs in the IRModule
+   */
+  Map<String, FunctionInfo> CalculateWorkspaceSizes(
+      const IRModule& lowered_mod, const Map<String, FunctionInfo>& function_metadata) {
+    LOG(INFO) << "CalculateWorkspaceSizes";
+    Integer workspace_byte_alignment = GetModuleWorkspaceByteAlignment(lowered_mod);
+    Map<String, FunctionInfo> updated_function_metadata;
+    for (const auto& kv : lowered_mod->functions) {
+      GlobalVar global_var = kv.first;
+      BaseFunc base_func = kv.second;
+      if (base_func->IsInstance<tir::PrimFuncNode>()) {
+        tir::PrimFunc pfunc = Downcast<tir::PrimFunc>(base_func);
+        Target tgt = pfunc->GetAttr<Target>(tvm::attr::kTarget).value();
+        const auto& ws = CalculateWorkspaceBytes(pfunc, workspace_byte_alignment);
+        if (function_metadata.count(global_var->name_hint)) {
+          updated_function_metadata.Set(global_var->name_hint,
+                                        function_metadata[global_var->name_hint]);
+          updated_function_metadata[global_var->name_hint]->workspace_sizes.Set(tgt, ws);
+        } else {
+          FunctionInfo finfo{{{tgt, ws}}, {}, {}, {{tgt, pfunc}}, {}, {}};
+          updated_function_metadata.Set(global_var->name_hint, finfo);
+        }
+      }
+    }
+    return updated_function_metadata;
+  }
+TVM_REGISTER_GLOBAL("relay.backend.aot.CalculateWorkspaceSizes")
+    .set_body_typed([](const IRModule& lowered_mod, const Map<String, FunctionInfo>& function_metadata) {
+      return static_cast<Map<String, FunctionInfo>>(CalculateWorkspaceSizes(lowered_mod, function_metadata));
+    });
+  /*!
+   * \brief Run StorageRewrite to plan memory for lowered IRModule.
+   */
+  IRModule PlanMemoryWithStorageRewrite2(const IRModule& mod, Map<String, FunctionInfo> &function_metadata, CompilationConfig &config) {
+    LOG(INFO) << "PlanMemoryWithStorageRewrite";
+    Integer workspace_byte_alignment = GetModuleWorkspaceByteAlignment(mod);
+    IRModule lowered_mod = mod->ShallowCopy();
+    function_metadata = CalculateWorkspaceSizes(lowered_mod, function_metadata);
+    // Running StorageRewrite just on the main function
+    tir::PrimFunc tir_main_func =
+        Downcast<tir::PrimFunc>(lowered_mod->Lookup(::tvm::runtime::symbol::tvm_module_main));
+    IRModule main_func_mod;
+    main_func_mod->Update(lowered_mod->GetGlobalVar(::tvm::runtime::symbol::tvm_module_main),
+                          tir_main_func);
+    main_func_mod = tir::transform::StorageRewrite()(main_func_mod);
+    lowered_mod->Update(lowered_mod->GetGlobalVar(::tvm::runtime::symbol::tvm_module_main),
+                        main_func_mod->Lookup(::tvm::runtime::symbol::tvm_module_main));
+    tir_main_func =
+        Downcast<tir::PrimFunc>(lowered_mod->Lookup(::tvm::runtime::symbol::tvm_module_main));
+    // Use the PrimFunc to calculate the workspace required to service the allocates
+    Integer main_workspace_size_bytes =
+        CalculateWorkspaceBytes(tir_main_func, workspace_byte_alignment);
+    backend::FunctionInfo main_func_info =
+        lowered_mod->GetAttr<backend::FunctionInfo>("main_func_info").value();
+    main_func_info->workspace_sizes.Set(config->host_target, main_workspace_size_bytes);
+    function_metadata.Set(runtime::symbol::tvm_module_main, main_func_info);
+    return lowered_mod;
+  }
+TVM_REGISTER_GLOBAL("relay.backend.aot.PlanMemoryWithStorageRewrite2")
+    .set_body_typed([](IRModule mod, Map<String, FunctionInfo> function_metadata, CompilationConfig config) {
+      return PlanMemoryWithStorageRewrite2(mod, function_metadata, config);
+    });
+
+
+  /*!
+   * \brief Run USMP to plan memory for lowered IRModule.
+   */
+  IRModule PlanMemoryWithUSMP2(const IRModule& mod, Map<String, FunctionInfo> &function_metadata) {
+    LOG(INFO) << "PlanMemoryWithUSMP";
+    VLOG(1) << "Planning memory with USMP for module:" << std::endl << PrettyPrint(mod);
+    Integer workspace_byte_alignment = GetModuleWorkspaceByteAlignment(mod);
+    IRModule lowered_mod = mod->ShallowCopy();
+    lowered_mod = tir::transform::UnifiedStaticMemoryPlanner()(lowered_mod);
+    function_metadata = CalculateWorkspaceSizes(lowered_mod, function_metadata);
+    Optional<Array<tir::usmp::AllocatedPoolInfo>> allocated_pool_infos =
+        lowered_mod->GetAttr<Array<tir::usmp::AllocatedPoolInfo>>(tvm::attr::kPoolArgs);
+    backend::FunctionInfo main_func_info =
+        lowered_mod->GetAttr<backend::FunctionInfo>("main_func_info").value();
+    main_func_info->workspace_sizes.clear();
+    if (allocated_pool_infos) {
+      for (const tir::usmp::AllocatedPoolInfo& allocated_pool_info : allocated_pool_infos.value()) {
+        for (const auto& tgt : allocated_pool_info->pool_info->targets) {
+          VLOG(1) << "USMP requires target " << tgt->ToDebugString() << " to have pool size "
+                  << allocated_pool_info->allocated_size->value;
+          size_t size = allocated_pool_info->allocated_size->value;
+          if (allocated_pool_info->pool_info->IsInstance<ConstantPoolInfoNode>()) {
+            size += main_func_info->constant_sizes.count(tgt)
+                        ? main_func_info->constant_sizes[tgt]->value
+                        : 0;
+            main_func_info->constant_sizes.Set(tgt, size);
+          } else if (allocated_pool_info->pool_info->IsInstance<WorkspacePoolInfoNode>()) {
+            size += main_func_info->workspace_sizes.count(tgt)
+                        ? main_func_info->workspace_sizes[tgt]->value
+                        : 0;
+            main_func_info->workspace_sizes.Set(tgt, size);
+          } else {
+            LOG(FATAL) << "Unknown pool type: " << allocated_pool_info->pool_info->GetTypeKey();
+          }
+        }
+      }
+    }
+    function_metadata.Set(runtime::symbol::tvm_module_main, main_func_info);
+    return lowered_mod;
+  }
+TVM_REGISTER_GLOBAL("relay.backend.aot.PlanMemoryWithUSMP2")
+    .set_body_typed([](IRModule mod, Map<String, FunctionInfo> function_metadata) {
+      return PlanMemoryWithUSMP2(mod, function_metadata);
+    });
+
 using StorageMap =
     std::unordered_map<Expr, StorageInfo, runtime::ObjectPtrHash, runtime::ObjectPtrEqual>;
 
@@ -913,106 +1032,72 @@ class AOTExecutorCodegen : public MixedModeVisitor {
   }
 
   /*!
-   * \brief Calculate workspace sizes for PrimFuncs in the IRModule
-   */
-  Map<String, FunctionInfo> CalculateWorkspaceSizes(
-      const IRModule& lowered_mod, const Map<String, FunctionInfo>& function_metadata) {
-    Integer workspace_byte_alignment = GetModuleWorkspaceByteAlignment(lowered_mod);
-    Map<String, FunctionInfo> updated_function_metadata;
-    for (const auto& kv : lowered_mod->functions) {
-      GlobalVar global_var = kv.first;
-      BaseFunc base_func = kv.second;
-      if (base_func->IsInstance<tir::PrimFuncNode>()) {
-        tir::PrimFunc pfunc = Downcast<tir::PrimFunc>(base_func);
-        Target tgt = pfunc->GetAttr<Target>(tvm::attr::kTarget).value();
-        const auto& ws = CalculateWorkspaceBytes(pfunc, workspace_byte_alignment);
-        if (function_metadata.count(global_var->name_hint)) {
-          updated_function_metadata.Set(global_var->name_hint,
-                                        function_metadata[global_var->name_hint]);
-          updated_function_metadata[global_var->name_hint]->workspace_sizes.Set(tgt, ws);
-        } else {
-          FunctionInfo finfo{{{tgt, ws}}, {}, {}, {{tgt, pfunc}}, {}, {}};
-          updated_function_metadata.Set(global_var->name_hint, finfo);
-        }
-      }
-    }
-    return updated_function_metadata;
-  }
-
-  /*!
    * \brief Run USMP to plan memory for lowered IRModule.
    */
   IRModule PlanMemoryWithUSMP(const IRModule& mod) {
-    VLOG(1) << "Planning memory with USMP for module:" << std::endl << PrettyPrint(mod);
-    Integer workspace_byte_alignment = GetModuleWorkspaceByteAlignment(mod);
-    IRModule lowered_mod = mod->ShallowCopy();
-    lowered_mod = tir::transform::UnifiedStaticMemoryPlanner()(lowered_mod);
-    function_metadata_ = CalculateWorkspaceSizes(lowered_mod, function_metadata_);
-    Optional<Array<tir::usmp::AllocatedPoolInfo>> allocated_pool_infos =
-        lowered_mod->GetAttr<Array<tir::usmp::AllocatedPoolInfo>>(tvm::attr::kPoolArgs);
-    backend::FunctionInfo main_func_info =
-        lowered_mod->GetAttr<backend::FunctionInfo>("main_func_info").value();
-    main_func_info->workspace_sizes.clear();
-    if (allocated_pool_infos) {
-      for (const tir::usmp::AllocatedPoolInfo& allocated_pool_info : allocated_pool_infos.value()) {
-        for (const auto& tgt : allocated_pool_info->pool_info->targets) {
-          VLOG(1) << "USMP requires target " << tgt->ToDebugString() << " to have pool size "
-                  << allocated_pool_info->allocated_size->value;
-          size_t size = allocated_pool_info->allocated_size->value;
-          if (allocated_pool_info->pool_info->IsInstance<ConstantPoolInfoNode>()) {
-            size += main_func_info->constant_sizes.count(tgt)
-                        ? main_func_info->constant_sizes[tgt]->value
-                        : 0;
-            main_func_info->constant_sizes.Set(tgt, size);
-          } else if (allocated_pool_info->pool_info->IsInstance<WorkspacePoolInfoNode>()) {
-            size += main_func_info->workspace_sizes.count(tgt)
-                        ? main_func_info->workspace_sizes[tgt]->value
-                        : 0;
-            main_func_info->workspace_sizes.Set(tgt, size);
-          } else {
-            LOG(FATAL) << "Unknown pool type: " << allocated_pool_info->pool_info->GetTypeKey();
-          }
-        }
-      }
-    }
-    function_metadata_.Set(runtime::symbol::tvm_module_main, main_func_info);
-    return lowered_mod;
+    LOG(INFO) << "PlanMemoryWithUSMP";
+    return PlanMemoryWithUSMP2(mod, function_metadata_);
+    // VLOG(1) << "Planning memory with USMP for module:" << std::endl << PrettyPrint(mod);
+    // Integer workspace_byte_alignment = GetModuleWorkspaceByteAlignment(mod);
+    // IRModule lowered_mod = mod->ShallowCopy();
+    // lowered_mod = tir::transform::UnifiedStaticMemoryPlanner()(lowered_mod);
+    // function_metadata_ = CalculateWorkspaceSizes(lowered_mod, function_metadata_);
+    // Optional<Array<tir::usmp::AllocatedPoolInfo>> allocated_pool_infos =
+    //     lowered_mod->GetAttr<Array<tir::usmp::AllocatedPoolInfo>>(tvm::attr::kPoolArgs);
+    // backend::FunctionInfo main_func_info =
+    //     lowered_mod->GetAttr<backend::FunctionInfo>("main_func_info").value();
+    // main_func_info->workspace_sizes.clear();
+    // if (allocated_pool_infos) {
+    //   for (const tir::usmp::AllocatedPoolInfo& allocated_pool_info : allocated_pool_infos.value()) {
+    //     for (const auto& tgt : allocated_pool_info->pool_info->targets) {
+    //       VLOG(1) << "USMP requires target " << tgt->ToDebugString() << " to have pool size "
+    //               << allocated_pool_info->allocated_size->value;
+    //       size_t size = allocated_pool_info->allocated_size->value;
+    //       if (allocated_pool_info->pool_info->IsInstance<ConstantPoolInfoNode>()) {
+    //         size += main_func_info->constant_sizes.count(tgt)
+    //                     ? main_func_info->constant_sizes[tgt]->value
+    //                     : 0;
+    //         main_func_info->constant_sizes.Set(tgt, size);
+    //       } else if (allocated_pool_info->pool_info->IsInstance<WorkspacePoolInfoNode>()) {
+    //         size += main_func_info->workspace_sizes.count(tgt)
+    //                     ? main_func_info->workspace_sizes[tgt]->value
+    //                     : 0;
+    //         main_func_info->workspace_sizes.Set(tgt, size);
+    //       } else {
+    //         LOG(FATAL) << "Unknown pool type: " << allocated_pool_info->pool_info->GetTypeKey();
+    //       }
+    //     }
+    //   }
+    // }
+    // function_metadata_.Set(runtime::symbol::tvm_module_main, main_func_info);
+    // return lowered_mod;
   }
 
-  /*!
-   * \brief Run StorageRewrite to plan memory for lowered IRModule.
-   */
   IRModule PlanMemoryWithStorageRewrite(const IRModule& mod) {
-    Integer workspace_byte_alignment = GetModuleWorkspaceByteAlignment(mod);
-    IRModule lowered_mod = mod->ShallowCopy();
-    function_metadata_ = CalculateWorkspaceSizes(lowered_mod, function_metadata_);
-    // Running StorageRewrite just on the main function
-    tir::PrimFunc tir_main_func =
-        Downcast<tir::PrimFunc>(lowered_mod->Lookup(::tvm::runtime::symbol::tvm_module_main));
-    IRModule main_func_mod;
-    main_func_mod->Update(lowered_mod->GetGlobalVar(::tvm::runtime::symbol::tvm_module_main),
-                          tir_main_func);
-    main_func_mod = tir::transform::StorageRewrite()(main_func_mod);
-    lowered_mod->Update(lowered_mod->GetGlobalVar(::tvm::runtime::symbol::tvm_module_main),
-                        main_func_mod->Lookup(::tvm::runtime::symbol::tvm_module_main));
-    tir_main_func =
-        Downcast<tir::PrimFunc>(lowered_mod->Lookup(::tvm::runtime::symbol::tvm_module_main));
-    // Use the PrimFunc to calculate the workspace required to service the allocates
-    Integer main_workspace_size_bytes =
-        CalculateWorkspaceBytes(tir_main_func, workspace_byte_alignment);
-    backend::FunctionInfo main_func_info =
-        lowered_mod->GetAttr<backend::FunctionInfo>("main_func_info").value();
-    main_func_info->workspace_sizes.Set(config_->host_target, main_workspace_size_bytes);
-    function_metadata_.Set(runtime::symbol::tvm_module_main, main_func_info);
-    return lowered_mod;
-  }
-
-  /*!
-   * \brief Gets module workspace alignment from supplied executor or defaults to 16
-   */
-  Integer GetModuleWorkspaceByteAlignment(const IRModule& mod) {
-    Executor executor_config = mod->GetAttr<Executor>(tvm::attr::kExecutor).value();
-    return executor_config->GetAttr<Integer>("workspace-byte-alignment").value_or(16);
+    LOG(INFO) << "PlanMemoryWithStorageRewrite";
+    return PlanMemoryWithStorageRewrite2(mod, function_metadata_, config_);
+    // Integer workspace_byte_alignment = GetModuleWorkspaceByteAlignment(mod);
+    // IRModule lowered_mod = mod->ShallowCopy();
+    // function_metadata_ = CalculateWorkspaceSizes(lowered_mod, function_metadata_);
+    // // Running StorageRewrite just on the main function
+    // tir::PrimFunc tir_main_func =
+    //     Downcast<tir::PrimFunc>(lowered_mod->Lookup(::tvm::runtime::symbol::tvm_module_main));
+    // IRModule main_func_mod;
+    // main_func_mod->Update(lowered_mod->GetGlobalVar(::tvm::runtime::symbol::tvm_module_main),
+    //                       tir_main_func);
+    // main_func_mod = tir::transform::StorageRewrite()(main_func_mod);
+    // lowered_mod->Update(lowered_mod->GetGlobalVar(::tvm::runtime::symbol::tvm_module_main),
+    //                     main_func_mod->Lookup(::tvm::runtime::symbol::tvm_module_main));
+    // tir_main_func =
+    //     Downcast<tir::PrimFunc>(lowered_mod->Lookup(::tvm::runtime::symbol::tvm_module_main));
+    // // Use the PrimFunc to calculate the workspace required to service the allocates
+    // Integer main_workspace_size_bytes =
+    //     CalculateWorkspaceBytes(tir_main_func, workspace_byte_alignment);
+    // backend::FunctionInfo main_func_info =
+    //     lowered_mod->GetAttr<backend::FunctionInfo>("main_func_info").value();
+    // main_func_info->workspace_sizes.Set(config_->host_target, main_workspace_size_bytes);
+    // function_metadata_.Set(runtime::symbol::tvm_module_main, main_func_info);
+    // return lowered_mod;
   }
 
   /*!
