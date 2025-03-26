@@ -469,7 +469,6 @@ def _export_graph_model_library_format(
     }
     metadata["modules"] = {}
     for mod in mods:
-        print("mod.target", mod.target)
         if not isinstance(mod.target, list):
             mod.target = [mod.target]
         is_aot = isinstance(mod, executor_factory.AOTExecutorFactoryModule)
