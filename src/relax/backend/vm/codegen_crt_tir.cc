@@ -404,9 +404,21 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         tir_func = WithAttr(tir_func, tvm::attr::kTarget, {config->host_target});
         res_mod->Remove(p.first); // TODO: use ->Update()!
         res_mod->Add(GlobalVar(gsymbol.value()), tir_func);
+        // TODO: rename params?!
       } else {
         // LOG(INFO) << "!func";
       }
+    }
+    // if (codegen.constant_names_.size()) {
+    if (codegen.constant_names2_.size()) {
+      // Some backends (e.g. TensorRT) expect constants to be passed when they are instantiated
+      Map<String, runtime::NDArray> constants;
+      // for (const auto& [constant, name] : codegen.constant_names_) {
+      for (const auto& [constant, name] : codegen.constant_names2_) {
+        ICHECK(!constants.count(name)) << "More than one constant with the name " << name;
+        constants.Set(name, constant->data);
+      }
+      res_mod = WithAttr(res_mod, tvm::attr::kConstNameToConstant, std::move(constants));
     }
     // TODO: make call_type variable
     // TODO: try CPacked indead of Packed?
@@ -604,6 +616,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     all_args.push_back(tir::StringImm(gsymbol.value()));
     // Pack the inputs
     // for (const PrimExpr& arg : args) {
+    size_t i = 0;
     for (const Expr& arg : args) {
       if (const ShapeExprNode* shape_expr = arg.as<ShapeExprNode>()) {
         auto tir_arg = VisitExpr(arg);
@@ -623,6 +636,10 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         all_args.push_back(tir_arg.value());
       } else if (const ConstantNode* constant = arg.as<ConstantNode>()) {
         auto tir_arg = VisitExpr(arg);
+        auto tir_var = Downcast<tir::Var>(tir_arg);
+        auto prim_func_arg = prim_func->params[i];
+        auto myconst = Downcast<Constant>(arg);
+        constant_names2_.Set(myconst, gsymbol.value() + "." + prim_func_arg->name_hint);
         // TODO: assert defined
         all_args.push_back(tir_arg.value());
       } else if (params_by_expr_.find(arg) != params_by_expr_.end()) {
@@ -633,6 +650,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         auto sids = FindExpr(arg);
         all_args.insert(all_args.end(), sids.begin(), sids.end());
       }
+      i++;
     }
 
      // Pack the return(s) value. A call node can produce multiple outputs
@@ -752,7 +770,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     // tir::PrimFunc tir_func(tir_params, body, ret_type, {});
     Map<String, ObjectRef> dict_attrs;
     dict_attrs.Set("runner_function", Bool(true));
-    dict_attrs.Set("tir.is_entry_func", Bool(true));
+    // dict_attrs.Set(tir::attr::kIsEntryFunc, Bool(true));
     Array<tir::Var> input_vars =
         Array<tir::Var>(main_signature_.begin(), main_signature_.begin() + input_vars_.size());
     dict_attrs.Set("input_vars", input_vars);
@@ -836,6 +854,9 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     }
     tir::PrimFunc tir_func(main_signature_, body, ret_type, main_buffer_map_, DictAttrs(dict_attrs));
     tir_func = WithAttr(tir_func, "global_symbol", tir_func_name);
+
+
+
     registers_num_ = 0;
     // var_map_.clear();
     stmt_stack_.clear();
@@ -975,12 +996,14 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   Optional<PrimExpr> VisitExpr_(const ConstantNode* op) final {
     // LOG(INFO) << "VisitExpr_(const ConstantNode* op)" << "\n";
     Expr expr = GetRef<Expr>(op);
+    auto myconst = Downcast<Constant>(expr);;
     ICHECK(storage_device_map_.find(expr) != storage_device_map_.end()) << "Storage map did not contain constant expr: " << expr;
     SInfo& sinfo = storage_device_map_[expr];
     std::stringstream ss;
     ss << "constant_" << constant_map_.size();
     tir::Var constant(ss.str(), PointerType(PrimType(DataType(op->data->dtype))));
     constant_map_[constant] = op;
+    constant_names_.Set(myconst, ss.str());
     auto sid = sinfo->storage_ids[0];
     sids_table_[sid] = constant;
     return constant;
@@ -1062,7 +1085,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
         } else if (func.as<FunctionNode>()) {
           *kind = VMFuncInfo::FuncKind::kVMTIRFunc;
           return gvar->name_hint;
-        } else if (func.as<tir::PrimFuncNode>()) {
+        } else if (auto* pfunc = func.as<tir::PrimFuncNode>()) {
           *kind = VMFuncInfo::FuncKind::kPackedFunc;
           return gvar->name_hint;
         } else {
@@ -1191,7 +1214,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   // }
 
   void EmitNormalCall(const Call& call_node, int64_t dst_reg) {
-    LOG(INFO) << "EmitNormalCall" << "\n";
+    // LOG(INFO) << "EmitNormalCall" << "\n";
     // Call call = GetRef<Call>(call_node);
     Array<PrimExpr> args = VisitArray(call_node->args);
     // A function can be a closure that comes from parent
@@ -1200,11 +1223,11 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
     auto symbol = LookupFunction(call_node->op, &kind);
 
     if (symbol.defined() && kind == VMFuncInfo::FuncKind::kPackedFunc) {
-      LOG(INFO) << "defined && kPackedFunc" << "\n";
+      // LOG(INFO) << "defined && kPackedFunc" << "\n";
       // primfunc in the same module.
       // use cpacked to directly invoke without named based lookup
       if (Optional<tir::PrimFunc> prim_func = LookupPrimFunc(symbol.value())) {
-        LOG(INFO) << "defined && kPackedFunc && prim_func" << "\n";
+        // LOG(INFO) << "defined && kPackedFunc && prim_func" << "\n";
         // this->EmitCallCPacked(prim_func.value(), args, dst_reg);
         if(unpacked_api_) {
             this->EmitCallCUnpacked2(prim_func.value(), call_node->args, call_node);
@@ -1213,7 +1236,7 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
 
         }
       } else {
-        LOG(INFO) << "defined && kPackedFunc && !prim_func" << "\n";
+        // LOG(INFO) << "defined && kPackedFunc && !prim_func" << "\n";
         // this->EmitCallPacked(symbol.value(), args, dst_reg);
         // this->EmitCallPacked2(symbol.value(), call->args, call);
         this->EmitCallPacked2(symbol.value(), call_node->args, call_node);
@@ -1295,6 +1318,8 @@ class CodeGenCRTTIR : public ExprFunctor<Optional<PrimExpr>(const Expr&)> {
   SMap storage_device_map_;
   /*! \brief mapping sid -> tir::Var */
   std::unordered_map<int, tir::Var> sids_table_;
+  Map<Constant, String> constant_names_;
+  Map<Constant, String> constant_names2_;
   /*! \brief the list of return sids (note that the function might return more then one output */
   std::vector<int> return_sid_;
   /*! \brief mapping between expression and parameters */
