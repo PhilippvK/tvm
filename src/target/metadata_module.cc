@@ -68,7 +68,8 @@ static runtime::Module CreateCrtMetadataModule(
   if (target->kind->name == "c") {
     runtime::metadata::Metadata aot_metadata;
     if (executor->GetAttr<String>("interface-api", tvm::String("packed")) == "packed") {
-      aot_metadata = ConvertMetaData(metadata);
+      // aot_metadata = ConvertMetaData(metadata);
+      // TODO: genralize this for relax
     }
 
     crt_exportable_modules.push_back(target_module);
