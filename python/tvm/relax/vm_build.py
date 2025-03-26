@@ -186,7 +186,8 @@ def _vmcodegen(
 
 
 def _check_system_lib_req(
-    runtime, target: Optional[tvm.target.Target] = None,
+    runtime,
+    target: Optional[tvm.target.Target] = None,
 ):
     """Automatically detect system lib requirement"""
     system_lib = None
@@ -199,16 +200,37 @@ def _check_system_lib_req(
         assert runtime["system-lib"] == system_lib
 
 
+def calculate_workspace_sizes(lowered_mod, func_metadata, workspace_byte_alignment):
+    updated_func_metadata = {}
+    for global_var, base_func in lowered_mod.functions.items():
+        from tvm.tir.analysis import calculate_workspace_bytes
+
+        if isinstance(base_func, PrimFunc):
+            pfunc = base_func
+            tgt = pfunc.attrs.get("target")
+            assert tgt is not None
+            ws = calculate_workspace_bytes(pfunc, workspace_byte_alignment)
+            # if func_metadata.count(global_var.name_hint) > 0:
+            if global_var.name_hint in func_metadata > 0:
+                updated_metadata[global_var.name_hint].workspace_sizes[tgt] = ws
+            else:
+                finfo = FunctionInfo()
+                updated_metadata[global_var.name_hint] = finfo
+
+
 def _vmlink(
     builder: "relax.ExecBuilder",
     target: Optional[Union[str, tvm.target.Target]],
     tir_mod: Optional[tvm.IRModule] = None,
+    relax_mod=None,
     ext_libs: List[tvm.runtime.Module] = None,
     params: Optional[Dict[str, list]] = None,
     *,
     runtime: Runtime = None,  # TODO: type hint
     system_lib: Optional[bool] = None,
-    metadata = None,
+    metadata=None,
+    executor=None,
+    config=None,
 ):
     """
     Internal codegen function to make executable.
@@ -257,14 +279,59 @@ def _vmlink(
     if ext_libs is None:
         ext_libs = []
     lib = None
+    metadata = None
     if tir_mod is not None and len(tir_mod.get_global_vars()) > 0:
-        lib = tvm.build(
+        tir_mod = tir_mod.with_attrs({"runtime": runtime, "executor": executor})
+        assert params is not None
+        # lowered_mod = relax.transform.BindParams("main", params)(lowered_mod)
+        # lowered_mod = tvm.tir.transform._ffi_api.BindParams(params)(lowered_mod)
+        # lowered_mod = tvm.tir.transform._ffi_api.BindParams2(params)(lowered_mod)
+        # lowered_mod = tvm.tir.transform._ffi_api.BindParams3(params)(lowered_mod)
+        tir_mod = tvm.tir.transform._ffi_api.BindParams3(params)(tir_mod)
+        lowered_mod = tvm.lower(
             tir_mod,
+            # target=target,
+            # runtime=runtime,
+            # _autodetect_system_lib_req(target, system_lib),
+        )
+        # bind_params_pass = tvm.get_global_func("tir.transform.BindParams")
+        # lowered_mod = bind_params_pass(params)(lowered_mod)
+        from tvm.relay.backend.aot import CreateExecutorMetadata
+
+        # TODO: get from executor/runtime?
+        workspace_byte_alignment = 16
+        constant_byte_alignment = 1
+        from tvm.relay.backend import executor_factory as _executor_factory
+        from tvm.relay.backend.aot import CreateFunctionMetadata
+
+        # TODO: move/rename/expose?
+        # from tvm.relay.backend._aot import CalculateWorkspaceSizes
+        from tvm.relay.backend._aot import PlanMemoryWithStorageRewrite2
+        from tvm.relay.backend._aot import PlanMemoryWithUSMP2
+
+        func_metadata = CreateFunctionMetadata(
+            _filter_tir(lowered_mod), relax_mod, workspace_byte_alignment, constant_byte_alignment
+        )
+        main_func_info = func_metadata["__tvm_main__"]
+        lowered_mod = lowered_mod.with_attr("main_func_info", main_func_info)
+        lowered_mod = PlanMemoryWithUSMP2(lowered_mod, func_metadata)
+        main_func_info = func_metadata["__tvm_main__"]
+        metadata = CreateExecutorMetadata(
+            lowered_mod, "tvmgen_default", executor, workspace_byte_alignment, constant_byte_alignment
+        )
+        # lib = tvm.tir.transform.StorageRewrite()(lowered_mod)
+        lib = tvm.build(
+            lowered_mod,
+            # tir_mod,
             target=target,
             runtime=runtime,
             # _autodetect_system_lib_req(target, system_lib),
         )
-    return Executable(_ffi_api.VMLink(builder, target, lib, ext_libs, params, metadata))  # type: ignore
+        # TODO: attrs for workspace_memory_pools_, constant_memory_pools_
+        # from tvm.relay.backend import Executor
+
+        # executor = Executor("aot", {"interface-api": "packed"})
+    return metadata, func_metadata, Executable(_ffi_api.VMLink(builder, target, lib, ext_libs, params, metadata))  # type: ignore
 
 
 def build(
@@ -353,40 +420,75 @@ def build(
 
     ctxt = tvm.transform.PassContext()
     config = tvm.target.make_compilation_config(ctxt, target)
-    ext_libs, constants = _extract_attrs(mod)
-    params.update(dict(constants))
     builder = relax.ExecBuilder()
     unpacked_api = False
     if executor:
-        unpacked_api = int(executor["unpacked-api"])
+        unpacked_api = int(executor.attrs.get("unpacked-api", False))
         print("unpacked_api", unpacked_api, type(unpacked_api))
     mod2 = _vmcodegen(builder, mod, config, exec_mode, unpacked_api=unpacked_api)
+    ext_libs, constants = _extract_attrs(mod2)
+    params.update(dict(constants))
+    # const_name_to_const = mod2.attr["const_name_to_constant"]
+    # mod3 = tvm.transform.Sequential(
+    #     [
+    #         # tvm.tir.transform.InjectPrefetch(),
+    #         # tvm.tir.transform.TextureFlatten(),
+    #         # tvm.tir.transform.StorageFlatten(64, instrument_bound_checkers),
+    #         # tvm.tir.transform.LowerCrossThreadReduction(),
+    #         tvm.tir.transform.LowerInitBlock(),
+    #         tvm.tir.transform.PlanAndUpdateBufferAllocationLocation(),
+    #         tvm.tir.transform.ConvertBlocksToOpaque(),
+    #         # tvm.tir.transform.LiftThreadBinding(),
+    #         # tvm.tir.transform.ManifestSharedMemoryLocalStage(),
+    #         tvm.tir.transform.CompactBufferAllocation(),
+    #         tvm.tir.transform.LowerAutoCopy(),
+    #         # tvm.tir.transform.UnifyThreadBinding(),
+    #         tvm.tir.transform.LowerMatchBuffer(),
+    #         tvm.tir.transform.Simplify(),
+    #         tvm.tir.transform.InjectPermutedLayout(),
+    #         tvm.tir.transform.Simplify(),
+    #         tvm.tir.transform.InjectSoftwarePipeline(),
+    #         # tvm.tir.transform.TransformMmaBufferLayout(),
+    #         tvm.tir.transform.LowerOpaqueBlock(),
+    #         tvm.tir.transform.FlattenBuffer(),
+    #         tvm.tir.transform.Simplify(),
+    #     ]
+    # )(mod2)
+    # mod2 = mod3
+    from tvm.relay.backend.aot import CreateFunctionMetadata
+
+    # fm = CreateFunctionMetadata(_filter_tir(mod2), mod, 16, 1)
     metadata = None
-    print("executor", executor)
     if exec_mode == "crt":
         mod2 = mod2.with_attrs({"runtime": runtime, "executor": executor})
         # TODO: attrs for workspace_memory_pools_, constant_memory_pools_
         assert executor is not None
         # from tvm.relay.backend import Executor
         from tvm.relay.backend.aot import CreateExecutorMetadata
+
         # executor = Executor("aot", {"interface-api": "packed"})
         metadata = CreateExecutorMetadata(mod2, "tvmgen_default", executor, 16, 1)
-    linked_mod = _vmlink(
+    metadata, func_metadata, linked_mod = _vmlink(
         builder=builder,
         target=target,
         tir_mod=_filter_tir(mod2),
+        relax_mod=mod,
         ext_libs=ext_libs,
         params=params,
         runtime=runtime,
         system_lib=system_lib,
         metadata=metadata,
+        executor=executor,
+        config=config,
     )
     if exec_mode == "crt":
         assert runtime is not None
         # runtime = tvm.relay.backend.Runtime("cpp", {"system-lib": True})
         from tvm.relay.backend import executor_factory as _executor_factory
-        from tvm.relay.backend.aot import CreateFunctionMetadata
-        func_metadata = CreateFunctionMetadata(_filter_tir(mod2), mod, 16, 1)
+
+        # from tvm.relay.backend.aot import CreateFunctionMetadata
+
+        # func_metadata = CreateFunctionMetadata(_filter_tir(mod2), mod, 16, 1)
         # input("A")
         # func_metadata = None
         # func_metadata = CreateFunctionMetadata(linked_mod.mod.imported_modules[0], 16, 1)
