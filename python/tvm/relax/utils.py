@@ -21,9 +21,10 @@ import inspect
 from typing import Tuple as typing_Tuple
 from typing import Any, Callable, List, Dict, Optional, TypeVar
 
+import tvm
 from .. import tir
 from ..tir import PrimExpr
-from ..runtime import String, convert_to_object
+from ..runtime import String, convert_to_object, Object
 from . import _ffi_api
 from .expr import Tuple as rx_Tuple
 from .expr import Expr, ShapeExpr, Function, PrimValue, StringImm, te_tensor
@@ -391,6 +392,8 @@ def gen_call_tir_inputs(
                 extra_tir_args_list.append(new_arg)
                 return new_arg
             elif isinstance(arg, (int, float, str, Type, Attrs)) or arg is None:
+                return arg
+            elif isinstance(arg, Object):
                 return arg
             raise TypeError("not supported type in emit_te: {}".format(type(arg)))
 
