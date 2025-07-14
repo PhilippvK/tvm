@@ -39,6 +39,7 @@
 namespace tvm {
 
 // Register build pipeline related options
+TVM_REGISTER_PASS_CONFIG_OPTION("tir.split_files", Bool);
 TVM_REGISTER_PASS_CONFIG_OPTION("tir.noalias", Bool);
 TVM_REGISTER_PASS_CONFIG_OPTION("tir.detect_global_barrier", Bool);
 TVM_REGISTER_PASS_CONFIG_OPTION("tir.instrument_bound_checkers", Bool);

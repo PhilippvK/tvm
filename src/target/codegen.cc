@@ -70,7 +70,12 @@ runtime::Module Build(IRModule mod, Target target) {
   std::string build_f_name = "target.build." + target->kind->name;
   const PackedFunc* bf = runtime::Registry::Get(build_f_name);
   ICHECK(bf != nullptr) << build_f_name << " is not enabled";
-  return (*bf)(mod, target);
+  if (target->kind->name == "c") {
+    bool split_files = transform::PassContext::Current()->GetConfig<Bool>("tir.split_files", Bool(false)).value();
+    return (*bf)(mod, target, split_files);
+  } else {
+    return (*bf)(mod, target);
+  }
 }
 
 /*! \brief Helper class to serialize module */

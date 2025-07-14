@@ -420,7 +420,7 @@ inline void CodeGenCHost::PrintTernaryCondExpr(const T* op, const char* compare,
      << "? (" << a_id << ") : (" << b_id << "))";
 }
 
-runtime::Module BuildCHost(IRModule mod, Target target) {
+runtime::Module BuildCHost(IRModule mod, Target target, bool split_files = false) {
   using tvm::runtime::Registry;
   bool output_ssa = false;
   bool emit_asserts = false;
@@ -465,11 +465,25 @@ runtime::Module BuildCHost(IRModule mod, Target target) {
     cg.DeclareFunction(gvar, prim_func);
   }
 
-  // Codegen all functions.  Passing emit_fwd_func_decl=true adds a
-  // forward declaration for any `builtin::call_extern`, based on the
-  // arguments provided to it.
-  for (const auto& [gvar, prim_func] : funcs) {
-    cg.AddFunction(gvar, prim_func, emit_fwd_func_decl);
+  Array<runtime::Module> to_import;
+  if (split_files) {
+    for (const auto& [gvar, prim_func] : funcs) {
+      CodeGenCHost single_cg;
+      single_cg.Init(output_ssa, emit_asserts, emit_fwd_func_decl, target->str(), devices);
+      single_cg.SetConstantsByteAlignment(target->GetAttr<Integer>("constants-byte-alignment").value_or(16));
+      // single_cg.DeclareFunction(gvar, prim_func);
+      single_cg.AddFunction(gvar, prim_func, emit_fwd_func_decl);
+      std::string code_ = single_cg.Finish();
+      runtime::Module single_mod = CSourceModuleCreate(code_, "c", {gvar->name_hint});
+      to_import.push_back(single_mod);
+    }
+  } else {
+    // Codegen all functions.  Passing emit_fwd_func_decl=true adds a
+    // forward declaration for any `builtin::call_extern`, based on the
+    // arguments provided to it.
+    for (const auto& [gvar, prim_func] : funcs) {
+      cg.AddFunction(gvar, prim_func, emit_fwd_func_decl);
+    }
   }
 
   // NOTE: it's possible that kRuntime attr is not attached when the mod was built with tvm.build().
@@ -494,7 +508,13 @@ runtime::Module BuildCHost(IRModule mod, Target target) {
   }
 
   std::string code = cg.Finish();
-  return CSourceModuleCreate(code, "c", cg.GetFunctionNames());
+  if (split_files) {
+    auto ret_mod = tvm::codegen::CSourceModuleCreate(";", "", Array<String>{});
+    for (auto single_mod : to_import)
+      ret_mod->Import(single_mod);
+    return ret_mod;
+  }
+  return CSourceModuleCreate(code, "c", cg.GetFunctionNames());  // ?
 }
 
 TVM_REGISTER_GLOBAL("target.build.c").set_body_typed(BuildCHost);
