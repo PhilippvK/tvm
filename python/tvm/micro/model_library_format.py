@@ -140,6 +140,8 @@ def _populate_codegen_dir(
 
         for dso_mod in dso_modules:
             if dso_mod.type_key == "c":
+                if dso_mod.format == "":
+                    continue
                 assert dso_mod.format in ["c", "cc", "cpp"]
                 ext = dso_mod.format
                 index = mod_indices["src"]
