@@ -30,6 +30,7 @@
 #include <tvm/runtime/device_api.h>
 #include <tvm/tir/builtin.h>
 #include <tvm/tir/function.h>
+#include <tvm/tir/transform.h>
 #include <tvm/tir/stmt_functor.h>
 #include <tvm/tir/usmp/analysis.h>
 #include <tvm/tir/usmp/utils.h>
@@ -232,7 +233,12 @@ void BufferInfoExtractor::RecordAllocateNodeInfo(const AllocateNode* op) {
   auto storage_scope = Downcast<PointerType>(op->buffer_var->type_annotation)->storage_scope;
   // We only statically memory plan only allocates with known
   // compile time sizes.
-  if (size_bytes.defined() && !(size_bytes.IntValue() < 1024 && storage_scope == "global")) {
+  constexpr int kMaxStackAllocaDefault = 1024;
+  const int kMaxStackAlloca =
+      transform::PassContext::Current()
+          ->GetConfig<Integer>("tir.max_stack_alloca", Integer(kMaxStackAllocaDefault))
+          .value()->value;
+  if (size_bytes.defined() && !(size_bytes.IntValue() < kMaxStackAlloca && storage_scope == "global")) {
     if (allocate_infos.find(op->buffer_var) == allocate_infos.end()) {
       // By default, the core compiler is assumed to attach the a default pool to each allocate.
       ICHECK(op->annotations.count(kPoolCandidatesAllocateAttr))
