@@ -169,7 +169,7 @@ int TVMAotExecutor_Init(TVMAotExecutor* executor, TVMModuleHandle module_handle,
 
   const TVMMetadata* md = executor->metadata;
 
-  DumpMetadata(md);
+  // DumpMetadata(md);
 
   executor->num_args = md->num_inputs + md->num_outputs + md->num_workspace_pools;
 
