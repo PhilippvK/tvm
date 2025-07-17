@@ -162,9 +162,9 @@ def conv1d_nwc_dsp_schedule(cfg, outs):
 
         cfg["reorder_0_simd"].apply(sched, conv, [n, owo, owi, coo, coi, kw, cio, cii])
 
-        gemm, uniq_id = intrin_gemm_MxKxN(M, K, N, data_vec.dtype, output.dtype, stride_w)
-        sched[output].tensorize(owi, gemm)
-        sched[output].pragma(n, "import_c", gemm_MxKxN_impl(M, K, N, uniq_id))
+        # gemm, uniq_id = intrin_gemm_MxKxN(M, K, N, data_vec.dtype, output.dtype, stride_w)
+        # sched[output].tensorize(owi, gemm)
+        # sched[output].pragma(n, "import_c", gemm_MxKxN_impl(M, K, N, uniq_id))
 
         # this is the scope to attach global config inside this kernel
         kernel_scope = n
