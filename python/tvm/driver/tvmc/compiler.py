@@ -557,104 +557,41 @@ def compile_model(
         )
         instruments = [print_ir_instr] if instruments is None else [print_ir_instr] + instruments
 
-    # with tempfile.TemporaryDirectory() as tmpdirname:
-    if True:
-        if ms_db is None or len(ms_db) == 0:
-            ms_db = ms.database.MemoryDatabase()
-        else:
-            config["relay.backend.use_meta_schedule_dispatch"] = metascheduler_dispatch
-            ms_db = load_ms_db_wrapper(ms_db)
-            # db_path = Path(ms_db)
-            # if db_path.is_dir():
-            #     path_workload = db_path / "database_workload.json"
-            #     path_tuning_record = db_path / "database_tuning_record.json"
-            # elif db_path.is_file():
-            #     suffix = db_path.suffix
-            #     if suffix == ".json":
-            #         if "workload" in db_path.stem:
-            #             path_workload = db_path
-            #             path_tuning_record = db_path.parent / db_path.name.replace("workload", "tuning_record")
-            #         elif "tuning_record" in db_path.stem:
-            #             path_tuning_record = db_path
-            #             path_workload = db_path.parent / db_path.name.replace("tuning_record", "workload")
-            #         else:
-            #             raise ValueError("Invalid MS DB file name: {db_path.name}")
-            #         raise NotImplementedError("ms_db json")
-            #     elif tarfile.is_tarfile(db_path):
-            #         db_out_path = Path(tmpdirname)
-            #         with tarfile.open(db_path) as f:
-            #             f.extractall(path=db_out_path)
-            #         db_out_path = db_out_path / "work_dir"  # TODO: fix
-            #         path_workload = db_out_path / "database_workload.json"
-            #         path_tuning_record = db_out_path / "database_tuning_record.json"
-            #     else:
-            #         raise ValueError(f"Unsupported suffix: {suffix}")
-            # else:
-            #     path_workload = Path(f"{db_path}_workload.json")
-            #     path_tuning_record = Path("{db_path}_tuning_record.json")
-            # assert path_workload.is_file(), f"Not found: {path_workload}"
-            # assert path_tuning_record.is_file(), f"Not found: {path_tuning_record}"
-            # ms_db = ms.database.JSONDatabase(
-            #     path_workload=str(path_workload),
-            #     path_tuning_record=str(path_tuning_record),
-            #     module_equality=metascheduler_module_equality,
-            # )
-        with tvm.transform.PassContext(
-            opt_level=opt_level,
-            config=config,
-            disabled_pass=disabled_pass,
-            instruments=instruments,
-        ):
-            transform_args = parse_graph_transform_args(locals())
-            mod = apply_graph_transforms(mod, transform_args)
-            mod = tvm.relay.transform.InferType()(mod)
+    if ms_db is None or len(ms_db) == 0:
+        ms_db = ms.database.MemoryDatabase()
+    else:
+        config["relay.backend.use_meta_schedule_dispatch"] = metascheduler_dispatch
+        ms_db = load_ms_db_wrapper(ms_db)
+    with tvm.transform.PassContext(
+        opt_level=opt_level,
+        config=config,
+        disabled_pass=disabled_pass,
+        instruments=instruments,
+    ):
+        transform_args = parse_graph_transform_args(locals())
+        mod = apply_graph_transforms(mod, transform_args)
+        mod = tvm.relay.transform.InferType()(mod)
 
-            for partition_function, opts in zip(partition_functions, partition_opts):
-                mod = partition_function(mod, params, mod_name=mod_name, **opts)
+        for partition_function, opts in zip(partition_functions, partition_opts):
+            mod = partition_function(mod, params, mod_name=mod_name, **opts)
 
-            if initial_relay:
-                # dump which operations are offloaded to which backend
-                dump_operation_offloads(mod, initial_relay, dump_offloads)
+        if initial_relay:
+            # dump which operations are offloaded to which backend
+            dump_operation_offloads(mod, initial_relay, dump_offloads)
 
-            if tuning_records and os.path.exists(tuning_records):
-                logger.debug("tuning records file provided: %s", tuning_records)
+        if tuning_records and os.path.exists(tuning_records):
+            logger.debug("tuning records file provided: %s", tuning_records)
 
-                use_autoscheduler = True
-                try:
-                    auto_scheduler.load_records(tuning_records)
-                except tvm._ffi.base.TVMError:
-                    use_autoscheduler = False
+            use_autoscheduler = True
+            try:
+                auto_scheduler.load_records(tuning_records)
+            except tvm._ffi.base.TVMError:
+                use_autoscheduler = False
 
-                if use_autoscheduler:
-                    with auto_scheduler.ApplyHistoryBest(tuning_records):
-                        config["relay.backend.use_auto_scheduler"] = True
-                        logger.debug("building relay graph with autoscheduler")
-                        graph_module = build(
-                            mod,
-                            tvm_target=tvm_target,
-                            executor=executor,
-                            runtime=runtime,
-                            params=params,
-                            use_vm=use_vm,
-                            mod_name=mod_name,
-                            workspace_pools=workspace_pools,
-                        )
-                else:
-                    with autotvm.apply_history_best(tuning_records):
-                        logger.debug("building relay graph with tuning records")
-                        graph_module = build(
-                            mod,
-                            tvm_target=tvm_target,
-                            executor=executor,
-                            runtime=runtime,
-                            params=params,
-                            use_vm=use_vm,
-                            mod_name=mod_name,
-                            workspace_pools=workspace_pools,
-                        )
-            else:
-                logger.debug("building relay graph (no tuning records provided)")  # TODO: update
-                with ms_db:
+            if use_autoscheduler:
+                with auto_scheduler.ApplyHistoryBest(tuning_records):
+                    config["relay.backend.use_auto_scheduler"] = True
+                    logger.debug("building relay graph with autoscheduler")
                     graph_module = build(
                         mod,
                         tvm_target=tvm_target,
@@ -665,69 +602,80 @@ def compile_model(
                         mod_name=mod_name,
                         workspace_pools=workspace_pools,
                     )
-        dso_modules = graph_module.get_lib()._collect_dso_modules()
-        for dso in dso_modules:
-            dso_src = dso.get_source()
-
-        # Generate output dump files with sources
-        for source_type in dump_code:
-            if source_type == "relay0":
-                dumps[source_type] = str(initial_relay)
-            elif source_type == "relay":
-                dumps[source_type] = str(mod)
-            elif "tir" in source_type:
-                dumps[source_type] = "\n".join(dumps[source_type])
-            elif source_type == "dso":
-                dso_modules = graph_module.get_lib()._collect_dso_modules()
-                for i, dso in enumerate(dso_modules):
-                    dso_src = dso.get_source()
-                    dumps[f"dso{i}"] = dso_src
             else:
-                lib = graph_module.lib if use_vm else graph_module.get_lib()
-                # TODO lib.get_source call have inconsistent behavior for unsupported
-                #      formats (@leandron).
-                dumps[source_type] = lib.get_source(source_type)
-                for smod in lib.imported_modules:
-                    dumps[smod.type_key] = smod.get_source()
+                with autotvm.apply_history_best(tuning_records):
+                    logger.debug("building relay graph with tuning records")
+                    graph_module = build(
+                        mod,
+                        tvm_target=tvm_target,
+                        executor=executor,
+                        runtime=runtime,
+                        params=params,
+                        use_vm=use_vm,
+                        mod_name=mod_name,
+                        workspace_pools=workspace_pools,
+                    )
+    dso_modules = graph_module.get_lib()._collect_dso_modules()
 
-        if dump_pass_diff:
-            new_dumps = instruments[0].dumps
-            dumps.update(new_dumps)
+    # Generate output dump files with sources
+    for source_type in dump_code:
+        if source_type == "relay0":
+            dumps[source_type] = str(initial_relay)
+        elif source_type == "relay":
+            dumps[source_type] = str(mod)
+        elif "tir" in source_type:
+            dumps[source_type] = "\n".join(dumps[source_type])
+        elif source_type == "dso":
+            dso_modules = graph_module.get_lib()._collect_dso_modules()
+            for i, dso in enumerate(dso_modules):
+                dso_src = dso.get_source()
+                dumps[f"dso{i}"] = dso_src
+        else:
+            lib = graph_module.lib if use_vm else graph_module.get_lib()
+            # TODO lib.get_source call have inconsistent behavior for unsupported
+            #      formats (@leandron).
+            dumps[source_type] = lib.get_source(source_type)
+            for smod in lib.imported_modules:
+                dumps[smod.type_key] = smod.get_source()
 
-        # Write dumps to file.
-        if dumps:
-            save_dumps(str(package_path), dumps)
+    if dump_pass_diff:
+        new_dumps = instruments[0].dumps
+        dumps.update(new_dumps)
 
-        if print_pass_tree:
-            print("============================")
-            text = ""
-            for pre, fill, node in RenderTree(context.tree):
-                gvars = ",".join(node.global_vars)
-                LIMIT = 40
-                gvars = gvars.replace("tvmgen_default_", "")
-                if len(gvars) > LIMIT:
-                    gvars = gvars[: LIMIT - 3] + "..."
-                if len(node.global_vars) > 0:
-                    gvars = gvars + f" (#={len(node.global_vars)})"
-                print("%s%s [%d..%d] %s" % (pre, node.name, node.start, node.stop, gvars))
-            print("============================")
+    # Write dumps to file.
+    if dumps:
+        save_dumps(str(package_path), dumps)
+
+    if print_pass_tree:
+        print("============================")
+        text = ""
+        for pre, fill, node in RenderTree(context.tree):
+            gvars = ",".join(node.global_vars)
+            LIMIT = 40
+            gvars = gvars.replace("tvmgen_default_", "")
+            if len(gvars) > LIMIT:
+                gvars = gvars[: LIMIT - 3] + "..."
+            if len(node.global_vars) > 0:
+                gvars = gvars + f" (#={len(node.global_vars)})"
+            print("%s%s [%d..%d] %s" % (pre, node.name, node.start, node.stop, gvars))
+        print("============================")
 
 
-        # Write dumps to file.
-        if dumps:
-            save_dumps(str(package_path), dumps)
+    # Write dumps to file.
+    if dumps:
+        save_dumps(str(package_path), dumps)
 
-        # Create a new tvmc model package object from the graph definition.
-        package_path = tvmc_model.export_package(
-            graph_module, package_path, cross, cross_options, output_format
-        )
+    # Create a new tvmc model package object from the graph definition.
+    package_path = tvmc_model.export_package(
+        graph_module, package_path, cross, cross_options, output_format
+    )
 
-        # Print compilation times per pass
-        if print_pass_times:
-            print("Compilation time breakdown by pass:")
-            print(timing_inst.render())
+    # Print compilation times per pass
+    if print_pass_times:
+        print("Compilation time breakdown by pass:")
+        print(timing_inst.render())
 
-        return TVMCPackage(package_path)
+    return TVMCPackage(package_path)
 
 
 def build(
