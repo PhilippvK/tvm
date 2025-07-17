@@ -25,7 +25,7 @@ from tvm.driver.tvmc import TVMCException
 # distinguish from runtime.BoxInt.
 INTERNAL_TO_NATIVE_TYPE = {
     "runtime.String": str,
-    "runtime.BoxBool": bool,
+    "runtime.BoxBool": lambda x: bool(int(x)) if x.isdigit() and len(x) == 1 else (x.lower() in ["true", "t", "on", "yes", "y"]),
     "runtime.BoxFloat": float,
     "runtime.BoxInt": int,
     "Array": str,
