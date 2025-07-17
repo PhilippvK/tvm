@@ -151,17 +151,17 @@ def depthwise_conv2d_nhwc_dsp_schedule(_cfg, outs):
         c_ax_o, c_ax_i = schedule[output].split(c_ax, factor=simd_lanes)
         schedule[output].reorder(b_ax, c_ax_o, y_ax, x_ax, ky_ax, kx_ax, c_ax_i)
 
-        multi_channel_convolve = intrin_multi_channel_convolve(
-            in_dtype, padded_h, padded_w, channels, kernel_h, kernel_w, suffix
-        )
-        schedule[output].tensorize(ky_ax, multi_channel_convolve)
-        schedule[output].pragma(
-            b_ax,
-            "import_c",
-            multi_channel_convolve_impl(
-                in_dtype, padded_h, padded_w, channels, kernel_h, kernel_w, suffix
-            ),
-        )
+        # multi_channel_convolve = intrin_multi_channel_convolve(
+        #     in_dtype, padded_h, padded_w, channels, kernel_h, kernel_w, suffix
+        # )
+        # schedule[output].tensorize(ky_ax, multi_channel_convolve)
+        # schedule[output].pragma(
+        #     b_ax,
+        #     "import_c",
+        #     multi_channel_convolve_impl(
+        #         in_dtype, padded_h, padded_w, channels, kernel_h, kernel_w, suffix
+        #     ),
+        # )
 
     traverse_inline(schedule, outs[-1].op, _callback)
     return schedule

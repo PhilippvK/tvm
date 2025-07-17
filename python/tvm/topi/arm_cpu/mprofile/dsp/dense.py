@@ -78,9 +78,9 @@ def dense_dsp_schedule(cfg, outs):
 
         sched[dense].reorder(x_o, y_o, k_o, x_i, y_i, k_i)
 
-        gemm, uniq_id = intrin_gemm_MxKxN(M, K, N, data.dtype, output.dtype, stride_w=1)
-        sched[output].tensorize(x_i, gemm)
-        sched[output].pragma(x_o, "import_c", gemm_MxKxN_impl(M, K, N, uniq_id))
+        # gemm, uniq_id = intrin_gemm_MxKxN(M, K, N, data.dtype, output.dtype, stride_w=1)
+        # sched[output].tensorize(x_i, gemm)
+        # sched[output].pragma(x_o, "import_c", gemm_MxKxN_impl(M, K, N, uniq_id))
 
     traverse_inline(sched, outs[-1].op, _callback)
     return sched

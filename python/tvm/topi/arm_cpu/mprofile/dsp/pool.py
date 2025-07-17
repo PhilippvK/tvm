@@ -49,9 +49,9 @@ def schedule_maxpool_1d_nwc(s, op):
     (k,) = s[op].op.reduce_axis
 
     s[op].reorder(n, w, k, c)
-    max_val, uniq_id = intrin_max((1, 1, channels), data_vec.dtype, output.dtype)
-    s[op].tensorize(c, max_val)
-    s[output].pragma(n, "import_c", max_impl(uniq_id))
+    # max_val, uniq_id = intrin_max((1, 1, channels), data_vec.dtype, output.dtype)
+    # s[op].tensorize(c, max_val)
+    # s[output].pragma(n, "import_c", max_impl(uniq_id))
 
 
 def schedule_maxpool_2d_nhwc(s, op):
@@ -67,9 +67,9 @@ def schedule_maxpool_2d_nhwc(s, op):
     ko, ki = s[op].op.reduce_axis
 
     s[op].reorder(n, h, w, ko, ki, c)
-    max_val, uniq_id = intrin_max((1, 1, 1, channels), data_vec.dtype, output.dtype)
-    s[op].tensorize(c, max_val)
-    s[output].pragma(n, "import_c", max_impl(uniq_id))
+    # max_val, uniq_id = intrin_max((1, 1, 1, channels), data_vec.dtype, output.dtype)
+    # s[op].tensorize(c, max_val)
+    # s[output].pragma(n, "import_c", max_impl(uniq_id))
 
 
 def schedule_avgpool_1d_ncw(s, op):
@@ -81,9 +81,9 @@ def schedule_avgpool_1d_ncw(s, op):
     (k,) = s[op].op.reduce_axis
     pool_w = k.dom.extent.value
 
-    summary, uniq_id = intrin_sum((1, 1, pool_w), data_vec.dtype, output.dtype, reset=True)
-    s[op].tensorize(k, summary)
-    s[output].pragma(n, "import_c", sum_impl(pool_w, uniq_id))
+    # summary, uniq_id = intrin_sum((1, 1, pool_w), data_vec.dtype, output.dtype, reset=True)
+    # s[op].tensorize(k, summary)
+    # s[output].pragma(n, "import_c", sum_impl(pool_w, uniq_id))
 
 
 def schedule_avgpool_2d_nchw(s, op):
@@ -95,9 +95,9 @@ def schedule_avgpool_2d_nchw(s, op):
     _, ki = s[op].op.reduce_axis
     pool_w = ki.dom.extent.value
 
-    summary, uniq_id = intrin_sum((1, 1, 1, pool_w), data_vec.dtype, output.dtype)
-    s[op].tensorize(ki, summary)
-    s[output].pragma(n, "import_c", sum_impl(pool_w, uniq_id))
+    # summary, uniq_id = intrin_sum((1, 1, 1, pool_w), data_vec.dtype, output.dtype)
+    # s[op].tensorize(ki, summary)
+    # s[output].pragma(n, "import_c", sum_impl(pool_w, uniq_id))
 
 
 def pool_dsp_schedule(outs, layout):
