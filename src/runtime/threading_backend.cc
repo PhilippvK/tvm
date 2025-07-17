@@ -343,7 +343,7 @@ class ThreadGroup::Impl {
     }
     if (big_count_ + little_count_ != static_cast<int>(sorted_order_.size())) {
       big_count_ = static_cast<int>(sorted_order_.size()) - little_count_;
-      LOG(WARNING) << "more than two frequencies detected! Forced big_count_ to " << big_count_;
+      // LOG(WARNING) << "more than two frequencies detected! Forced big_count_ to " << big_count_;
     }
   }
 
