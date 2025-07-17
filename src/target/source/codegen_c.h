@@ -306,7 +306,7 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
   bool IsVolatile(const VarNode* buf_var) const { return volatile_buf_.count(buf_var) != 0; }
 
   /*! \brief restrict keyword */
-  std::string restrict_keyword_{""};
+  std::string restrict_keyword_{"restrict"};
   /*! \brief the storage scope of allocation */
   std::unordered_map<const VarNode*, std::string> alloc_storage_scope_;
   /*! \brief the data type of allocated buffers */
