@@ -69,6 +69,7 @@ from tvm.target import Target
 from tvm.relay.backend import Executor, Runtime
 from tvm.relay.analysis.operations_distribution import analyze_operations_distribution
 from tvm.relay.transform.suffixes import tag_suffixes
+from tvm import meta_schedule as ms
 
 from . import composite_target, frontends, TVMCException
 from .model import TVMCModel, TVMCPackage
@@ -153,6 +154,12 @@ def add_compile_parser(subparsers, _, json_params):
         default="",
         help="path to an auto-tuning log file by AutoTVM. If not presented, "
         "the fallback/tophub configs will be used.",
+    )
+    parser.add_argument(
+        "--ms-db",
+        metavar="PATH",
+        default="",
+        help="TODO",
     )
     generate_registry_args(parser, Executor, "graph")
     generate_registry_args(parser, Runtime, "cpp")
@@ -332,6 +339,7 @@ def drive_compile(args):
             executor=reconstruct_registry_entity(args, Executor),
             runtime=reconstruct_registry_entity(args, Runtime),
             tuning_records=args.tuning_records,
+            ms_db=args.ms_db,
             package_path=args.output,
             cross=args.cross_compiler,
             cross_options=args.cross_compiler_options,
@@ -364,6 +372,7 @@ def compile_model(
     executor: Optional[Executor] = Executor("graph"),
     runtime: Optional[Runtime] = Runtime("cpp"),
     tuning_records: Optional[str] = None,
+    ms_db: Optional[str] = None,
     package_path: Optional[str] = None,
     cross: Optional[Union[str, Callable]] = None,
     cross_options: Optional[str] = None,
@@ -408,6 +417,8 @@ def compile_model(
     tuning_records : str
         A path to tuning records produced using tvmc.tune. When provided,
         compilation will use more optimized kernels leading to better results.
+    ms_db : str
+        TODO.
     package_path : str, optional
         The path to export the compiled model to. If not provided it will
         be saved in a temporary directory.
@@ -522,6 +533,16 @@ def compile_model(
         )
         instruments = [print_ir_instr] if instruments is None else [print_ir_instr] + instruments
 
+    if ms_db is None or len(ms_db) == 0:
+        ms_db = ms.database.MemoryDatabase()
+    else:
+        config["relay.backend.use_meta_schedule_dispatch"] = True
+        db_path = Path(ms_db)
+        path_workload = db_path / "database_workload.json"
+        assert path_workload.is_file(), f"Not found: {path_workload}"
+        path_tuning_record = db_path / "database_tuning_record.json"
+        assert path_tuning_record.is_file(), f"Not found: {path_tuning_record}"
+        ms_db = ms.database.JSONDatabase(path_workload=str(path_workload), path_tuning_record=str(path_tuning_record))
     with tvm.transform.PassContext(
         opt_level=opt_level,
         config=config,
@@ -577,16 +598,17 @@ def compile_model(
                     )
         else:
             logger.debug("building relay graph (no tuning records provided)")
-            graph_module = build(
-                mod,
-                tvm_target=tvm_target,
-                executor=executor,
-                runtime=runtime,
-                params=params,
-                use_vm=use_vm,
-                mod_name=mod_name,
-                workspace_pools=workspace_pools,
-            )
+            with ms_db:
+                graph_module = build(
+                    mod,
+                    tvm_target=tvm_target,
+                    executor=executor,
+                    runtime=runtime,
+                    params=params,
+                    use_vm=use_vm,
+                    mod_name=mod_name,
+                    workspace_pools=workspace_pools,
+                )
         dso_modules = graph_module.get_lib()._collect_dso_modules()
         for dso in dso_modules:
             dso_src = dso.get_source()
