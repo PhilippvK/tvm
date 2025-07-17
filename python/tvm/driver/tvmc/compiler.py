@@ -37,6 +37,8 @@ from tvm.target import Target
 from tvm.relay.backend import Executor, Runtime
 from tvm.relay.analysis.operations_distribution import analyze_operations_distribution
 from tvm.relay.transform.suffixes import tag_suffixes
+from tvm import meta_schedule as ms
+from tvm.tir.tensor_intrin.arm_cpu import DP4A_S8S8S32_INTRIN  # required?
 
 from . import composite_target, frontends, TVMCException
 from .model import TVMCModel, TVMCPackage
