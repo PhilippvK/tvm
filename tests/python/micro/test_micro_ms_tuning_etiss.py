@@ -21,6 +21,7 @@ import pytest
 from types import MappingProxyType
 from typing import Optional
 from typing import TYPE_CHECKING, Callable, List
+import traceback
 import tvm
 import tvm.testing
 from tvm import relay
@@ -28,6 +29,8 @@ from tvm.relay.backend import Executor
 # from tvm.contrib import graph_executor
 from tvm.contrib import utils
 from tvm import meta_schedule as ms
+from tvm.tir import stmt_functor
+from tvm.runtime import ndarray
 from tvm.driver import tvmc
 
 ###
@@ -455,6 +458,27 @@ static int32_t __attribute__((always_inline)) inline cfu_kernel_""" + str(channe
     // return *acc;
     return get_acc();
 }
+
+#if NUM_CLUSTERS == 2
+void set_codebook_2(int8_t* data_ptr) {
+    uint16_t* codebook_lo = *((int16_t*)data_ptr);
+    cfu_op0_hw(CFU_OPCODE_SET_CODEBOOK_2B, codebook_lo, 0);
+}
+}
+#elif NUM_CLUSTERS == 4
+void set_codebook_4(int8_t* data_ptr) {
+    uint32_t* codebook_lo = *((int32_t*)data_ptr);
+    cfu_op0_hw(CFU_OPCODE_SET_CODEBOOK_4B, codebook_lo, 0);
+}
+#elif NUM_CLUSTERS == 16
+void set_codebook_16(int8_t* data_ptr) {
+    uint32_t* codebook_lo = *((int32_t*)data_ptr);
+    uint32_t* codebook_hi = *(((int32_t*)data_ptr) + 1);
+    cfu_op0_hw(CFU_OPCODE_SET_CODEBOOK_4B, codebook_lo, hi);
+}
+#else
+// TODO: err?
+#endif  // NUM_CLUSTERS
 #endif  // CFU_KERNEL_CODE
 """
 
@@ -495,17 +519,245 @@ class ImportCPostprocess(ms.postproc.PyPostproc):
         has = has_block(sch, "root")
         # print("has", has)
         if has:
+            has_tensorize = False
+            is_legal = False
             try:
                 # block = sch.get_block("block")
                 block = sch.get_block("root")
                 # print("block", block)
                 sch.annotate(block, "foo", "bar")
-                code = _gen_cfu_kernel_code(self.num_clusters, self.mode, self.channel_count)
-                # code = "dummy code"
-                # print("code", code)
-                sch.annotate(block, "pragma_import_c", code)
+                # code = _gen_cfu_kernel_code(self.num_clusters, self.mode, self.channel_count)
+                # sch.annotate(block, "pragma_import_c", code)
+                # print("dir(sch)", dir(sch))
+                mod = sch.mod
+
+                packed_weights_arr = None
+                codebook_arr = None
+                const_name = None
+                pack_factor = None
+                tensorize_func = None
+                tensorize_block = None
+
+
+                def _visit(stmt):
+                    nonlocal has_tensorize, is_legal, packed_weights_arr, codebook_arr, const_name, pack_factor, tensorize_func, tensorize_block
+                    if isinstance(stmt, tvm.tir.Block):  # finding blocks to be tensorized?
+                        tensorize_attr = stmt.annotations.get("meta_schedule.auto_tensorize")
+                        if tensorize_attr is None:
+                            return
+                        if not tensorize_attr.startswith("cfu_"):
+                            return
+                        # print("BLOCK", dir(stmt))
+                        # print("stmt.name_hint", stmt.name_hint, dir(stmt.name_hint))
+                        block_name = stmt.name_hint
+                        # print("block_name", block_name)
+                        tensorize_count = int(tensorize_attr.split("_", 1)[1][:-1])
+                        # print("tensorize_count", tensorize_count)
+                        assert not has_tensorize, "Can only tensorize once per block!"
+                        has_tensorize = True
+                        tensorize_func = tensorize_attr
+                        tensorize_block = block_name
+                        # print("stmt.annotations", stmt.annotations, dir(stmt.annotations))
+                        # print("stmt.annotations.items()", stmt.annotations.items())
+                        # print("stmt.annotations.keys()", stmt.annotations.keys())
+                        # print("A", stmt.annotations.get("meta_schedule.auto_tensorize"))
+                        # print("B", stmt.annotations.get("meta_schedule.auto_tensorize", None))
+                        # input("!!!")
+                    elif isinstance(stmt, tvm.tir.Call):  # finding call_extern after RewriteTensorize
+                        pass
+                        # print("CALL", dir(stmt))
+                        # print("stmt.op", stmt.op, dir(stmt.op))
+                        # print("stmt.op.name", stmt.op.name)
+                        # input("!!!")
+                    elif isinstance(stmt, tvm.tir.AllocateConst):  # Finding constants for weight clustering
+                        # print("alloc_const")
+                        # print("sch.mod", sch.mod)
+                        # print("mod.attrs", mod.attrs)
+                        # print("mod.functions", mod.functions)
+                        # print("stmt", stmt)
+                        # print("dir(stmt)", dir(stmt))
+                        # print("stmt.annotations", stmt.annotations)
+                        # print("stmt.body", stmt.body)
+                        # print("stmt.buffer_var", stmt.buffer_var)
+                        # print("dir(stmt.buffer_var)", dir(stmt.buffer_var))
+                        buffer_var = stmt.buffer_var
+                        name = buffer_var.name
+                        # print("buffer_var.name", name)
+                        # print("buffer_var.dtype", buffer_var.dtype)
+                        # print("stmt.data", stmt.data)
+                        #print("stmt.data.numpy()", stmt.data.numpy())
+                        # print("dir(stmt.data)", dir(stmt.data))
+                        data = stmt.data.numpy()
+                        # print("data", data.dtype)
+                        values, counts = np.unique(data, return_counts=True)
+                        num_clusters = len(values)
+                        if num_clusters in [2, 4, 16]:  # TODO: 3, 5-15 also fine?
+                            if data.dtype == "int8":
+                                dtype_bits = 8
+                                # print("values", values)
+                                # print("counts", counts)
+                                from math import log2
+                                cluster_bits = int(log2(num_clusters))
+                                # print("cluster_bits", cluster_bits)
+                                pack_factor = dtype_bits / cluster_bits
+                                # print("pack_factor", pack_factor)
+                                shape = data.shape
+                                # print("shape", shape)
+                                extent = shape[-1]
+                                # print("extent", extent)
+                                ok = extent % pack_factor == 0
+                                # print("ok?", ok)
+                                packed_weights = [values.tolist().index(x) for x in data.flatten()]
+                                # print("packed_weights", packed_weights)
+                                packed_weights = np.array(packed_weights, dtype="uint8")
+                                # print("packed_weights2", packed_weights)
+                                packed_weights = packed_weights.reshape(shape)
+                                # print("packed_weights3", packed_weights)
+                                # packed_weights = packed_weights.astype("uint8")
+                                # print("packed_weights4", packed_weights, packed_weights.shape)
+                                def pack_bits(arr, n_bits: int):
+                                    assert arr.dtype == np.uint8, "Input array must be of dtype uint8"
+                                    max_val = 2**n_bits
+                                    assert np.all(arr < max_val), f"All elements must be less than {max_val}"
+                                    factor = 8 // n_bits
+                                    assert arr.shape[-1] % factor == 0, f"Innermost axis length must be divisible by {factor}"
+
+                                    # Reshape to group every 4 elements along the innermost axis
+                                    shape = arr.shape[:-1] + (arr.shape[-1] // factor, factor)
+                                    grouped = arr.reshape(shape)
+
+                                    # TODO: little or big endian?
+                                    if n_bits == 1:
+                                        # Pack each group of 8 uint1s into a uint8
+                                        packed = (
+                                            (grouped[..., 0] << 7) |
+                                            (grouped[..., 1] << 6) |
+                                            (grouped[..., 2] << 5) |
+                                            (grouped[..., 3] << 4)
+                                            (grouped[..., 4] << 3) |
+                                            (grouped[..., 5] << 2) |
+                                            (grouped[..., 6] << 1) |
+                                            (grouped[..., 7])
+                                        )
+                                    elif n_bits == 2:
+                                        # Pack each group of 4 uint2s into a uint8
+                                        packed = (
+                                            (grouped[..., 0] << 6) |
+                                            (grouped[..., 1] << 4) |
+                                            (grouped[..., 2] << 2) |
+                                            (grouped[..., 3])
+                                        )
+                                    elif n_bits == 4:
+                                        # Pack each group of 2 uint4s into a uint8
+                                        packed = (
+                                            (grouped[..., 0] << 4) |
+                                            (grouped[..., 1])
+                                        )
+                                    packed = packed.astype(np.uint8)
+
+                                    return packed, factor
+                                packed_weights, factor = pack_bits(packed_weights, cluster_bits)
+                                # print("packed_weights5", packed_weights, packed_weights.shape)
+                                packed_weights_arr = packed_weights
+                                codebook_arr = values
+                                const_name = name
+                                pack_factor = factor
+                                is_legal = True
+                                # print("packed_weights5.shape", packed_weights.shape)
+                                # print("stmt.dtype", stmt.dtype)
+                                # print("stmt.extents", stmt.extents)
+                                # print("stmt.span", stmt.span)
+                                # annotations', 'body', 'buffer_var', 'data', 'dtype', 'extents', 'handle', 'irmod_storage_idx', 'legacy_repr', 'same_as', 'script', 'show', 'span
+                                # input("€")
+                        # assert np.array_equal(stmt.data.numpy(), constants[int(stmt.irmod_storage_idx)].numpy())
+
+                # for n, f in mod.functions.items():
+                #     tvm.tir.stmt_functor.post_order_visit(f.body, _visit)
+                # def _mutate(stmt):
+                #     nonlocal has_tensorize, packed_weights_arr, codebook_arr, const_name, pack_factor, tensorize_func
+                #     if not has_tensorize:
+                #         return stmt
+                #     if isinstance(stmt, tvm.tir.Block):  # finding blocks to be tensorized?
+                #         block_name = stmt.name_hint
+                #         # print("block_name", block_name)
+                #         # if block_name == "root":
+                #         #     # ann = stmt.annotations
+                #         #     # print("stmt", dir(stmt))
+                #         #     ann = {k: v for k, v in stmt.annotations.items()}
+                #         #     # print("ann", ann, dir(ann))
+                #         #     code = _gen_cfu_kernel_code(self.num_clusters, self.mode, self.channel_count)
+                #         #     # sch.annotate(block, "pragma_import_c", code)
+                #         #     ann["pragma_import_c"] = code
+                #         #     # print("ann2", ann, dir(ann))
+                #         #     # stmt.annotations = ann
+                #         #     new_block = tvm.tir.Block()
+                #         #     # print("stmt2", dir(stmt))
+                #         #     # input("***")
+                #         #     return stmt
+                #     elif isinstance(stmt, tvm.tir.AllocateConst):  # Replace constant for weight clustering
+                #         # print("alloc_const")
+                #         buffer_var = stmt.buffer_var
+                #         name = buffer_var.name
+                #         if name == const_name:
+                #             # TODO: change dtype?
+                #             # buffer_var = tir.Var("v", tvm.ir.PointerType(tvm.ir.PrimType("int32")))
+                #             new_extents = list(stmt.extents)
+                #             new_extents[-1] = new_extents[-1] // pack_factor
+                #             new_data = ndarray.array(packed_weights_arr)
+                #             codebook_var = tvm.tir.Var("codebook", tvm.ir.PointerType(tvm.ir.PrimType("int8")))
+                #             # print("codebook_var", codebook_var, dir(codebook_var))
+                #             # codebook_buf = tvm.tir.decl_buffer((len(codebook_arr),), "int8")
+                #             codebook_buf = tvm.tir.decl_buffer(
+                #                 shape=[len(codebook_arr)],
+                #                 dtype="int8",
+                #                 data=codebook_var  # Bind it to the actual var
+                #             )
+                #             # print("codebook_buf", codebook_buf)
+                #             set_codebook_stmt = tvm.tir.Evaluate(tvm.tir.call_extern(
+                #                 "void",
+                #                 f"set_codebook_{self.num_clusters}",
+                #                 codebook_buf.access_ptr("r", offset=0),
+                #                 # codebook_var.access_ptr("r", offset=0),
+                #             ))
+                #             new_body = tvm.tir.SeqStmt([set_codebook_stmt, stmt.body])
+                #             # print("new_body", new_body)
+                #             newer_body = tvm.tir.AllocateConst(buffer_var=codebook_var, dtype="int8", extents=[len(codebook_arr)], data_or_idx=ndarray.array(codebook_arr), body=new_body)
+                #             # print("newer_body", newer_body)
+                #             # new_body = ret = tvm.tir.AllocateConst(buffer_var=codebook_var, dtype=tvm.tir.int8, extents=[len(codebook_arr)], data_or_idx=ndarray.array(codebook_arr), body=stmt.body)
+                #                 # T.call_pure_extern(
+                #             ret = tvm.tir.AllocateConst(buffer_var=stmt.buffer_var, dtype=stmt.dtype, extents=new_extents, data_or_idx=new_data, body=newer_body, annotations=stmt.annotations, span=stmt.span)
+                #             # print("ret", ret)
+                #             # input("€2")
+                #             return ret
+                #     return stmt
+
+                # print("functions", mod.functions)
+                # f_old = mod.functions["main"]
+                f_old = mod["main"]
+                # print("f_old", dir(f_old))
+                # new_body = stmt_functor.ir_transform(f_old.body, _visit, _mutate, ["tir.Block", "tir.AllocateConst"])
+                new_body = stmt_functor.ir_transform(f_old.body, _visit, None, ["tir.Block", "tir.AllocateConst"])
+                # print("has_tensorize", has_tensorize)
+                if has_tensorize:
+                    if is_legal:
+                        # f_new = f_old.with_body(new_body)
+                        # mod["main"] = f_new
+                        # print("mod", mod)
+                        # block = sch.get_block("root")
+                        # print("block_new", block)
+                        # input("&2")
+                        code = _gen_cfu_kernel_code(self.num_clusters, self.mode, self.channel_count)
+                        # code = "dummy code"
+                        # print("code", code)
+                        sch.annotate(block, "pragma_import_c", code)
+                    else:
+                        print("illegal!")
+                        sch.unannotate(tensorize_block, "meta_schedule.auto_tensorize")
+                        input("#")
             except Exception as ex:
                 print(ex)
+                print(traceback.format_exc())
+                input("&&&")
                 raise ex
         # print("sch", sch)
         # input(">")
@@ -518,9 +770,297 @@ class ImportCPostprocess(ms.postproc.PyPostproc):
         return "ImportCPostprocess"
 
 
+@derived_object
+class ImportC2Postprocess(ms.postproc.PyPostproc):
+    """A postproc that always fails."""
 
-CODE = _gen_cfu_kernel_code(4, "MODE_EMUL", 32)
-print("CODE", CODE)
+    def __init__(
+        self,
+        num_clusters: int,
+        mode: str,
+        channel_count: int,
+        # f_initialize_with_tune_context: Callable = None,
+        # f_apply: Callable = None,
+        # f_clone: Callable = None,
+        # f_as_string: Callable = None,
+    ):
+        # print("ImportCPostprocess.__init__")
+        super().__init__(
+            # self,
+            # f_initialize_with_tune_context,
+            # f_apply,
+            # f_clone,
+            # f_as_string,
+        )
+        self.num_clusters = num_clusters
+        self.mode = mode
+        self.channel_count = channel_count
+        # print("ImportCPostprocess.__init__ done")
+
+    def _initialize_with_tune_context(self, context: ms.TuneContext) -> None:
+        pass
+
+    def apply(self, sch: Schedule) -> bool:
+        # print("apply", sch)
+        # return False
+        # has = has_block(sch, "block")
+        has = has_block(sch, "root")
+        # print("has", has)
+        if has:
+            has_call = False
+            try:
+                # block = sch.get_block("block")
+                block = sch.get_block("root")
+                # print("block", block)
+                sch.annotate(block, "foo", "bar")
+                code = _gen_cfu_kernel_code(self.num_clusters, self.mode, self.channel_count)
+                sch.annotate(block, "pragma_import_c", code)
+                # print("dir(sch)", dir(sch))
+                mod = sch.mod
+
+                packed_weights_arr = None
+                codebook_arr = None
+                const_name = None
+                pack_factor = None
+                tensorize_func = None
+
+
+                def _visit(stmt):
+                    nonlocal has_call, packed_weights_arr, codebook_arr, const_name, pack_factor, tensorize_func
+                    if isinstance(stmt, tvm.tir.Call):  # finding call_extern after RewriteTensorize
+                        if stmt.op.name == "tir.call_pure_extern":
+                            func_name = stmt.args[0]
+                            # print("func_name", func_name, dir(func_name))
+                            if func_name.value.startswith("cfu_kernel"):
+                                has_call = True
+                                # print("mod", mod)
+                                # print("CALL", dir(stmt))
+                                # print("stmt.op", stmt.op, dir(stmt.op))
+                                # print("stmt.op.name", stmt.op.name)
+                                # print("args", stmt.args)
+                                # input("!!!")
+                    elif isinstance(stmt, tvm.tir.AllocateConst):  # Finding constants for weight clustering
+                        # print("alloc_const")
+                        # print("sch.mod", sch.mod)
+                        # print("mod.attrs", mod.attrs)
+                        # print("mod.functions", mod.functions)
+                        # print("stmt", stmt)
+                        # print("dir(stmt)", dir(stmt))
+                        # print("stmt.annotations", stmt.annotations)
+                        # print("stmt.body", stmt.body)
+                        # print("stmt.buffer_var", stmt.buffer_var)
+                        # print("dir(stmt.buffer_var)", dir(stmt.buffer_var))
+                        buffer_var = stmt.buffer_var
+                        name = buffer_var.name
+                        # print("buffer_var.name", name)
+                        # print("buffer_var.dtype", buffer_var.dtype)
+                        # print("stmt.data", stmt.data)
+                        #print("stmt.data.numpy()", stmt.data.numpy())
+                        # print("dir(stmt.data)", dir(stmt.data))
+                        data = stmt.data.numpy()
+                        # print("data", data.dtype)
+                        values, counts = np.unique(data, return_counts=True)
+                        num_clusters = len(values)
+                        if num_clusters in [2, 4, 16]:  # TODO: 3, 5-15 also fine?
+                            if data.dtype == "int8":
+                                dtype_bits = 8
+                                # print("values", values)
+                                # print("counts", counts)
+                                from math import log2
+                                cluster_bits = int(log2(num_clusters))
+                                # print("cluster_bits", cluster_bits)
+                                pack_factor = dtype_bits / cluster_bits
+                                # print("pack_factor", pack_factor)
+                                shape = data.shape
+                                # print("shape", shape)
+                                extent = shape[-1]
+                                # print("extent", extent)
+                                ok = extent % pack_factor == 0
+                                # print("ok?", ok)
+                                packed_weights = [values.tolist().index(x) for x in data.flatten()]
+                                # print("packed_weights", packed_weights)
+                                packed_weights = np.array(packed_weights, dtype="uint8")
+                                # print("packed_weights2", packed_weights)
+                                packed_weights = packed_weights.reshape(shape)
+                                # print("packed_weights3", packed_weights)
+                                # packed_weights = packed_weights.astype("uint8")
+                                # print("packed_weights4", packed_weights, packed_weights.shape)
+                                def pack_bits(arr, n_bits: int):
+                                    assert arr.dtype == np.uint8, "Input array must be of dtype uint8"
+                                    max_val = 2**n_bits
+                                    assert np.all(arr < max_val), f"All elements must be less than {max_val}"
+                                    factor = 8 // n_bits
+                                    assert arr.shape[-1] % factor == 0, f"Innermost axis length must be divisible by {factor}"
+
+                                    # Reshape to group every 4 elements along the innermost axis
+                                    shape = arr.shape[:-1] + (arr.shape[-1] // factor, factor)
+                                    grouped = arr.reshape(shape)
+
+                                    # TODO: little or big endian?
+                                    if n_bits == 1:
+                                        # Pack each group of 8 uint1s into a uint8
+                                        packed = (
+                                            (grouped[..., 0] << 7) |
+                                            (grouped[..., 1] << 6) |
+                                            (grouped[..., 2] << 5) |
+                                            (grouped[..., 3] << 4)
+                                            (grouped[..., 4] << 3) |
+                                            (grouped[..., 5] << 2) |
+                                            (grouped[..., 6] << 1) |
+                                            (grouped[..., 7])
+                                        )
+                                    elif n_bits == 2:
+                                        # Pack each group of 4 uint2s into a uint8
+                                        packed = (
+                                            (grouped[..., 0] << 6) |
+                                            (grouped[..., 1] << 4) |
+                                            (grouped[..., 2] << 2) |
+                                            (grouped[..., 3])
+                                        )
+                                    elif n_bits == 4:
+                                        # Pack each group of 2 uint4s into a uint8
+                                        packed = (
+                                            (grouped[..., 0] << 4) |
+                                            (grouped[..., 1])
+                                        )
+                                    packed = packed.astype(np.uint8)
+
+                                    return packed, factor
+                                packed_weights, factor = pack_bits(packed_weights, cluster_bits)
+                                # print("packed_weights5", packed_weights, packed_weights.shape)
+                                packed_weights_arr = packed_weights
+                                codebook_arr = values
+                                const_name = name
+                                pack_factor = factor
+                                # print("packed_weights5.shape", packed_weights.shape)
+                                # print("stmt.dtype", stmt.dtype)
+                                # print("stmt.extents", stmt.extents)
+                                # print("stmt.span", stmt.span)
+                                # annotations', 'body', 'buffer_var', 'data', 'dtype', 'extents', 'handle', 'irmod_storage_idx', 'legacy_repr', 'same_as', 'script', 'show', 'span
+                                # input("€")
+                        # assert np.array_equal(stmt.data.numpy(), constants[int(stmt.irmod_storage_idx)].numpy())
+
+                # for n, f in mod.functions.items():
+                #     tvm.tir.stmt_functor.post_order_visit(f.body, _visit)
+                def _mutate(stmt):
+                    nonlocal has_call, packed_weights_arr, codebook_arr, const_name, pack_factor, tensorize_func
+                    if not has_call:
+                        return stmt
+                    # if isinstance(stmt, tvm.tir.MatchBufferRegion):
+                    #     print("MATCH2")
+                    #     print("stmt", stmt, dir(stmt))
+                    #     input("!!!5")
+                    elif isinstance(stmt, tvm.tir.Evaluate):  # finding call_extern after RewriteTensorize
+                        pass
+                        # print("EVAL")
+                        # print("stmt.op.name", stmt.op.name)
+                    elif isinstance(stmt, tvm.tir.Call):  # finding call_extern after RewriteTensorize
+                        # print("stmt.op.name", stmt.op.name)
+                        # if stmt.op.name == "tir.reads":
+                        #     print("READS")
+                        #     print("stmt", stmt, dir(stmt))
+                        #     input("!!!2")
+                        # elif stmt.op.name == "tir.match_buffer":
+                        #     print("MATCH")
+                        #     print("stmt", stmt, dir(stmt))
+                        #     input("!!!3")
+                        # elif stmt.op.name == "tir.tvm_access_ptr":
+                        # elif stmt.op.name == "tir.tvm_access_ptr":
+                        #     print("PTR")
+                        #     print("stmt", stmt, dir(stmt))
+                        #     print("stmt.args[1]", stmt.args[1], dir(stmt.args[1]), type(stmt.args[1]))
+                        #     print("stmt.args[2]", stmt.args[2], dir(stmt.args[2]), type(stmt.args[2]))
+                        #     input("!!!4")
+                        # elif stmt.op.name == "tir.call_pure_extern":
+                        if stmt.op.name == "tir.call_pure_extern":
+                            func_name = stmt.args[0]
+                            if func_name.value.startswith("cfu_kernel"):
+                                pass
+                                # print("mod", mod)
+                                # print("args", stmt.args)
+                                # for arg in stmt.args:
+                                #     print("arg", arg, dir(arg), type(arg))
+                                # new_args = stmt.args
+                                # print("new_args", new_args)
+                                # stmt = tvm.tir.Call(stmt.dtype, stmt.op, new_args, stmt.span)
+                                # print("stmt", stmt)
+                                # input("!!!1")
+                    elif isinstance(stmt, tvm.tir.AllocateConst):  # Replace constant for weight clustering
+                        # print("alloc_const")
+                        buffer_var = stmt.buffer_var
+                        name = buffer_var.name
+                        if name == const_name:
+                            # TODO: change dtype?
+                            # buffer_var = tir.Var("v", tvm.ir.PointerType(tvm.ir.PrimType("int32")))
+                            new_extents = list(stmt.extents)
+                            new_extents[-1] = new_extents[-1] // pack_factor
+                            new_data = ndarray.array(packed_weights_arr)
+                            codebook_var = tvm.tir.Var("codebook", tvm.ir.PointerType(tvm.ir.PrimType("int8")))
+                            # print("codebook_var", codebook_var, dir(codebook_var))
+                            # codebook_buf = tvm.tir.decl_buffer((len(codebook_arr),), "int8")
+                            codebook_buf = tvm.tir.decl_buffer(
+                                shape=[len(codebook_arr)],
+                                dtype="int8",
+                                data=codebook_var  # Bind it to the actual var
+                            )
+                            # print("codebook_buf", codebook_buf)
+                            set_codebook_stmt = tvm.tir.Evaluate(tvm.tir.call_extern(
+                                "void",
+                                f"set_codebook_{self.num_clusters}",
+                                codebook_buf.access_ptr("r", offset=0),
+                                # codebook_var.access_ptr("r", offset=0),
+                            ))
+                            new_body = tvm.tir.SeqStmt([set_codebook_stmt, stmt.body])
+                            # print("new_body", new_body)
+                            newer_body = tvm.tir.AllocateConst(buffer_var=codebook_var, dtype="int8", extents=[len(codebook_arr)], data_or_idx=ndarray.array(codebook_arr), body=new_body)
+                            # print("newer_body", newer_body)
+                            # new_body = ret = tvm.tir.AllocateConst(buffer_var=codebook_var, dtype=tvm.tir.int8, extents=[len(codebook_arr)], data_or_idx=ndarray.array(codebook_arr), body=stmt.body)
+                                # T.call_pure_extern(
+                            ret = tvm.tir.AllocateConst(buffer_var=stmt.buffer_var, dtype=stmt.dtype, extents=new_extents, data_or_idx=new_data, body=newer_body, annotations=stmt.annotations, span=stmt.span)
+                            # print("ret", ret)
+                            # input("€2")
+                            return ret
+                    return stmt
+
+                # print("functions", mod.functions)
+                # f_old = mod.functions["main"]
+                f_old = mod["main"]
+                # print("f_old", dir(f_old))
+                new_body = stmt_functor.ir_transform(f_old.body, _visit, _mutate, ["tir.Block", "tir.AllocateConst", "tir.Call", "tir.MatchBufferRegion", "tir.Evaluate"])
+                # print("has_call", has_call)
+                if has_call:
+                    # mod.functions["main"] = f_new
+                    f_new = f_old.with_body(new_body)
+                    mod["main"] = f_new
+                    # print("mod_new", mod)
+                    # sch.mod = mod
+                    # print("sch", sch, dir(sch))
+                    # block = sch.get_block("root")
+                    # print("block_new", block)
+                    # input("&2")
+                    # code = _gen_cfu_kernel_code(self.num_clusters, self.mode, self.channel_count)
+                    # code = "dummy code"
+                    # print("code", code)
+                    # sch.annotate(block, "pragma_import_c2", code)
+            except Exception as ex:
+                print(ex)
+                print(traceback.format_exc())
+                input("&&&")
+                raise ex
+        # print("sch", sch)
+        # input(">")
+        return True
+
+    def clone(self) -> "ImportC2Postprocess":
+        return ImportC2Postprocess(self.num_clusters, self.mode, self.channel_count)
+
+    def __str__(self) -> str:
+        return "ImportC2Postprocess"
+
+
+
+# CODE = _gen_cfu_kernel_code(4, "MODE_EMUL", 32)
+# print("CODE", CODE)
 
 
 def get_tuning_config(enable_intrin: bool = False, num_clusters: Optional[int] = None, cfu_mode: Optional[str] = None, channel_count: Optional[int] = None):
@@ -639,9 +1179,10 @@ def get_tuning_config(enable_intrin: bool = False, num_clusters: Optional[int] =
             ms.postproc.DisallowDynamicLoop(),
             ms.postproc.RewriteParallelVectorizeUnroll(),
             ms.postproc.RewriteReductionBlock(),
-            ms.postproc.RewriteTensorize(),
-            # ms.postproc.RewriteTensorize(vectorize_init_loop=True),
             *([ImportCPostprocess(num_clusters, cfu_mode, channel_count)] if enable_intrin and num_clusters is not None else []),
+            ms.postproc.RewriteTensorize(),
+            # *([ImportC2Postprocess(num_clusters, cfu_mode, channel_count)] if enable_intrin and num_clusters is not None else []),
+            # ms.postproc.RewriteTensorize(vectorize_init_loop=True),
         ]
 
     def _get_mutator_probs():
@@ -702,6 +1243,28 @@ def create_relay_module():
     return mod, params, model_info
 ###
 
+# def CompressWeights():
+#     def _transform(func, mod, ctx):
+#         print("CompressWeights")
+#         print("func", func)
+#         print("mod", mod)
+#         print("ctx", ctx)
+#         input("@A")
+#         def stmt_post(stmt):
+#             print("stmt_post", stmt)
+#             return stmt
+# 
+#         new_body = tvm.tir.stmt_functor.ir_transform(
+#             func.body,
+#             None,
+#             stmt_post,
+#             ["tir.Evaluate", "tir.Call"],
+#         )
+#         print("new_body", new_body)
+#         input("@B")
+#         return func.with_body(new_body)
+#     return tvm.tir.transform.prim_func_pass(_transform, opt_level=0, name="CompressWeights")
+
 
 @pytest.mark.parametrize("alter_op", [
     # False,
@@ -724,7 +1287,9 @@ def create_relay_module():
     # (5, 20, 1000000),
     # (5, 50, 1000000),
     # (5, 100, 1000000),
-    (5, 200, 1000000),
+    # (5, 200, 1000000),
+    # (1, 200, 1000000),
+    (1, 1, 1000000),
     # (5, 400, 1000000),
     # (1, 400, 1000000),
     # (5, 800, 1000000),
@@ -750,8 +1315,8 @@ def create_relay_module():
     # ("resnet_clustered_layer6", 16, 16),  # conv2d
     # ("resnet_clustered_layer7", None, None),  # add
     ("resnet_clustered_layer8", 4, 32),  # conv2d
-    ("resnet_clustered_layer9", 4, 64),  # conv2d
-    ("resnet_clustered_layer10", 4, 32),  # conv2d
+    # ("resnet_clustered_layer9", 4, 64),  # conv2d
+    # ("resnet_clustered_layer10", 4, 32),  # conv2d
     # ("resnet_clustered_layer11", None, None),  # add
     # ("resnet_clustered_layer12", None, None),  # avg_pool
     # ("resnet_clustered_layer13", None, None),  # reshape
@@ -766,6 +1331,7 @@ def create_relay_module():
 def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials_per_iter, max_trials_per_task, max_trials_global, enable_custom, enable_intrin, cfu_mode, module_equality, model, num_clusters, channel_count, transform_layout):
     print()
     from tvm.contrib.micro.meta_schedule.local_builder_micro import get_local_builder_micro
+    from tvm.contrib.micro.meta_schedule.local_builder_micro import CompressWeights
     from tvm.contrib.micro.meta_schedule.rpc_runner_micro import get_rpc_runner_micro
 
     import pathlib
@@ -788,7 +1354,8 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     }
     opt_level = 3
     pass_config = {
-        "tir.disable_vectorize": True
+        "tir.disable_vectorize": True,
+        "tir.add_lower_pass": [(3, CompressWeights())],
     }
     disabled_pass = []
     if not alter_op:
@@ -804,7 +1371,8 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
                 x = str(x)
             x = x.replace(" ", "").replace(",", "").replace("/", "").replace(";", "").replace("=", "-").replace("+", "")
             return x
-        fields = [target, toolchain, alter_op, num_trials_per_iter, max_trials_per_task, max_trials_global, ts, opt_level, enable_custom, enable_intrin, cfu_mode, module_equality, model, num_clusters, channel_count, transform_layout, *sum(map(list, pass_config.items()), []), *[f"no{x}" for x in disabled_pass]]
+        # fields = [target, toolchain, alter_op, num_trials_per_iter, max_trials_per_task, max_trials_global, ts, opt_level, enable_custom, enable_intrin, cfu_mode, module_equality, model, num_clusters, channel_count, transform_layout, list(map(lambda x: str(x)[:10], *sum(map(list, pass_config.items()), []))), *[f"no{x}" for x in disabled_pass]]
+        fields = [target, toolchain, alter_op, num_trials_per_iter, max_trials_per_task, max_trials_global, ts, opt_level, enable_custom, enable_intrin, cfu_mode, module_equality, model, num_clusters, channel_count, transform_layout, *[f"no{x}" for x in disabled_pass]]
         label = "-".join([sanitize(x) for x in fields])
         work_dir_path = base_dir / label
     else:
@@ -816,6 +1384,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     # MODEL = "resnet_clustered_layer14"
     # MODEL = "resnet_clustered_layer10"
 
+    # TODO: move to helper and share code!
     if model == "default":
         # input("1")
         mod, params, model_info = create_relay_module()
@@ -836,6 +1405,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer0":  # conv2d(?)
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer0.tflite")
+            # str(BASE_DIR / "models/layers_unpacked/pretrainedResnet_clustered_quant_remap_layer0.tflite")
         )
         mod = model.mod
         params = model.params
@@ -846,6 +1416,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer1":  # conv2d(?)
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer1.tflite")
+            # str(BASE_DIR / "models/layers_unpacked/pretrainedResnet_clustered_quant_remap_layer1.tflite")
         )
         mod = model.mod
         params = model.params
@@ -856,6 +1427,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer2":  # conv2d(?)
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer2.tflite")
+            # str(BASE_DIR / "models/layers_unpacked/pretrainedResnet_clustered_quant_remap_layer2.tflite")
         )
         mod = model.mod
         params = model.params
@@ -866,6 +1438,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer3":  # add
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer3.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer3.tflite")
         )
         mod = model.mod
         params = model.params
@@ -876,6 +1449,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer4":  # conv2d(?)
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer4.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer4.tflite")
         )
         mod = model.mod
         params = model.params
@@ -886,6 +1460,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer5":  # conv2d(?)
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer5.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer5.tflite")
         )
         mod = model.mod
         params = model.params
@@ -896,6 +1471,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer6":  # conv2d(?)
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer6.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer6.tflite")
         )
         mod = model.mod
         params = model.params
@@ -906,6 +1482,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer7":  # add
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer7.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer7.tflite")
         )
         mod = model.mod
         params = model.params
@@ -916,6 +1493,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer8":  # conv2d(?)
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer8.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer8.tflite")
         )
         mod = model.mod
         params = model.params
@@ -926,6 +1504,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer9":  # conv2d(?)
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer9.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer9.tflite")
         )
         mod = model.mod
         params = model.params
@@ -936,6 +1515,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer10":  # conv2d(1x16x16x32, 64x1x1x32, 1x8x8x64)
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer10.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer10.tflite")
         )
         mod = model.mod
         params = model.params
@@ -946,6 +1526,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer11":  # add
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer11.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer11.tflite")
         )
         mod = model.mod
         params = model.params
@@ -956,6 +1537,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer12":  # avg pool
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer12.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer12.tflite")
         )
         mod = model.mod
         params = model.params
@@ -966,6 +1548,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer13":  # rehape
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer13.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer13.tflite")
         )
         mod = model.mod
         params = model.params
@@ -976,6 +1559,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     elif model == "resnet_clustered_layer14":  # fully connected
         model = tvmc.load(
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer14.tflite")
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer14.tflite")
         )
         mod = model.mod
         params = model.params
@@ -985,6 +1569,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
         data_sample = np.random.rand(*input_shape).astype(input_dtype)
     elif model == "resnet_clustered_layer15":  # softmax
         model = tvmc.load(
+            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer15.tflite")
             str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer15.tflite")
         )
         mod = model.mod
