@@ -19,6 +19,8 @@
 import os
 import tempfile
 from typing import Optional, Dict
+import traceback
+import tvm
 from tvm.ir import IRModule
 from tvm.runtime import NDArray
 from tvm.target import Target
@@ -34,9 +36,8 @@ from tvm.tir.transform import RemoveWeightLayoutRewriteBlock
 def get_local_builder_micro():
     """Return micro-compatible Builder for meta schedule."""
 
-    def _micro_build(
-        mod: IRModule, target: Target, _params: Optional[Dict[str, NDArray]]
-    ) -> OperatorModule:
+    def _micro_build(mod: IRModule, target: Target, _params: Optional[Dict[str, NDArray]]) -> OperatorModule:
+        # print("_miro_build")
         """Build function for micro targets.
 
         Parameters
@@ -61,10 +62,25 @@ def get_local_builder_micro():
         mod = IRModule({"main": prim_func})
         runtime = Runtime("crt", {"system-lib": True})
         mod = RemoveWeightLayoutRewriteBlock(skip_ndarray_rewrite=True)(mod)
-        rt_mod = tvm_build(mod, target=target, runtime=runtime)
+        pass_config = {
+            "tir.disable_vectorize": True,
+        }
+        with tvm.transform.PassContext(
+            opt_level=3,
+            config=pass_config,
+            # disabled_pass=disabled_pass,
+        ):
+            try:
+                # print("try")
+                rt_mod = tvm_build(mod, target=target, runtime=runtime)
+            except Exception as ex:
+                print(ex)
+                print(traceback.format_exc())
+                input(">>>")
         return rt_mod
 
     def _micro_export(mod: OperatorModule) -> str:
+        # print("_miro_export")
         """Export function for micro targets.
 
         Parameters
