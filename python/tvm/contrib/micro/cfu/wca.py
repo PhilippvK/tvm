@@ -96,9 +96,13 @@ def _gen_cfu_kernel_code(num_clusters: int, cfu_mode: str, channel_count: int, k
 #define CFU_KERNEL_CODE_""" + cfg.upper() + """
 #include <stdint.h>
 
+#ifndef MODE
 #define MODE """ + cfu_mode + """
 #include "cfu_wca.h"
 #undef MODE
+#else
+#include "cfu_wca.h"
+#endif
 
 
 static int32_t __attribute__((always_inline)) inline """ + kernel_name + """(int8_t* data_ptr, int8_t* weights_ptr, int32_t* acc) {
@@ -411,6 +415,8 @@ def pack_bits(arr, n_bits: int):
     return packed, factor
 
 
+from tvm._ffi.registry import register_func
+@register_func("tvm.tir.transform.CompressWeights")
 def CompressWeights():
     # print("CompressWeights")
     name_supply = NameSupply()
@@ -564,3 +570,5 @@ def CompressWeights():
             return func
             # return func
     return tvm.tir.transform.prim_func_pass(_transform, opt_level=0, name="CompressWeights")
+
+
