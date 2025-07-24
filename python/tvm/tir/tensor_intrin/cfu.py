@@ -19,14 +19,18 @@
 from tvm.script import tir as T
 from .. import TensorIntrin
 
+# from tvm.ir.supply import NameSupply
+# 
+# name_supply = NameSupply()
 
 def get_cfu_intrin(dtype_a, dtype_b, dtype_c, count):
+    global name_supply
     assert dtype_a == "int8"
     assert dtype_b == "int8"
     assert dtype_c == "int32"
 
     @T.prim_func
-    def dp4a_desc(
+    def cfu_desc(
         A: T.Buffer((count,), dtype_a, offset_factor=1, align=4),
         B: T.Buffer((count,), dtype_b, offset_factor=1, align=4),
         C: T.Buffer((1,), dtype_c, offset_factor=1, align=4),
@@ -40,7 +44,7 @@ def get_cfu_intrin(dtype_a, dtype_b, dtype_c, count):
                     C[0] = C[0] + T.cast(A[vi], dtype_c) * T.cast(B[vi], dtype_c)
 
     @T.prim_func
-    def dp4a_impl(
+    def cfu_impl(
         A: T.Buffer((count,), dtype_a, offset_factor=1, align=4),
         B: T.Buffer((count,), dtype_b, offset_factor=1, align=4),
         C: T.Buffer((1,), dtype_c, offset_factor=1, align=4),
@@ -50,13 +54,14 @@ def get_cfu_intrin(dtype_a, dtype_b, dtype_c, count):
             T.writes(C[0])
             C[0] += T.call_pure_extern(
                 f"cfu_kernel_{count}x",  # TODO: rename
+                # name_supply.fresh_name("cfu_kernel"),
                 A.access_ptr("r", offset=0),
                 B.access_ptr("r", offset=0),
                 C.access_ptr("w", offset=0),
                 dtype=dtype_c,
             )
 
-    return dp4a_desc, dp4a_impl
+    return cfu_desc, cfu_impl
 
 
 CFU_64X_INTRIN = "cfu_64x"
