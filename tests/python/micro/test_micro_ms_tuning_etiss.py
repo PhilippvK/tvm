@@ -14,638 +14,98 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+
+import logging
 from datetime import datetime
 from pathlib import Path
-import numpy as np
-import pytest
 from types import MappingProxyType
 from typing import Optional
-from typing import TYPE_CHECKING, Callable, List
-import traceback
+
+import numpy as np
+import pytest
+
 import tvm
 import tvm.testing
 from tvm import relay
 from tvm.relay.backend import Executor
-# from tvm.contrib import graph_executor
 from tvm.contrib import utils
 from tvm import meta_schedule as ms
-from tvm.tir import stmt_functor
-from tvm.runtime import ndarray
 from tvm.driver import tvmc
-
-###
 import tvm.micro.testing
 from tvm.meta_schedule.runner import EvaluatorConfig
-
-###
-# from tvm.tir.tensor_intrin.x86 import VNNI_DOT_16x4_INTRIN as VNNI_INTRIN
-
-import logging
-logging.basicConfig(level=logging.ERROR)
-
 from tvm.meta_schedule.logging import get_logger
+from tvm import transform
+from tvm.tir.tensor_intrin.cfu import CFU_32X_INTRIN, CFU_24X_INTRIN, CFU_16X_INTRIN, CFU_8X_INTRIN
+from tvm.tir.tensor_intrin.cfu import CFU_40X_INTRIN, CFU_48X_INTRIN, CFU_56X_INTRIN, CFU_64X_INTRIN
+from tvm.contrib.micro.meta_schedule.local_builder_micro import get_local_builder_micro
+from tvm.contrib.micro.meta_schedule.rpc_runner_micro import get_rpc_runner_micro
+from tvm.contrib.micro.cfu.wca import CompressWeights, ImportCPostprocess
+
+
+logging.basicConfig(level=logging.ERROR)
 get_logger("xgb_model").setLevel(logging.ERROR)
 
 DIR = Path(__file__).parent.resolve()
 BASE_DIR = DIR / "../../../../"
-
 
 MS_DISPATCH = 1  # silent?
 # MS_DISPATCH = 2  # verbose
 # MS_DISPATCH = ?  # error
 
 
-import numpy as np
-import pytest
-from types import MappingProxyType
-import pathlib
-import json
-import tvm
-import tvm.testing
-from tvm import relay
-from tvm import transform
-from tvm.relay.backend import Executor
-from tvm.contrib import graph_executor, utils
-from tvm import meta_schedule as ms
-from tvm.meta_schedule.utils import derived_object
-from tvm.tir.schedule import Schedule, Trace
-from tvm.tir.tensor_intrin.rocm import AMDGPU_SDOT4_INTRIN
-from tvm.tir.tensor_intrin.arm_cpu import DP4A_S8S8S32_INTRIN
-from tvm.tir.tensor_intrin.cfu import CFU_32X_INTRIN, CFU_24X_INTRIN, CFU_16X_INTRIN, CFU_8X_INTRIN
-from tvm.tir.tensor_intrin.cfu import CFU_40X_INTRIN, CFU_48X_INTRIN, CFU_56X_INTRIN, CFU_64X_INTRIN
-# from tvm.tir.tensor_intrin.arm_cpu import DP4A_S8S8S32_INIT_INTRIN
-from tvm.tir.tensor_intrin.hexagon import VRMPY_i8i8i32_INTRIN
-from tvm.tir.tensor_intrin.arm_cpu import ARM_DOT_4x4_i8_NEON_INTRIN
-# from tvm.tir.tensor_intrin.cfu import CFU_MAC_i8i8i32_INTRIN
-
-from tvm.tir.schedule.analysis import has_block
-
-
-from math import log2
-def detect_clustered_weights(stmt):
-    buffer_var = stmt.buffer_var
-    name = buffer_var.name
-    data = stmt.data.numpy()
-    values, counts = np.unique(data, return_counts=True)
-    values = list(values)
-    counts = list(counts)
-
-    # fill to next supported cluster count
-    if len(values) in [1]:
-        values += [0]
-        counts += [0]
-    elif len(values) in [3]:
-        values += [0]
-        counts += [0]
-    elif len(values) in list(range(5, 16)):
-        missing = 16 - len(values)
-        values += [0] * missing
-        counts += [0] * missing
-
-    num_clusters = len(values)
-    if num_clusters in [2, 4, 16]:  # TODO: 3, 5-15 also fine?
-        if data.dtype == "int8":
-            dtype_bits = 8
-            cluster_bits = int(log2(num_clusters))
-            pack_factor = dtype_bits / cluster_bits
-            shape = data.shape
-            extent = shape[-1]
-            ok = extent % pack_factor == 0
-            packed_weights = [values.index(x) for x in data.flatten()]
-            packed_weights = np.array(packed_weights, dtype="uint8")
-            packed_weights = packed_weights.reshape(shape)
-            from tvm.contrib.micro.meta_schedule.local_builder_micro import pack_bits
-            packed_weights, factor = pack_bits(packed_weights, cluster_bits)
-            if packed_weights is None:
-                return None
-            return packed_weights, values, name, factor
-    return None
-
-
-def detect_tensorize_block(stmt):
-    tensorize_attr = stmt.annotations.get("meta_schedule.auto_tensorize")
-    if tensorize_attr is None:
-        return
-    if not tensorize_attr.startswith("cfu_"):
-        return
-    block_name = stmt.name_hint
-    tensorize_count = int(tensorize_attr.split("_", 1)[1][:-1])
-    return tensorize_attr, tensorize_count, block_name
-
-
-def _gen_cfu_kernel_code(num_clusters: int, cfu_mode: str, channel_count: int):
-    assert num_clusters in [2, 4, 16]
-    assert cfu_mode in ["MODE_EMUL", "MODE_CFU"]
-    assert channel_count in [8, 16, 24, 32, 40, 48, 56, 64]
-    return """
-#ifndef CFU_KERNEL_CODE
-#define CFU_KERNEL_CODE
-#include <stdint.h>
-
-asm(".set regnum_x0  ,  0");
-asm(".set regnum_x1  ,  1");
-asm(".set regnum_x2  ,  2");
-asm(".set regnum_x3  ,  3");
-asm(".set regnum_x4  ,  4");
-asm(".set regnum_x5  ,  5");
-asm(".set regnum_x6  ,  6");
-asm(".set regnum_x7  ,  7");
-asm(".set regnum_x8  ,  8");
-asm(".set regnum_x9  ,  9");
-asm(".set regnum_x10 , 10");
-asm(".set regnum_x11 , 11");
-asm(".set regnum_x12 , 12");
-asm(".set regnum_x13 , 13");
-asm(".set regnum_x14 , 14");
-asm(".set regnum_x15 , 15");
-asm(".set regnum_x16 , 16");
-asm(".set regnum_x17 , 17");
-asm(".set regnum_x18 , 18");
-asm(".set regnum_x19 , 19");
-asm(".set regnum_x20 , 20");
-asm(".set regnum_x21 , 21");
-asm(".set regnum_x22 , 22");
-asm(".set regnum_x23 , 23");
-asm(".set regnum_x24 , 24");
-asm(".set regnum_x25 , 25");
-asm(".set regnum_x26 , 26");
-asm(".set regnum_x27 , 27");
-asm(".set regnum_x28 , 28");
-asm(".set regnum_x29 , 29");
-asm(".set regnum_x30 , 30");
-asm(".set regnum_x31 , 31");
-
-asm(".set regnum_zero,  0");
-asm(".set regnum_ra  ,  1");
-asm(".set regnum_sp  ,  2");
-asm(".set regnum_gp  ,  3");
-asm(".set regnum_tp  ,  4");
-asm(".set regnum_t0  ,  5");
-asm(".set regnum_t1  ,  6");
-asm(".set regnum_t2  ,  7");
-asm(".set regnum_s0  ,  8");
-asm(".set regnum_s1  ,  9");
-asm(".set regnum_a0  , 10");
-asm(".set regnum_a1  , 11");
-asm(".set regnum_a2  , 12");
-asm(".set regnum_a3  , 13");
-asm(".set regnum_a4  , 14");
-asm(".set regnum_a5  , 15");
-asm(".set regnum_a6  , 16");
-asm(".set regnum_a7  , 17");
-asm(".set regnum_s2  , 18");
-asm(".set regnum_s3  , 19");
-asm(".set regnum_s4  , 20");
-asm(".set regnum_s5  , 21");
-asm(".set regnum_s6  , 22");
-asm(".set regnum_s7  , 23");
-asm(".set regnum_s8  , 24");
-asm(".set regnum_s9  , 25");
-asm(".set regnum_s10 , 26");
-asm(".set regnum_s11 , 27");
-asm(".set regnum_t3  , 28");
-asm(".set regnum_t4  , 29");
-asm(".set regnum_t5  , 30");
-asm(".set regnum_t6  , 31");
-
-asm(".set CUSTOM0  , 0x0B");
-asm(".set CUSTOM1  , 0x2B");
-
-#ifdef ISSUE_582_WORKAROUND
-#define CUSTOM_INSTRUCTION_NOP "nop\\n"
-#else
-#define CUSTOM_INSTRUCTION_NOP
-#endif
-
-#define opcode_R(opcode, func3, func7, rs1, rs2)   \\
-({                                                 \\
-    register unsigned long result;                 \\
-    asm volatile(                                  \\
-     ".word ((" #opcode ") |                       \\
-     (regnum_%[result] << 7) |                     \\
-     (regnum_%[arg1] << 15) |                      \\
-     (regnum_%[arg2] << 20) |                      \\
-     ((" #func3 ") << 12) |                        \\
-     ((" #func7 ") << 25));\\n"                    \\
-     CUSTOM_INSTRUCTION_NOP                        \\
-     : [result] "=r" (result)                      \\
-     : [arg1] "r" (rs1), [arg2] "r" (rs2)          \\
-    );                                             \\
-    result;                                        \\
-})
-
-// generic name for each custom instruction - via hardware
-#define cfu_op_hw(funct3, funct7, rs1, rs2) \\
-  opcode_R(CUSTOM0, funct3, funct7, (rs1), (rs2))
-#define cfu_op0_hw(funct7, rs1, rs2) cfu_op_hw(0, funct7, rs1, rs2)
-#define cfu_op1_hw(funct7, rs1, rs2) cfu_op_hw(1, funct7, rs1, rs2)
-#define cfu_op2_hw(funct7, rs1, rs2) cfu_op_hw(2, funct7, rs1, rs2)
-#define cfu_op3_hw(funct7, rs1, rs2) cfu_op_hw(3, funct7, rs1, rs2)
-#define cfu_op4_hw(funct7, rs1, rs2) cfu_op_hw(4, funct7, rs1, rs2)
-#define cfu_op5_hw(funct7, rs1, rs2) cfu_op_hw(5, funct7, rs1, rs2)
-#define cfu_op6_hw(funct7, rs1, rs2) cfu_op_hw(6, funct7, rs1, rs2)
-#define cfu_op7_hw(funct7, rs1, rs2) cfu_op_hw(7, funct7, rs1, rs2)
-
-// generic name for each custom instruction - via software
-#define cfu_op_sw(funct3, funct7, rs1, rs2) \\
-  software_cfu(funct3, funct7, rs1, rs2)
-#define cfu_op0_sw(funct7, rs1, rs2) cfu_op_sw(0, funct7, rs1, rs2)
-#define cfu_op1_sw(funct7, rs1, rs2) cfu_op_sw(1, funct7, rs1, rs2)
-#define cfu_op2_sw(funct7, rs1, rs2) cfu_op_sw(2, funct7, rs1, rs2)
-#define cfu_op3_sw(funct7, rs1, rs2) cfu_op_sw(3, funct7, rs1, rs2)
-#define cfu_op4_sw(funct7, rs1, rs2) cfu_op_sw(4, funct7, rs1, rs2)
-#define cfu_op5_sw(funct7, rs1, rs2) cfu_op_sw(5, funct7, rs1, rs2)
-#define cfu_op6_sw(funct7, rs1, rs2) cfu_op_sw(6, funct7, rs1, rs2)
-#define cfu_op7_sw(funct7, rs1, rs2) cfu_op_sw(7, funct7, rs1, rs2)
-
-// generic name for each custom instruction - switchable
-#define cfu_op0(funct7, rs1, rs2) cfu_op(0, funct7, rs1, rs2)
-#define cfu_op1(funct7, rs1, rs2) cfu_op(1, funct7, rs1, rs2)
-#define cfu_op2(funct7, rs1, rs2) cfu_op(2, funct7, rs1, rs2)
-#define cfu_op3(funct7, rs1, rs2) cfu_op(3, funct7, rs1, rs2)
-#define cfu_op4(funct7, rs1, rs2) cfu_op(4, funct7, rs1, rs2)
-#define cfu_op5(funct7, rs1, rs2) cfu_op(5, funct7, rs1, rs2)
-#define cfu_op6(funct7, rs1, rs2) cfu_op(6, funct7, rs1, rs2)
-#define cfu_op7(funct7, rs1, rs2) cfu_op(7, funct7, rs1, rs2)
-
-// =============== Switch HW vs SW
-
-#ifdef CFU_SOFTWARE_DEFINED
-#define cfu_op(funct3, funct7, rs1, rs2) cfu_op_sw(funct3, funct7, rs1, rs2)
-#else
-#define cfu_op(funct3, funct7, rs1, rs2) cfu_op_hw(funct3, funct7, rs1, rs2)
-#endif
-
-#define MODE_CPU      1
-#define MODE_EMUL     2
-#define MODE_CFU      3
-
-#define CFU_OPCODE_PUSH_WEIGHTS        0b0000000
-#define CFU_OPCODE_PUSH_WEIGHTS_4B     0b0001000
-#define CFU_OPCODE_SET_CODEBOOK_2B     0b0100000
-#define CFU_OPCODE_SET_CODEBOOK_4B     0b0101000
-#define CFU_OPCODE_SET_CODEBOOK_16B_LO 0b0111000
-#define CFU_OPCODE_SET_CODEBOOK_16B_HI 0b0110000
-#define CFU_OPCODE_ALU_MAC             0b1000000
-#define CFU_OPCODE_ALU_RST             0b1001000
-
-#define MODE """ + cfu_mode + """
-#define NUM_CLUSTERS """ + str(num_clusters) + """
-#define COUNT """ + str(channel_count) + """
-
-#if MODE == MODE_EMUL
-typedef struct {
-    uint32_t word0;
-    uint32_t word1;
-} weights_t;
-
-typedef struct {
-    int8_t x[4];
-} codebook_t;
-
-static weights_t current_weights = {.word0 = 0, .word1 = 0};
-// static codebook_t current_codebook = {.byte0 = 0, .byte1 = 0, .byte2 = 0, .byte3 = 0};
-static codebook_t current_codebook = {.x = {0, 0, 0, 0}};
-
-static int32_t acc = 0;
-#endif  // MODE
-
-#if MODE == MODE_EMUL
-static void __attribute__((always_inline)) inline push_weights_4b(uint32_t word0, uint32_t word1) {
-    // printf("push_weights_4b\\n");
-    current_weights.word0 = word0;
-    current_weights.word1 = word1;
-}
-#elif MODE == MODE_CFU
-static int32_t __attribute__((always_inline)) inline push_weights_4b(uint32_t word0, uint32_t word1) {
-    // printf("push_weights_4b\\n");
-#ifdef SEAL5
-    return __builtin_riscv_xcfu_cfu0_push_weights_4b(word0);
-#else
-    cfu_op0_hw(CFU_OPCODE_PUSH_WEIGHTS_4B, word0, word1);
-#endif  // SEAL5
-}
-#endif  // MODE
-
-#define push_weights_16b push_weights_4b
-
-static int32_t __attribute__((always_inline)) inline alu_mac(uint32_t word0, uint32_t word1) {
-    // printf("alu_mac\\n");
-#if MODE == MODE_EMUL
-    acc += current_weights.word0 * word0;
-    acc += current_weights.word1 * word1;
-    return acc;
-#elif MODE == MODE_CFU
-#ifdef SEAL5
-    int32_t acc = __builtin_riscv_xcfu_cfu0_alu_mac(word0, word1);
-#else
-    int32_t acc = cfu_op0_hw(CFU_OPCODE_ALU_MAC, word0, word1);
-#endif  // SEAL5
-    return acc;
-#endif  // MODE
-    // TODO: if non-zero?
-}
-
-static void __attribute__((always_inline)) inline alu_rst() {
-    // printf("alu_rst\\n");
-#if MODE == MODE_EMUL
-    acc = 0;
-#elif MODE == MODE_CFU
-#ifdef SEAL5
-    __builtin_riscv_xcfu_cfu0_alu_rst();
-#else
-    cfu_op0_hw(CFU_OPCODE_ALU_RST, 0, 0);
-#endif  // SEAL5
-#endif  // MODE
-}
-
-static int32_t __attribute__((always_inline)) inline get_acc() {
-    // printf("get_acc\\n");
-#if MODE == MODE_EMUL
-    return acc;
-#elif MODE == MODE_CFU
-#ifdef SEAL5
-    return __builtin_riscv_xcfu_cfu0_alu_mac(0, 0);
-#else
-    return cfu_op0_hw(CFU_OPCODE_ALU_MAC, 0, 0);  // TODO: opcode for load?
-#endif  // SEAL5
-#endif  // MODE
-}
-
-static int32_t __attribute__((always_inline)) inline cfu_kernel_""" + str(channel_count) + """x(int8_t* data_ptr, int8_t* weights_ptr, int32_t* acc) {
-
-    alu_rst();
-#if NUM_CLUSTERS == 2
-#if COUNT == 64  // TODO: hardcode or dynamic?
-    uint32_t code_word0 = *((uint32_t*)weights_ptr);
-    uint32_t code_word1 = *((uint32_t*)(weights_ptr + 4));
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_2b(code_word0, code_word1);
-    for (int i = 0; i < (COUNT / 8); i++) {
-        // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#elif COUNT == 56
-    uint32_t code_word0 = *((uint32_t*)weights_ptr);
-    uint16_t code_word1_lo = *((uint16_t*)(weights_ptr + 4));
-    uint8_t code_word1_hi = *((uint8_t*)(weights_ptr + 6));
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_2b(code_word0, (uint32_t)code_word1 | ((uint32_t)code_word1_hi << 16));
-    for (int i = 0; i < (COUNT / 8); i++) {
-        // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#elif COUNT == 48
-    uint32_t code_word0 = *((uint32_t*)weights_ptr);
-    uint16_t code_word1 = *((uint16_t*)(weights_ptr + 4));
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_2b(code_word0, (uint32_t)code_word1);
-    for (int i = 0; i < (COUNT / 8); i++) {
-        // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#elif COUNT == 40
-    uint32_t code_word0 = *((uint32_t*)weights_ptr);
-    uint8_t code_word1 = *((uint8_t*)(weights_ptr + 4));
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_2b(code_word0, (uint32_t)code_word1);
-    for (int i = 0; i < (COUNT / 8); i++) {
-        // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#elif COUNT == 32
-    uint32_t code_word0 = *((uint32_t*)weights_ptr);
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_2b(code_word0, 0);
-    for (int i = 0; i < (COUNT / 8); i++) {
-        // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#elif COUNT == 24
-    uint16_t code_word0_lo = *((uint16_t*)(weights_ptr));
-    uint8_t code_word0_hi = *((uint8_t*)(weights_ptr + 2));
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_2b((uint32_t)code_word0 | ((uint32_t)code_word0_hi << 16), 0);
-    for (int i = 0; i < (COUNT / 8); i++) {
-        // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#elif COUNT == 16
-    uint16_t code_word0 = *((uint16_t*)weights_ptr);
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_2b((uint32_t)code_word0, 0);
-    for (int i = 0; i < (COUNT / 8); i++) {
-        // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#elif COUNT == 8
-    uint8_t code_word0 = *((uint8_t*)weights_ptr);
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_2b((uint32_t)code_word0, 0);
-    for (int i = 0; i < (COUNT / 8); i++) {
-        // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#else
-// TODO: error?
-#endif  // COUNT
-#elif NUM_CLUSTERS == 4
-#if COUNT == 32  // TODO: hardcode or dynamic?
-    uint32_t code_word0 = *((uint32_t*)weights_ptr);
-    uint32_t code_word1 = *((uint32_t*)(weights_ptr + 4));
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    // cfu_op0(CFU_FUNCT7_PUSH_WEIGHTS, code_word0, code_word1);
-    push_weights_4b(code_word0, code_word1);
-    for (int i = 0; i < (COUNT / 8); i++) {
-        // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#elif COUNT == 24
-    uint32_t code_word0 = *((uint32_t*)weights_ptr);
-    uint16_t code_word1 = *((uint16_t*)(weights_ptr + 4));
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_4b(code_word0, (uint32_t)code_word1);
-    for (int i = 0; i < (COUNT / 8); i++) {
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#elif COUNT == 16
-    uint32_t code_word0 = *((uint32_t*)weights_ptr);
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_4b(code_word0, 0);
-    for (int i = 0; i < (COUNT / 8); i++) {
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#elif COUNT == 8
-    uint16_t code_word0 = *((uint16_t*)weights_ptr);
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_4b((uint32_t)code_word0, 0);
-    for (int i = 0; i < (COUNT / 8); i++) {
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#else
-// TODO: error
-#endif  // COUNT
-#elif NUM_CLUSTERS == 16
-#if COUNT == 16  // TODO: hardcode or dynamic?
-    uint32_t code_word0 = *((uint32_t*)weights_ptr);
-    uint32_t code_word1 = *((uint32_t*)(weights_ptr + 4));
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_16b(code_word0, code_word1); // rename?
-    for (int i = 0; i < (COUNT / 8); i++) {
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#elif COUNT == 8
-    uint32_t code_word0 = *((uint32_t*)weights_ptr);
-    uint32_t* act_words = (uint32_t*)data_ptr;
-    push_weights_16b(code_word0, 0); // rename?
-    for (int i = 0; i < (COUNT / 8); i++) {
-        alu_mac(act_words[2 * i], act_words[2 * i + 1]);
-    }
-#else
-// TODO: error?
-#endif  // COUNT
-#endif  // NUM_CLUSTERS
-    // *acc = get_acc();
-    // return 42;
-    // return *acc;
-    return get_acc();
-}
-
-#if NUM_CLUSTERS == 2
-void set_codebook_2(int8_t* data_ptr) {
-    uint16_t* codebook_lo = *((int16_t*)data_ptr);
-    cfu_op0_hw(CFU_OPCODE_SET_CODEBOOK_2B, codebook_lo, 0);
-}
-}
-#elif NUM_CLUSTERS == 4
-void set_codebook_4(int8_t* data_ptr) {
-    uint32_t* codebook_lo = *((int32_t*)data_ptr);
-    cfu_op0_hw(CFU_OPCODE_SET_CODEBOOK_4B, codebook_lo, 0);
-}
-#elif NUM_CLUSTERS == 16
-void set_codebook_16(int8_t* data_ptr) {
-    uint32_t* codebook_lo = *((int32_t*)data_ptr);
-    uint32_t* codebook_hi = *(((int32_t*)data_ptr) + 1);
-    cfu_op0_hw(CFU_OPCODE_SET_CODEBOOK_4B, codebook_lo, hi);
-}
-#else
-// TODO: err?
-#endif  // NUM_CLUSTERS
-#endif  // CFU_KERNEL_CODE
-"""
-
-@derived_object
-class ImportCPostprocess(ms.postproc.PyPostproc):
-    """A postproc that always fails."""
-
-    def __init__(
-        self,
-        # num_clusters: int,
-        mode: str,
-        # channel_count: int,
-        # f_initialize_with_tune_context: Callable = None,
-        # f_apply: Callable = None,
-        # f_clone: Callable = None,
-        # f_as_string: Callable = None,
-    ):
-        # print("ImportCPostprocess.__init__")
-        super().__init__(
-            # self,
-            # f_initialize_with_tune_context,
-            # f_apply,
-            # f_clone,
-            # f_as_string,
+def lookup_model_by_name(model):
+    def _load_model(path):
+        model = tvmc.load(
+            str(path)
         )
-        # self.num_clusters = num_clusters
-        self.mode = mode
-        # self.channel_count = channel_count
-        # print("ImportCPostprocess.__init__ done")
+        mod = model.mod
+        params = model.params
+        return mod, params
 
-    def _initialize_with_tune_context(self, context: ms.TuneContext) -> None:
-        pass
+    if model == "default":
+        # input("1")
+        mod, params, model_info = create_relay_module()
+        input_name = model_info["in_tensor"]
+        input_shape = model_info["in_shape"]
+        input_dtype = model_info["in_dtype"]
+    else:
+        MODELS_DIR = BASE_DIR / "models"
 
-    def apply(self, sch: Schedule) -> bool:
-        # print("apply", sch)
-        # return False
-        # has = has_block(sch, "block")
-        has = has_block(sch, "root")
-        # print("has", has)
-        if has:
-            has_tensorize = False
-            is_legal = False
-            try:
-                block = sch.get_block("root")
-                # sch.annotate(block, "foo", "bar")
-                mod = sch.mod
+        DEFAULT_INPUT_SHAPE = [1, 32, 32, 3]
+        INPUT_SHAPE_LOOKUP = {
+            "pretrainedResnet_clustered_quant_remap": [1, 32, 32, 3],
+            "pretrainedResnet_clustered_quant_remap_packed": [1, 32, 32, 3],
+        }
+        INPUT_DTYPE_LOOKUP = {
+            "pretrainedResnet_clustered_quant_remap": "int8",
+            "pretrainedResnet_clustered_quant_remap_packed": "int8",
+        }
+        DEFAULT_INPUT_DTYPE = "int8"
 
-                packed_weights_arr = None
-                codebook_arr = None
-                const_name = None
-                pack_factor = None
-                tensorize_func = None
-                tensorize_block = None
-                tensorize_count = None
+        model_file = model if ".tflite" in model else f"{model}.tflite"
+        model_name = Path(model).stem
+        model_path = MODELS_DIR / model_file
+        assert model_path.is_file(), f"Model not found: {model_path}"
+        mod, params = _load_model(model_path)
 
-                def _visit(stmt):
-                    nonlocal has_tensorize, is_legal, packed_weights_arr, codebook_arr, const_name, pack_factor, tensorize_func, tensorize_block, tensorize_count
-                    if isinstance(stmt, tvm.tir.Block):  # finding blocks to be tensorized?
-                        res = detect_tensorize_block(stmt)
-                        if res is not None:
-                            assert not has_tensorize, "Can only tensorize once per block!"
-                            has_tensorize = True
-                            assert len(res) == 3
-                            tensorize_func, tensorize_count, tensorize_block = res
-                    elif isinstance(stmt, tvm.tir.AllocateConst):  # Finding constants for weight clustering
-                        res = detect_clustered_weights(stmt)
-                        if res is not None:
-                            assert len(res) == 4
-                            packed_weights_arr, codebook_arr, const_name, pack_factor = res
-                            is_legal = True
-                        else:
-                            is_legal = False
-
-                stmt_functor.ir_transform(mod["main"].body, _visit, None, ["tir.Block", "tir.AllocateConst"])
-                # print("has_tensorize", has_tensorize)
-                if has_tensorize:
-                    if is_legal:
-                        num_clusters = len(codebook_arr)
-                        code = _gen_cfu_kernel_code(num_clusters, self.mode, tensorize_count)
-                        # print("code", code)
-                        sch.annotate(block, "pragma_import_c", code)
-                    else:
-                        # print("illegal!")
-                        block_ = sch.get_block(tensorize_block)
-                        sch.unannotate(block_, "meta_schedule.auto_tensorize")
-                        # input("#")
-            except Exception as ex:
-                print(ex)
-                print(traceback.format_exc())
-                input("&&&")
-                raise ex
-        # print("sch", sch)
-        # input(">")
-        return True
-
-    def clone(self) -> "ImportCPostprocess":
-        # return ImportCPostprocess(self.num_clusters, self.mode, self.channel_count)
-        return ImportCPostprocess(self.mode)
-
-    def __str__(self) -> str:
-        return "ImportCPostprocess"
+        input_shape = INPUT_SHAPE_LOOKUP.get(model_name, DEFAULT_INPUT_SHAPE)
+        input_dtype = INPUT_DTYPE_LOOKUP.get(model_name, DEFAULT_INPUT_DTYPE)
+    data_sample = np.random.rand(*input_shape).astype(input_dtype)
+    return mod, params, input_name, input_shape, input_dtype, data_sample
 
 
 def get_tuning_config(enable_intrin: bool = False, num_clusters: Optional[int] = None, cfu_mode: Optional[str] = None, channel_count: Optional[int] = None):
-    print("get_tuning_config", enable_intrin, num_clusters, cfu_mode, channel_count)
+    # print("get_tuning_config", enable_intrin, num_clusters, cfu_mode, channel_count)
     if num_clusters is not None:
         assert channel_count is not None
         from math import log2
         max_channels = 64 // int(log2(num_clusters))
         channel_count = min(max_channels, channel_count)
-    print("channel_count", channel_count)
+    # print("channel_count", channel_count)
 
     # def _get_sch_rules(intrin: Optional[str] = None, num_clusters: Optional[int] = None, channel_count: Optional[int] = None):
     def _get_sch_rules(intrin: Optional[str] = None, num_clusters: Optional[int] = None, channel_count: Optional[int] = None):
-        print("_get_sch_rules", intrin, num_clusters, channel_count)
+        # print("_get_sch_rules", intrin, num_clusters, channel_count)
         # init_intrin = DP4A_S8S8S32_INIT_INTRIN
         # structure_lookup = {
         #     AMDGPU_SDOT4_INTRIN: "SSSRRSRS",
@@ -688,9 +148,8 @@ def get_tuning_config(enable_intrin: bool = False, num_clusters: Optional[int] =
         else:
             intrins = [intrin]
 
-
         structure = "SR"
-        print("intrin", intrin)
+        # print("intrin", intrin)
         return [
             ms.schedule_rule.ApplyCustomRule(),
             ms.schedule_rule.InlineConstantScalars(),
@@ -765,7 +224,7 @@ def get_tuning_config(enable_intrin: bool = False, num_clusters: Optional[int] =
     # def _get_postprocs(num_clusters: Optional[int] = None, cfu_mode: Optional[str] = None, channel_count: Optional[int] = None):
     def _get_postprocs(cfu_mode: Optional[str] = None):
         # print("_get_postprocs", num_clusters, cfu_mode, channel_count)
-        print("_get_postprocs", cfu_mode)
+        # print("_get_postprocs", cfu_mode)
         return [
             ms.postproc.DisallowDynamicLoop(),
             ms.postproc.RewriteParallelVectorizeUnroll(),
@@ -789,8 +248,8 @@ def get_tuning_config(enable_intrin: bool = False, num_clusters: Optional[int] =
     # default_intrin = "auto"
     default_intrin = "all" if channel_count is None else "auto"
     intrin = default_intrin if enable_intrin else None
-    # sch_rules = _get_sch_rules(intrin, num_clusters, channel_count)
-    sch_rules = _get_sch_rules(intrin)
+    sch_rules = _get_sch_rules(intrin, num_clusters, channel_count)
+    # sch_rules = _get_sch_rules(intrin)
     # postprocs = _get_postprocs(num_clusters, cfu_mode, channel_count)
     postprocs = _get_postprocs(cfu_mode)
     mutator_probs = _get_mutator_probs()
@@ -848,7 +307,7 @@ def create_relay_module():
 #         def stmt_post(stmt):
 #             print("stmt_post", stmt)
 #             return stmt
-# 
+#
 #         new_body = tvm.tir.stmt_functor.ir_transform(
 #             func.body,
 #             None,
@@ -884,7 +343,8 @@ def create_relay_module():
     # (5, 100, 1000000),
     # (5, 200, 1000000),
     # (10, 200, 1000000),
-    (20, 200, 1000000),
+    # (20, 200, 1000000),
+    (5, 10, 1000000),
     # (1, 200, 1000000),
     # (1, 1, 1000000),
     # (5, 400, 1000000),
@@ -894,32 +354,54 @@ def create_relay_module():
 ])
 @pytest.mark.parametrize("enable_custom,enable_intrin,cfu_mode", [
     # (False, False, None),
-    (True, False, None),
+    # (True, False, None),
     # (True, True, "MODE_EMUL"),
-    # (True, True, "MODE_CFU"),
+    (True, True, "MODE_CFU"),
 ])
 @pytest.mark.parametrize("module_equality", ["ignore-ndarray"])
 @pytest.mark.parametrize("model,num_clusters,channel_count", [  # in or out?
     # ("default", None, None),
-    # ("resnet_clustered", None, None),
-    # ("resnet_clustered_layer0", 16, 3),  # conv2d, 3 in channels, no accel?
-    # ("resnet_clustered_layer0", None, None),  # conv2d, 3 in channels, no accel?
-    # ("resnet_clustered_layer1", 16, 16),  # conv2d
-    # ("resnet_clustered_layer2", 16, 16),  # conv2d
-    # ("resnet_clustered_layer3", None, None),  # add
-    # ("resnet_clustered_layer4", 16, 16),  # conv2d
-    # ("resnet_clustered_layer5", 16, 32),  # conv2d
-    # ("resnet_clustered_layer6", 16, 16),  # conv2d
-    # ("resnet_clustered_layer7", None, None),  # add
-    # ("resnet_clustered_layer8", 4, 32),  # conv2d
-    ("resnet_clustered_layer8", None, None),  # conv2d
-    # ("resnet_clustered_layer9", 4, 64),  # conv2d
-    # ("resnet_clustered_layer10", 4, 32),  # conv2d
-    # ("resnet_clustered_layer11", None, None),  # add
-    # ("resnet_clustered_layer12", None, None),  # avg_pool
-    # ("resnet_clustered_layer13", None, None),  # reshape
-    # ("resnet_clustered_layer14", None, None),  # dense
-    # ("resnet_clustered_layer15", None, None),  # softmax
+    # ("pretrainedResnet_clustered_quant_remap", None, None),
+    # ("pretrainedResnet_clustered_quant_remap_packed", None, None),
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer0", 4, 3),  # conv2d, 3 in channels, no accel?
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer0", None, None),  # conv2d, 3 in channels, no accel?
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer1", 4, 16),  # conv2d
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer2", 4, 16),  # conv2d
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer3", None, None),  # add
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer4", 4, 16),  # conv2d
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer5", 4, 32),  # conv2d
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer6", 4, 16),  # conv2d
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer7", None, None),  # add
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer8", 4, 32),  # conv2d
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer8", None, None),  # conv2d
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer9", 4, 64),  # conv2d
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer10", 4, 32),  # conv2d
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer11", None, None),  # add
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer12", None, None),  # avg_pool
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer13", None, None),  # reshape
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer14", None, None),  # dense
+    # ("layers/pretrainedResnet_clustered_quant_remap_layer15", None, None),  # softmax
+    # NEW
+    # ("new/pretrainedResnet_clustered_quant_remap", None, None),
+    # ("new/pretrainedResnet_clustered_quant_remap_packed", None, None),
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer0", 16, 3),  # conv2d, 3 in channels, no accel?
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer0", None, None),  # conv2d, 3 in channels, no accel?
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer1", 16, 16),  # conv2d
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer2", 16, 16),  # conv2d
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer3", None, None),  # add
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer4", 16, 16),  # conv2d
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer5", 16, 32),  # conv2d
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer6", 16, 16),  # conv2d
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer7", None, None),  # add
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer8", 4, 32),  # conv2d
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer8", None, None),  # conv2d
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer9", 4, 64),  # conv2d
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer10", 4, 32),  # conv2d
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer11", None, None),  # add
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer12", None, None),  # avg_pool
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer13", None, None),  # reshape
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer14", None, None),  # dense
+    # ("new/layers/pretrainedResnet_clustered_quant_remap_layer15", None, None),  # softmax
 ])
 @pytest.mark.parametrize("transform_layout", [
     # False,
@@ -928,13 +410,8 @@ def create_relay_module():
 @tvm.testing.requires_micro
 def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials_per_iter, max_trials_per_task, max_trials_global, enable_custom, enable_intrin, cfu_mode, module_equality, model, num_clusters, channel_count, transform_layout):
     print()
-    from tvm.contrib.micro.meta_schedule.local_builder_micro import get_local_builder_micro
-    from tvm.contrib.micro.meta_schedule.local_builder_micro import CompressWeights
-    from tvm.contrib.micro.meta_schedule.rpc_runner_micro import get_rpc_runner_micro
-
-    import pathlib
     platform = DIR / "../../../../microtvm-etiss-template/template_project"
-    print("platform", platform)
+    # print("platform", platform)
     options = {
         "verbose": True,
         "quiet": True,
@@ -964,6 +441,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
         base_dir = Path("/tmp/base")
         now = datetime.now()
         ts = now.strftime("%Y%m%dT%H%M%S")
+
         def sanitize(x):
             if not isinstance(x, str):
                 x = str(x)
@@ -983,202 +461,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     # MODEL = "resnet_clustered_layer10"
 
     # TODO: move to helper and share code!
-    if model == "default":
-        # input("1")
-        mod, params, model_info = create_relay_module()
-        input_name = model_info["in_tensor"]
-        input_shape = model_info["in_shape"]
-        input_dtype = model_info["in_dtype"]
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered":
-        model = tvmc.load(
-            # str(BASE_DIR / "models/pretrainedResnet_clustered_quant_remap_packed.tflite")
-            str(BASE_DIR / "models/pretrainedResnet_clustered_quant_remap.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 32, 32, 3]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer0":  # conv2d(?)
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer0.tflite")
-            # str(BASE_DIR / "models/layers_unpacked/pretrainedResnet_clustered_quant_remap_layer0.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 16, 16, 32]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer1":  # conv2d(?)
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer1.tflite")
-            # str(BASE_DIR / "models/layers_unpacked/pretrainedResnet_clustered_quant_remap_layer1.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 16, 16, 32]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer2":  # conv2d(?)
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer2.tflite")
-            # str(BASE_DIR / "models/layers_unpacked/pretrainedResnet_clustered_quant_remap_layer2.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 16, 16, 32]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer3":  # add
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer3.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer3.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 16, 16, 32]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer4":  # conv2d(?)
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer4.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer4.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 16, 16, 32]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer5":  # conv2d(?)
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer5.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer5.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 16, 16, 32]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer6":  # conv2d(?)
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer6.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer6.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 16, 16, 32]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer7":  # add
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer7.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer7.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 16, 16, 32]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer8":  # conv2d(?)
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer8.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer8.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 16, 16, 32]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer9":  # conv2d(?)
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer9.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer9.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 16, 16, 32]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer10":  # conv2d(1x16x16x32, 64x1x1x32, 1x8x8x64)
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer10.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer10.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 16, 16, 32]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer11":  # add
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer11.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer11.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 32, 32, 3]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer12":  # avg pool
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer12.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer12.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 32, 32, 3]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer13":  # rehape
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer13.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer13.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 32, 32, 3]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer14":  # fully connected
-        model = tvmc.load(
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer14.tflite")
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer14.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 32, 32, 3]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    elif model == "resnet_clustered_layer15":  # softmax
-        model = tvmc.load(
-            # str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer15.tflite")
-            str(BASE_DIR / "models/layers/pretrainedResnet_clustered_quant_remap_packed_layer15.tflite")
-        )
-        mod = model.mod
-        params = model.params
-
-        input_shape = [1, 32, 32, 3]
-        input_dtype = "int8"
-        data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    else:
-        assert False, f"Unsupported Model: {model}"
+    mod, params, input_name, input_shape, input_dtype, data_sample = lookup_model_by_name(model)
 
     if transform_layout:
         with tvm.transform.PassContext(
@@ -1199,7 +482,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
             )
             mod = seq(mod)
 
-    print("model.mod", model.mod)
+    # print("model.mod", model.mod)
     link_params = True
 
     runtime = relay.backend.Runtime("crt", {"system-lib": True})
@@ -1211,7 +494,6 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     # SKIP_TUNING = True
     SKIP_TUNING = False
     builder = get_local_builder_micro()
-
 
     with ms.Profiler() as profiler:
         if not SKIP_TUNING:
@@ -1301,7 +583,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
                 runtime=runtime,
             )
     print(profiler.table())
-    import time
+    # import time
     # print("sleeping")
     # time.sleep(10)
     non_ms_mod: tvm.runtime.Module = ms.relay_integration.compile_relay(
