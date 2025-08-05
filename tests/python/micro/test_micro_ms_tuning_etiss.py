@@ -71,16 +71,21 @@ def lookup_model_by_name(model):
     else:
         MODELS_DIR = BASE_DIR / "models"
 
-        DEFAULT_INPUT_SHAPE = [1, 32, 32, 3]
         INPUT_SHAPE_LOOKUP = {
             "pretrainedResnet_clustered_quant_remap": [1, 32, 32, 3],
             "pretrainedResnet_clustered_quant_remap_packed": [1, 32, 32, 3],
         }
+        DEFAULT_INPUT_SHAPE = [1, 32, 32, 3]
         INPUT_DTYPE_LOOKUP = {
             "pretrainedResnet_clustered_quant_remap": "int8",
             "pretrainedResnet_clustered_quant_remap_packed": "int8",
         }
         DEFAULT_INPUT_DTYPE = "int8"
+        INPUT_NAME_LOOKUP = {
+            "pretrainedResnet_clustered_quant_remap": "input",
+            "pretrainedResnet_clustered_quant_remap_packed": "input",
+        }
+        DEFAULT_INPUT_NAME = "input"
 
         model_file = model if ".tflite" in model else f"{model}.tflite"
         model_name = Path(model).stem
@@ -90,6 +95,7 @@ def lookup_model_by_name(model):
 
         input_shape = INPUT_SHAPE_LOOKUP.get(model_name, DEFAULT_INPUT_SHAPE)
         input_dtype = INPUT_DTYPE_LOOKUP.get(model_name, DEFAULT_INPUT_DTYPE)
+        input_name = INPUT_NAME_LOOKUP.get(model_name, DEFAULT_INPUT_NAME)
     data_sample = np.random.rand(*input_shape).astype(input_dtype)
     return mod, params, input_name, input_shape, input_dtype, data_sample
 
@@ -344,7 +350,8 @@ def create_relay_module():
     # (5, 200, 1000000),
     # (10, 200, 1000000),
     # (20, 200, 1000000),
-    (5, 10, 1000000),
+    # (5, 10, 1000000),
+    (5, 100, 1000000),
     # (1, 200, 1000000),
     # (1, 1, 1000000),
     # (5, 400, 1000000),
@@ -382,7 +389,7 @@ def create_relay_module():
     # ("layers/pretrainedResnet_clustered_quant_remap_layer14", None, None),  # dense
     # ("layers/pretrainedResnet_clustered_quant_remap_layer15", None, None),  # softmax
     # NEW
-    # ("new/pretrainedResnet_clustered_quant_remap", None, None),
+    ("new/pretrainedResnet_clustered_quant_remap", None, None),
     # ("new/pretrainedResnet_clustered_quant_remap_packed", None, None),
     # ("new/layers/pretrainedResnet_clustered_quant_remap_layer0", 16, 3),  # conv2d, 3 in channels, no accel?
     # ("new/layers/pretrainedResnet_clustered_quant_remap_layer0", None, None),  # conv2d, 3 in channels, no accel?
