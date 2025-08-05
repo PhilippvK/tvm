@@ -40,10 +40,8 @@ from tvm.contrib.micro.cfu.wca import CompressWeights
 def get_local_builder_micro():
     """Return micro-compatible Builder for meta schedule."""
 
-    def _micro_build(
-        mod: IRModule, target: Target, _params: Optional[Dict[str, NDArray]]
-    ) -> OperatorModule:
-        print("_miro_build")
+    def _micro_build(mod: IRModule, target: Target, _params: Optional[Dict[str, NDArray]]) -> OperatorModule:
+        # print("_miro_build")
         """Build function for micro targets.
 
         Parameters
@@ -97,7 +95,7 @@ def get_local_builder_micro():
         return rt_mod
 
     def _micro_export(mod: OperatorModule) -> str:
-        print("_miro_export")
+        # print("_miro_export")
         """Export function for micro targets.
 
         Parameters
