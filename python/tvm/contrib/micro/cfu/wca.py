@@ -415,6 +415,7 @@ def pack_bits(arr, n_bits: int):
     return packed, factor
 
 
+# This seems to break the coudpickle dump required for the rpc-based builder....
 from tvm._ffi.registry import register_func
 @register_func("tvm.tir.transform.CompressWeights")
 def CompressWeights():
