@@ -43,6 +43,7 @@ def load_function(full_name):
         return global_func
 
     # split full name "path.to.module.func" into two parts ["path.to.module", "func"]
+    assert "." in full_name
     module_name, func_name = full_name.rsplit(".", 1)
 
     # import module and find the function
