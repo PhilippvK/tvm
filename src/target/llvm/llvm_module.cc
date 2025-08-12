@@ -439,7 +439,11 @@ void LLVMModuleNode::InitMCJIT() {
   // create MCJIT
   mcjit_ee_ = builder.create(tm.release());
   ICHECK(mcjit_ee_ != nullptr) << "Failed to initialize LLVM MCJIT engine for "
+#if TVM_LLVM_VERSION >= 210
+                               << module_->getTargetTriple().str();
+#else
                                << module_->getTargetTriple();
+#endif
 
   VLOG(2) << "LLVM MCJIT execute " << module_->getModuleIdentifier() << " for triple `"
           << llvm_target->GetTargetTriple() << "`"
@@ -504,9 +508,35 @@ void LLVMModuleNode::InitORCJIT() {
 
 #if TVM_LLVM_VERSION >= 130
   // linker
-  const auto linkerBuilder = [&](llvm::orc::ExecutionSession& session, const llvm::Triple&) {
-    return std::make_unique<llvm::orc::ObjectLinkingLayer>(session);
-  };
+  const auto linkerBuilder =
+#if TVM_LLVM_VERSION >= 210
+      [&](llvm::orc::ExecutionSession& session)
+      -> llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>> {
+#else
+      [&](llvm::orc::ExecutionSession& session,
+          const llvm::Triple& triple) -> std::unique_ptr<llvm::orc::ObjectLayer> {
+#endif
+#if _WIN32
+    auto GetMemMgr = []() { return std::make_unique<llvm::SectionMemoryManager>(); };
+    auto ObjLinkingLayer =
+        std::make_unique<llvm::orc::RTDyldObjectLinkingLayer>(session, std::move(GetMemMgr));
+#else
+    auto ObjLinkingLayer = std::make_unique<llvm::orc::ObjectLinkingLayer>(session);
+#endif
+#if TVM_LLVM_VERSION >= 210
+    if (tm_builder.getTargetTriple().isOSBinFormatCOFF()) {
+#else
+    if (triple.isOSBinFormatCOFF()) {
+#endif
+      ObjLinkingLayer->setOverrideObjectFlagsWithResponsibilityFlags(true);
+      ObjLinkingLayer->setAutoClaimResponsibilityForObjectSymbols(true);
+    }
+#if TVM_LLVM_VERSION >= 210
+    return llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>>(std::move(ObjLinkingLayer));
+#else
+    return ObjLinkingLayer;
+#endif
+  };  // NOLINT(readability/braces)
 #endif
 
   // create LLJIT
@@ -521,7 +551,11 @@ void LLVMModuleNode::InitORCJIT() {
                                   .create());
 
   ICHECK(orcjit_ee_ != nullptr) << "Failed to initialize LLVM ORCJIT engine for "
+#if TVM_LLVM_VERSION >= 210
+                                << module_->getTargetTriple().str();
+#else
                                 << module_->getTargetTriple();
+#endif
 
   // store ctors
   auto ctors = llvm::orc::getConstructors(*module_);
@@ -625,7 +659,11 @@ TVM_REGISTER_GLOBAL("codegen.LLVMModuleCreate")
       // Generate a LLVM module from an input target string
       auto module = std::make_unique<llvm::Module>(module_name, *llvm_target->GetContext());
       llvm_target->SetTargetMetadata(module.get());
+#if TVM_LLVM_VERSION >= 210
+      module->setTargetTriple(llvm::Triple(llvm_target->GetTargetTriple()));
+#else
       module->setTargetTriple(llvm_target->GetTargetTriple());
+#endif
       module->setDataLayout(llvm_target->GetOrCreateTargetMachine()->createDataLayout());
       n->Init(std::move(module), std::move(llvm_instance));
       n->SetJITEngine(llvm_target->GetJITEngine());
