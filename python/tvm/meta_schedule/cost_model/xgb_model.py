@@ -510,8 +510,7 @@ class XGBModel(PyCostModel):
                     f"{key}: {score:.6f}"
                     for key, score in self._validate(
                         xs=new_features,
-                        # ys=group.min_cost / new_mean_costs_np,
-                        ys=new_mean_costs_np,
+                        ys=group.min_cost / new_mean_costs_np,
                     )
                 ),
             )
@@ -541,8 +540,7 @@ class XGBModel(PyCostModel):
         self._train(
             xs=list(itertools_chain.from_iterable([g.features for g in self.data.values()])),
             ys=np.concatenate(
-                # [g.min_cost / g.costs for g in self.data.values()],
-                [g.costs for g in self.data.values()],
+                [g.min_cost / g.costs for g in self.data.values()],
                 axis=0,
             ),
         )
