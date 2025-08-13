@@ -1,0 +1,12 @@
+pytest
+numpy
+scipy
+decorator
+psutil
+attrs
+cloudpickle
+xgboost
+tornado
+tflite
+pandas
+plotly
