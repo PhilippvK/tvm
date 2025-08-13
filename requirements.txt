@@ -10,3 +10,4 @@ tornado
 tflite
 pandas
 plotly
+anytree
