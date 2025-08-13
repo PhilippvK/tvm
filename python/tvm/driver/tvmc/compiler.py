@@ -705,13 +705,15 @@ def add_tir_to_dumps(config, dumps, dump_code):
     Creates a debug pass that dumps TIR functions as a list of strings.
     """
     def get_dump_tir_pass(phase):
+        if phase is None:
+            key = "tir"
+            phase = 3
+        else:
+            key = "tir" + str(phase)
+
         @tvm.tir.transform.prim_func_pass(opt_level=0)
         def _dump_tir_pass(tir_func, _, __):
-            if phase is None:
-                key = "tir"
-                phase = 3
-            else:
-                key = "tir" + str(phase)
+            nonlocal key
             if key in dumps:
                 dumps[key].append(str(tir_func))
             else:
