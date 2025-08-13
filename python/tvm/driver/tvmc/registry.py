@@ -36,7 +36,7 @@ def _generate_registry_option_args(parser, registry, name):
                 type=INTERNAL_TO_NATIVE_TYPE[option_type],
                 help=(
                     f"{registry.flag_registry_name.title()} "
-                    + "{name} {option_name}{INTERNAL_TO_HELP[option_type]}"
+                    + f"{name} {option_name}{INTERNAL_TO_HELP[option_type]}"
                 ),
             )
 
