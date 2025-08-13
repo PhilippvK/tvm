@@ -1,0 +1,252 @@
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_reshape_cast_subtract(p0: T.Buffer((1, 640), "int8"), T_subtract: T.Buffer((1, 640), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_outer, ax1_inner in T.grid(40, 16):
+        T_subtract_1 = T.Buffer((640,), "int16", data=T_subtract.data)
+        p0_1 = T.Buffer((640,), "int8", data=p0.data)
+        T_subtract_1[ax1_outer * 16 + ax1_inner] = T.Cast("int16", p0_1[ax1_outer * 16 + ax1_inner]) - T.int16(89)
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast(p0: T.Buffer((1, 640), "int16"), T_cast: T.Buffer((1, 128), "int8"), fused_nn_contrib_dense_pack_constant: T.Buffer((1, 128), "int32"), fused_constant: T.Buffer((16, 640, 8), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_outer_ax0_outer_fused in T.parallel(4):
+        compute = T.allocate([32], "int32", "global")
+        compute_global = T.allocate([8], "int32", "global")
+        compute_1 = T.Buffer((32,), "int32", data=compute)
+        for y_inner_outer_x_inner_outer_fused in range(4):
+            compute_global_1 = T.Buffer((8,), "int32", data=compute_global, align=32)
+            for x_c_init in range(8):
+                compute_global_1[x_c_init] = 0
+            for k_outer, x_c in T.grid(640, 8):
+                p0_1 = T.Buffer((640,), "int16", data=p0.data)
+                fused_constant_1 = T.Buffer((81920,), "int16", data=fused_constant.data)
+                compute_global_1[x_c] = compute_global_1[x_c] + T.Cast("int32", p0_1[k_outer]) * T.Cast("int32", fused_constant_1[ax1_outer_ax0_outer_fused * 20480 + y_inner_outer_x_inner_outer_fused * 5120 + k_outer * 8 + x_c])
+            for x_inner_inner in range(8):
+                compute_1[y_inner_outer_x_inner_outer_fused * 8 + x_inner_inner] = compute_global_1[x_inner_inner]
+        for ax1_inner_outer, ax1_inner_inner in T.grid(4, 8):
+            T_cast_1 = T.Buffer((128,), "int8", data=T_cast.data)
+            fused_nn_contrib_dense_pack_constant_1 = T.Buffer((128,), "int32", data=fused_nn_contrib_dense_pack_constant.data)
+            T_cast_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner] = T.Cast("int8", T.max(T.min(T.q_multiply_shift(compute_1[ax1_inner_outer * 8 + ax1_inner_inner] + fused_nn_contrib_dense_pack_constant_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner], 1638001653, 31, -8) - 128, 127), -128))
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_reshape_cast_subtract_1(p0: T.Buffer((1, 128), "int8"), T_subtract: T.Buffer((1, 128), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_outer, ax1_inner in T.grid(8, 16):
+        T_subtract_1 = T.Buffer((128,), "int16", data=T_subtract.data)
+        p0_1 = T.Buffer((128,), "int8", data=p0.data)
+        T_subtract_1[ax1_outer * 16 + ax1_inner] = T.Cast("int16", p0_1[ax1_outer * 16 + ax1_inner]) - T.int16(-128)
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_1(p0: T.Buffer((1, 128), "int16"), T_cast: T.Buffer((1, 128), "int8"), fused_nn_contrib_dense_pack_constant_1: T.Buffer((1, 128), "int32"), fused_constant_1: T.Buffer((16, 128, 8), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_outer_ax0_outer_fused in T.parallel(4):
+        compute = T.allocate([32], "int32", "global")
+        compute_global = T.allocate([8], "int32", "global")
+        compute_1 = T.Buffer((32,), "int32", data=compute)
+        for y_inner_outer_x_inner_outer_fused in range(4):
+            compute_global_1 = T.Buffer((8,), "int32", data=compute_global, align=32)
+            for x_c_init in range(8):
+                compute_global_1[x_c_init] = 0
+            for k_outer, x_c in T.grid(128, 8):
+                p0_1 = T.Buffer((128,), "int16", data=p0.data)
+                fused_constant_1_1 = T.Buffer((16384,), "int16", data=fused_constant_1.data)
+                compute_global_1[x_c] = compute_global_1[x_c] + T.Cast("int32", p0_1[k_outer]) * T.Cast("int32", fused_constant_1_1[ax1_outer_ax0_outer_fused * 4096 + y_inner_outer_x_inner_outer_fused * 1024 + k_outer * 8 + x_c])
+            for x_inner_inner in range(8):
+                compute_1[y_inner_outer_x_inner_outer_fused * 8 + x_inner_inner] = compute_global_1[x_inner_inner]
+        for ax1_inner_outer, ax1_inner_inner in T.grid(4, 8):
+            T_cast_1 = T.Buffer((128,), "int8", data=T_cast.data)
+            fused_nn_contrib_dense_pack_constant_1_1 = T.Buffer((128,), "int32", data=fused_nn_contrib_dense_pack_constant_1.data)
+            T_cast_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner] = T.Cast("int8", T.max(T.min(T.q_multiply_shift(compute_1[ax1_inner_outer * 8 + ax1_inner_inner] + fused_nn_contrib_dense_pack_constant_1_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner], 1442659874, 31, -5) - 128, 127), -128))
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_2(p0: T.Buffer((1, 128), "int16"), T_cast: T.Buffer((1, 128), "int8"), fused_nn_contrib_dense_pack_constant_2: T.Buffer((1, 128), "int32"), fused_constant_2: T.Buffer((16, 128, 8), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_outer_ax0_outer_fused in T.parallel(4):
+        compute = T.allocate([32], "int32", "global")
+        compute_global = T.allocate([8], "int32", "global")
+        compute_1 = T.Buffer((32,), "int32", data=compute)
+        for y_inner_outer_x_inner_outer_fused in range(4):
+            compute_global_1 = T.Buffer((8,), "int32", data=compute_global, align=32)
+            for x_c_init in range(8):
+                compute_global_1[x_c_init] = 0
+            for k_outer, x_c in T.grid(128, 8):
+                p0_1 = T.Buffer((128,), "int16", data=p0.data)
+                fused_constant_2_1 = T.Buffer((16384,), "int16", data=fused_constant_2.data)
+                compute_global_1[x_c] = compute_global_1[x_c] + T.Cast("int32", p0_1[k_outer]) * T.Cast("int32", fused_constant_2_1[ax1_outer_ax0_outer_fused * 4096 + y_inner_outer_x_inner_outer_fused * 1024 + k_outer * 8 + x_c])
+            for x_inner_inner in range(8):
+                compute_1[y_inner_outer_x_inner_outer_fused * 8 + x_inner_inner] = compute_global_1[x_inner_inner]
+        for ax1_inner_outer, ax1_inner_inner in T.grid(4, 8):
+            T_cast_1 = T.Buffer((128,), "int8", data=T_cast.data)
+            fused_nn_contrib_dense_pack_constant_2_1 = T.Buffer((128,), "int32", data=fused_nn_contrib_dense_pack_constant_2.data)
+            T_cast_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner] = T.Cast("int8", T.max(T.min(T.q_multiply_shift(compute_1[ax1_inner_outer * 8 + ax1_inner_inner] + fused_nn_contrib_dense_pack_constant_2_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner], 1185020362, 31, -2) - 128, 127), -128))
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_3(p0: T.Buffer((1, 128), "int16"), T_cast: T.Buffer((1, 128), "int8"), fused_nn_contrib_dense_pack_constant_3: T.Buffer((1, 128), "int32"), fused_constant_3: T.Buffer((16, 128, 8), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_outer_ax0_outer_fused in T.parallel(4):
+        compute = T.allocate([32], "int32", "global")
+        compute_global = T.allocate([8], "int32", "global")
+        compute_1 = T.Buffer((32,), "int32", data=compute)
+        for y_inner_outer_x_inner_outer_fused in range(4):
+            compute_global_1 = T.Buffer((8,), "int32", data=compute_global, align=32)
+            for x_c_init in range(8):
+                compute_global_1[x_c_init] = 0
+            for k_outer, x_c in T.grid(128, 8):
+                p0_1 = T.Buffer((128,), "int16", data=p0.data)
+                fused_constant_3_1 = T.Buffer((16384,), "int16", data=fused_constant_3.data)
+                compute_global_1[x_c] = compute_global_1[x_c] + T.Cast("int32", p0_1[k_outer]) * T.Cast("int32", fused_constant_3_1[ax1_outer_ax0_outer_fused * 4096 + y_inner_outer_x_inner_outer_fused * 1024 + k_outer * 8 + x_c])
+            for x_inner_inner in range(8):
+                compute_1[y_inner_outer_x_inner_outer_fused * 8 + x_inner_inner] = compute_global_1[x_inner_inner]
+        for ax1_inner_outer, ax1_inner_inner in T.grid(4, 8):
+            T_cast_1 = T.Buffer((128,), "int8", data=T_cast.data)
+            fused_nn_contrib_dense_pack_constant_3_1 = T.Buffer((128,), "int32", data=fused_nn_contrib_dense_pack_constant_3.data)
+            T_cast_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner] = T.Cast("int8", T.max(T.min(T.q_multiply_shift(compute_1[ax1_inner_outer * 8 + ax1_inner_inner] + fused_nn_contrib_dense_pack_constant_3_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner], 1439819933, 31, -4) - 128, 127), -128))
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_4(p0: T.Buffer((1, 128), "int16"), T_cast: T.Buffer((1, 8), "int8"), fused_nn_contrib_dense_pack_constant_4: T.Buffer((1, 8), "int32"), fused_constant_4: T.Buffer((1, 128, 8), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    compute_global = T.allocate([8], "int32", "global")
+    compute_global_1 = T.Buffer((8,), "int32", data=compute_global, align=32)
+    for x_c_init in range(8):
+        compute_global_1[x_c_init] = 0
+    for k_outer, x_c in T.grid(128, 8):
+        p0_1 = T.Buffer((128,), "int16", data=p0.data)
+        fused_constant_4_1 = T.Buffer((1024,), "int16", data=fused_constant_4.data)
+        compute_global_1[x_c] = compute_global_1[x_c] + T.Cast("int32", p0_1[k_outer]) * T.Cast("int32", fused_constant_4_1[k_outer * 8 + x_c])
+    for ax1_inner_inner in range(8):
+        T_cast_1 = T.Buffer((8,), "int8", data=T_cast.data)
+        compute_global_2 = T.Buffer((8,), "int32", data=compute_global, align=32)
+        fused_nn_contrib_dense_pack_constant_4_1 = T.Buffer((8,), "int32", data=fused_nn_contrib_dense_pack_constant_4.data)
+        T_cast_1[ax1_inner_inner] = T.Cast("int8", T.max(T.min(T.q_multiply_shift(compute_global_2[ax1_inner_inner] + fused_nn_contrib_dense_pack_constant_4_1[ax1_inner_inner], 1085889771, 31, -6) - 128, 127), -128))
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_reshape_cast_subtract_2(p0: T.Buffer((1, 8), "int8"), T_subtract: T.Buffer((1, 8), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_inner in range(8):
+        T_subtract_1 = T.Buffer((8,), "int16", data=T_subtract.data)
+        p0_1 = T.Buffer((8,), "int8", data=p0.data)
+        T_subtract_1[ax1_inner] = T.Cast("int16", p0_1[ax1_inner]) - T.int16(-128)
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_5(p0: T.Buffer((1, 8), "int16"), T_cast: T.Buffer((1, 128), "int8"), fused_nn_contrib_dense_pack_constant_5: T.Buffer((1, 128), "int32"), fused_constant_5: T.Buffer((16, 8, 8), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_outer_ax0_outer_fused in T.parallel(4):
+        compute = T.allocate([32], "int32", "global")
+        compute_global = T.allocate([8], "int32", "global")
+        compute_1 = T.Buffer((32,), "int32", data=compute)
+        for y_inner_outer_x_inner_outer_fused in range(4):
+            compute_global_1 = T.Buffer((8,), "int32", data=compute_global, align=32)
+            for x_c_init in range(8):
+                compute_global_1[x_c_init] = 0
+            for k_outer, x_c in T.grid(8, 8):
+                p0_1 = T.Buffer((8,), "int16", data=p0.data)
+                fused_constant_5_1 = T.Buffer((1024,), "int16", data=fused_constant_5.data)
+                compute_global_1[x_c] = compute_global_1[x_c] + T.Cast("int32", p0_1[k_outer]) * T.Cast("int32", fused_constant_5_1[ax1_outer_ax0_outer_fused * 256 + y_inner_outer_x_inner_outer_fused * 64 + k_outer * 8 + x_c])
+            for x_inner_inner in range(8):
+                compute_1[y_inner_outer_x_inner_outer_fused * 8 + x_inner_inner] = compute_global_1[x_inner_inner]
+        for ax1_inner_outer, ax1_inner_inner in T.grid(4, 8):
+            T_cast_1 = T.Buffer((128,), "int8", data=T_cast.data)
+            fused_nn_contrib_dense_pack_constant_5_1 = T.Buffer((128,), "int32", data=fused_nn_contrib_dense_pack_constant_5.data)
+            T_cast_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner] = T.Cast("int8", T.max(T.min(T.q_multiply_shift(compute_1[ax1_inner_outer * 8 + ax1_inner_inner] + fused_nn_contrib_dense_pack_constant_5_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner], 1442237646, 31, -5) - 128, 127), -128))
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_6(p0: T.Buffer((1, 128), "int16"), T_cast: T.Buffer((1, 128), "int8"), fused_nn_contrib_dense_pack_constant_6: T.Buffer((1, 128), "int32"), fused_constant_6: T.Buffer((16, 128, 8), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_outer_ax0_outer_fused in T.parallel(4):
+        compute = T.allocate([32], "int32", "global")
+        compute_global = T.allocate([8], "int32", "global")
+        compute_1 = T.Buffer((32,), "int32", data=compute)
+        for y_inner_outer_x_inner_outer_fused in range(4):
+            compute_global_1 = T.Buffer((8,), "int32", data=compute_global, align=32)
+            for x_c_init in range(8):
+                compute_global_1[x_c_init] = 0
+            for k_outer, x_c in T.grid(128, 8):
+                p0_1 = T.Buffer((128,), "int16", data=p0.data)
+                fused_constant_6_1 = T.Buffer((16384,), "int16", data=fused_constant_6.data)
+                compute_global_1[x_c] = compute_global_1[x_c] + T.Cast("int32", p0_1[k_outer]) * T.Cast("int32", fused_constant_6_1[ax1_outer_ax0_outer_fused * 4096 + y_inner_outer_x_inner_outer_fused * 1024 + k_outer * 8 + x_c])
+            for x_inner_inner in range(8):
+                compute_1[y_inner_outer_x_inner_outer_fused * 8 + x_inner_inner] = compute_global_1[x_inner_inner]
+        for ax1_inner_outer, ax1_inner_inner in T.grid(4, 8):
+            T_cast_1 = T.Buffer((128,), "int8", data=T_cast.data)
+            fused_nn_contrib_dense_pack_constant_6_1 = T.Buffer((128,), "int32", data=fused_nn_contrib_dense_pack_constant_6.data)
+            T_cast_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner] = T.Cast("int8", T.max(T.min(T.q_multiply_shift(compute_1[ax1_inner_outer * 8 + ax1_inner_inner] + fused_nn_contrib_dense_pack_constant_6_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner], 1315670694, 31, -5) - 128, 127), -128))
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_7(p0: T.Buffer((1, 128), "int16"), T_cast: T.Buffer((1, 128), "int8"), fused_nn_contrib_dense_pack_constant_7: T.Buffer((1, 128), "int32"), fused_constant_7: T.Buffer((16, 128, 8), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_outer_ax0_outer_fused in T.parallel(4):
+        compute = T.allocate([32], "int32", "global")
+        compute_global = T.allocate([8], "int32", "global")
+        compute_1 = T.Buffer((32,), "int32", data=compute)
+        for y_inner_outer_x_inner_outer_fused in range(4):
+            compute_global_1 = T.Buffer((8,), "int32", data=compute_global, align=32)
+            for x_c_init in range(8):
+                compute_global_1[x_c_init] = 0
+            for k_outer, x_c in T.grid(128, 8):
+                p0_1 = T.Buffer((128,), "int16", data=p0.data)
+                fused_constant_7_1 = T.Buffer((16384,), "int16", data=fused_constant_7.data)
+                compute_global_1[x_c] = compute_global_1[x_c] + T.Cast("int32", p0_1[k_outer]) * T.Cast("int32", fused_constant_7_1[ax1_outer_ax0_outer_fused * 4096 + y_inner_outer_x_inner_outer_fused * 1024 + k_outer * 8 + x_c])
+            for x_inner_inner in range(8):
+                compute_1[y_inner_outer_x_inner_outer_fused * 8 + x_inner_inner] = compute_global_1[x_inner_inner]
+        for ax1_inner_outer, ax1_inner_inner in T.grid(4, 8):
+            T_cast_1 = T.Buffer((128,), "int8", data=T_cast.data)
+            fused_nn_contrib_dense_pack_constant_7_1 = T.Buffer((128,), "int32", data=fused_nn_contrib_dense_pack_constant_7.data)
+            T_cast_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner] = T.Cast("int8", T.max(T.min(T.q_multiply_shift(compute_1[ax1_inner_outer * 8 + ax1_inner_inner] + fused_nn_contrib_dense_pack_constant_7_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner], 1994356843, 31, -6) - 128, 127), -128))
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_8(p0: T.Buffer((1, 128), "int16"), T_cast: T.Buffer((1, 128), "int8"), fused_nn_contrib_dense_pack_constant_8: T.Buffer((1, 128), "int32"), fused_constant_8: T.Buffer((16, 128, 8), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_outer_ax0_outer_fused in T.parallel(4):
+        compute = T.allocate([32], "int32", "global")
+        compute_global = T.allocate([8], "int32", "global")
+        compute_1 = T.Buffer((32,), "int32", data=compute)
+        for y_inner_outer_x_inner_outer_fused in range(4):
+            compute_global_1 = T.Buffer((8,), "int32", data=compute_global, align=32)
+            for x_c_init in range(8):
+                compute_global_1[x_c_init] = 0
+            for k_outer, x_c in T.grid(128, 8):
+                p0_1 = T.Buffer((128,), "int16", data=p0.data)
+                fused_constant_8_1 = T.Buffer((16384,), "int16", data=fused_constant_8.data)
+                compute_global_1[x_c] = compute_global_1[x_c] + T.Cast("int32", p0_1[k_outer]) * T.Cast("int32", fused_constant_8_1[ax1_outer_ax0_outer_fused * 4096 + y_inner_outer_x_inner_outer_fused * 1024 + k_outer * 8 + x_c])
+            for x_inner_inner in range(8):
+                compute_1[y_inner_outer_x_inner_outer_fused * 8 + x_inner_inner] = compute_global_1[x_inner_inner]
+        for ax1_inner_outer, ax1_inner_inner in T.grid(4, 8):
+            T_cast_1 = T.Buffer((128,), "int8", data=T_cast.data)
+            fused_nn_contrib_dense_pack_constant_8_1 = T.Buffer((128,), "int32", data=fused_nn_contrib_dense_pack_constant_8.data)
+            T_cast_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner] = T.Cast("int8", T.max(T.min(T.q_multiply_shift(compute_1[ax1_inner_outer * 8 + ax1_inner_inner] + fused_nn_contrib_dense_pack_constant_8_1[ax1_outer_ax0_outer_fused * 32 + ax1_inner_outer * 8 + ax1_inner_inner], 1105921547, 31, -6) - 128, 127), -128))
+# from tvm.script import tir as T
+
+@T.prim_func
+def tvmgen_default_fused_nn_contrib_dense_pack_add_fixed_point_multiply_add_clip_cast_9(p0: T.Buffer((1, 128), "int16"), T_cast: T.Buffer((1, 640), "int8"), fused_nn_contrib_dense_pack_constant_9: T.Buffer((1, 640), "int32"), fused_constant_9: T.Buffer((80, 128, 8), "int16")):
+    T.func_attr({"from_legacy_te_schedule": T.bool(True), "tir.noalias": T.bool(True)})
+    for ax1_outer_ax0_outer_fused in T.parallel(5):
+        compute = T.allocate([128], "int32", "global")
+        compute_global = T.allocate([8], "int32", "global")
+        compute_1 = T.Buffer((128,), "int32", data=compute)
+        for y_inner_outer_x_inner_outer_fused in range(16):
+            compute_global_1 = T.Buffer((8,), "int32", data=compute_global, align=32)
+            for x_c_init in range(8):
+                compute_global_1[x_c_init] = 0
+            for k_outer, x_c in T.grid(128, 8):
+                p0_1 = T.Buffer((128,), "int16", data=p0.data)
+                fused_constant_9_1 = T.Buffer((81920,), "int16", data=fused_constant_9.data)
+                compute_global_1[x_c] = compute_global_1[x_c] + T.Cast("int32", p0_1[k_outer]) * T.Cast("int32", fused_constant_9_1[ax1_outer_ax0_outer_fused * 16384 + y_inner_outer_x_inner_outer_fused * 1024 + k_outer * 8 + x_c])
+            for x_inner_inner in range(8):
+                compute_1[y_inner_outer_x_inner_outer_fused * 8 + x_inner_inner] = compute_global_1[x_inner_inner]
+        for ax1_inner_outer, ax1_inner_inner in T.grid(16, 8):
+            T_cast_1 = T.Buffer((640,), "int8", data=T_cast.data)
+            fused_nn_contrib_dense_pack_constant_9_1 = T.Buffer((640,), "int32", data=fused_nn_contrib_dense_pack_constant_9.data)
+            T_cast_1[ax1_outer_ax0_outer_fused * 128 + ax1_inner_outer * 8 + ax1_inner_inner] = T.Cast("int8", T.max(T.min(T.q_multiply_shift(compute_1[ax1_inner_outer * 8 + ax1_inner_inner] + fused_nn_contrib_dense_pack_constant_9_1[ax1_outer_ax0_outer_fused * 128 + ax1_inner_outer * 8 + ax1_inner_inner], 1462485078, 31, -9) + 96, 127), -128))

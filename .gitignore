@@ -274,6 +274,7 @@ gallery/how_to/work_with_microtvm/micro_tvmc.py
 
 # Printed TIR code on disk
 *.tir
+!tir_examples/*.tir
 
 # GDB history file
 .gdb_history
