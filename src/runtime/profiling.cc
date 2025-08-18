@@ -37,6 +37,15 @@
 #include <numeric>
 #include <thread>
 
+
+unsigned long read_cycles(void)
+{
+  unsigned long cycles;
+  // asm volatile ("rdcycle %0" : "=r" (cycles));
+  asm volatile ("rdinstret %0" : "=r" (cycles));
+  return cycles;
+}
+
 namespace tvm {
 namespace runtime {
 
@@ -70,8 +79,8 @@ Timer DefaultTimer(Device dev) { return Timer(make_object<DefaultTimerNode>(dev)
 
 class CPUTimerNode : public TimerNode {
  public:
-  virtual void Start() { start_ = std::chrono::high_resolution_clock::now(); }
-  virtual void Stop() { duration_ = std::chrono::high_resolution_clock::now() - start_; }
+  virtual void Start() { start2_ = read_cycles(); start_ = std::chrono::high_resolution_clock::now(); }
+  virtual void Stop() { duration2_ = read_cycles() - start2_; duration_ = std::chrono::high_resolution_clock::now() - start_; LOG(INFO) << "DURATION=" << duration2_; }
   virtual int64_t SyncAndGetElapsedNanos() { return duration_.count(); }
   virtual ~CPUTimerNode() {}
 
@@ -81,6 +90,8 @@ class CPUTimerNode : public TimerNode {
  private:
   std::chrono::high_resolution_clock::time_point start_;
   std::chrono::duration<int64_t, std::nano> duration_;
+  unsigned long start2_;
+  unsigned long duration2_;
 };
 TVM_REGISTER_OBJECT_TYPE(CPUTimerNode);
 
