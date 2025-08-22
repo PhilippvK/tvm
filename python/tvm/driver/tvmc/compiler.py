@@ -276,7 +276,7 @@ def compile_model(
             config[codegen["config_key"]] = codegen_from_cli["opts"]
         with tvm.transform.PassContext(config=config):
             mod = partition_function(mod, params, **codegen_from_cli["opts"])
-    if True:
+    if False:
         desired_layouts = {
             # 'nn.dense': ['NHWC', 'OHWI'],
             # 'nn.conv2d': ['NCHW', 'OHWI'],

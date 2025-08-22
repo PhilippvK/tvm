@@ -1,0 +1,5 @@
+def @main(%input: Tensor[(1, 8, 49, 40), int8]) -> Tensor[(1, 8, 24, 20), int8] {
+  %0 = layout_transform(%input, src_layout="NCHW", dst_layout="NHWC") /* ty=Tensor[(1, 49, 40, 8), int8] */;
+  %1 = nn.max_pool2d(%0, pool_size=[2, 2], strides=[2, 2], padding=[0, 0, 0, 0], layout="NHWC", out_layout="NHWC") /* from_string */ /* ty=Tensor[(1, 24, 20, 8), int8] */;
+  layout_transform(%1, src_layout="NHWC", dst_layout="NCHW") /* ty=Tensor[(1, 8, 24, 20), int8] */
+}

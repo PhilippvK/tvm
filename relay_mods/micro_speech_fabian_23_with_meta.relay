@@ -1,0 +1,97 @@
+#[version = "0.0.5"]
+def @main(%input: Tensor[(1, 1960), int8], %v_param_1: Tensor[(20, 8, 1, 8), int8], %v_param_2: Tensor[(8), int32], %v_param_3: Tensor[(10, 4, 8, 8), int8], %v_param_4: Tensor[(8), int32], %v_param_5: Tensor[(4, 3840), int8], %v_param_6: Tensor[(4), int32], output_tensor_names=["Identity"]) {
+  %0 = reshape(%input, newshape=[-1, 49, 40, 1]);
+  %1 = qnn.conv2d(%0, %v_param_1, -128, 0, 0.101562f, meta[relay.Constant][0], padding=[9, 3, 10, 4], channels=8, kernel_size=[20, 8], data_layout="NHWC", kernel_layout="HWIO", out_dtype="int32");
+  %2 = nn.bias_add(%1, %v_param_2, axis=3);
+  %3 = qnn.requantize(%2, meta[relay.Constant][1], 0, 0.141817f, -128, axis=3, rounding="UPWARD", compute_dtype="int64", out_dtype="int8");
+  %4 = clip(%3, a_min=-128f, a_max=127f);
+  %5 = nn.max_pool2d(%4, pool_size=[2, 2], strides=[2, 2], padding=[0, 0, 0, 0], layout="NHWC");
+  %6 = qnn.conv2d(%5, %v_param_3, -128, 0, 0.141817f, meta[relay.Constant][2], padding=[4, 1, 5, 2], channels=8, kernel_size=[10, 4], data_layout="NHWC", kernel_layout="HWIO", out_dtype="int32");
+  %7 = nn.bias_add(%6, %v_param_4, axis=3);
+  %8 = qnn.requantize(%7, meta[relay.Constant][3], 0, 0.0582336f, -128, axis=3, rounding="UPWARD", compute_dtype="int64", out_dtype="int8");
+  %9 = clip(%8, a_min=-128f, a_max=127f);
+  %10 = reshape(%9, newshape=[-1, 3840]);
+  %11 = reshape(%10, newshape=[-1, 3840]);
+  %12 = qnn.dense(%11, %v_param_5, -128, 0, 0.0582336f, 0.00373117f, units=4, out_dtype="int32");
+  %13 = nn.bias_add(%12, %v_param_6);
+  %14 = qnn.requantize(%13, 0.000217279f, 0, 0.264173f, 27, rounding="UPWARD", compute_dtype="int64", out_dtype="int8");
+  %15 = qnn.dequantize(%14, 0.264173f, 27);
+  %16 = nn.softmax(%15);
+  qnn.quantize(%16, 0.00390625f, -128, out_dtype="int8")
+}
+
+#[metadata]
+{
+  "root": 1, 
+  "nodes": [
+    {
+      "type_key": ""
+    }, 
+    {
+      "type_key": "Map", 
+      "keys": [
+        "relay.Constant"
+      ], 
+      "data": [2]
+    }, 
+    {
+      "type_key": "Array", 
+      "data": [3, 6, 7, 8]
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "0", 
+        "data": "0", 
+        "span": "0", 
+        "virtual_device_": "4"
+      }
+    }, 
+    {
+      "type_key": "VirtualDevice", 
+      "attrs": {
+        "device_type_int": "-1", 
+        "memory_scope": "5", 
+        "target": "0", 
+        "virtual_device_id": "-1"
+      }
+    }, 
+    {
+      "type_key": "runtime.String"
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "0", 
+        "data": "1", 
+        "span": "0", 
+        "virtual_device_": "4"
+      }
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "0", 
+        "data": "2", 
+        "span": "0", 
+        "virtual_device_": "4"
+      }
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "0", 
+        "data": "3", 
+        "span": "0", 
+        "virtual_device_": "4"
+      }
+    }
+  ], 
+  "b64ndarrays": [
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAArzPhOk3quDqsa7c6SRf0OpHf1TrV3sI6LtgEO9hpDTs=", 
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAA/vk2OV8+Fjl8BxU561JGOabFLTkNVR45S99XOf/LZTk=", 
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAAi4FDO26mZzvbq/M6aq7MOvrYUTup1h87elA5O19oPzs=", 
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAA9c7dOVdoAzoQOoo51TdoOVMU7jmmV7U54T7SOaIo2Tk="
+  ], 
+  "attrs": {"tvm_version": "0.9.dev0"}
+}

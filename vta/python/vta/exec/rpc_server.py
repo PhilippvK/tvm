@@ -35,34 +35,40 @@ from ..libinfo import find_libvta
 
 
 def server_start():
+    print("server_start")
     """VTA RPC server extension."""
     # pylint: disable=unused-variable
     curr_path = os.path.dirname(os.path.abspath(os.path.expanduser(__file__)))
     proj_root = os.path.abspath(os.path.join(curr_path, "../../../../"))
-    dll_path = find_libvta("libvta")[0]
-    cfg_path = os.path.abspath(os.path.join(proj_root, "3rdparty/vta-hw/config/vta_config.json"))
+    # dll_path = find_libvta("libvta")[0]
+    # cfg_path = os.path.abspath(os.path.join(proj_root, "3rdparty/vta-hw/config/vta_config.json"))
     runtime_dll = []
     _load_module = tvm.get_global_func("tvm.rpc.server.load_module")
 
     def load_vta_dll():
+        print("load_vta_dll")
         """Try to load vta dll"""
         if not runtime_dll:
-            runtime_dll.append(ctypes.CDLL(dll_path, ctypes.RTLD_GLOBAL))
-        logging.info("Loading VTA library: %s", dll_path)
+            pass
+            # runtime_dll.append(ctypes.CDLL(dll_path, ctypes.RTLD_GLOBAL))
+        # logging.info("Loading VTA library: %s", dll_path)
         return runtime_dll[0]
 
     @tvm.register_func("tvm.rpc.server.load_module", override=True)
     def load_module(file_name):
-        load_vta_dll()
+        print("load_module")
+        # load_vta_dll()
         return _load_module(file_name)
 
     @tvm.register_func("device_api.ext_dev")
     def ext_dev_callback():
-        load_vta_dll()
+        print("ext_dev_callback")
+        # load_vta_dll()
         return tvm.get_global_func("device_api.ext_dev")()
 
     @tvm.register_func("tvm.contrib.vta.init", override=True)
     def program_fpga(file_name):
+        print("program_fpga")
         # pylint: disable=import-outside-toplevel
         env = get_env()
         if env.TARGET == "pynq":
@@ -79,12 +85,14 @@ def server_start():
 
     @tvm.register_func("tvm.rpc.server.shutdown", override=True)
     def server_shutdown():
+        print("server_shutdown")
         if runtime_dll:
             runtime_dll[0].VTARuntimeShutdown()
             runtime_dll.pop()
 
     @tvm.register_func("tvm.contrib.vta.reconfig_runtime", override=True)
     def reconfig_runtime(cfg_json):
+        print("reconfigure_runtime")
         """Rebuild and reload runtime with new configuration.
 
         Parameters
@@ -118,6 +126,7 @@ def server_start():
             "\n\t".join(source),
             "\n\t".join(ldflags),
         )
+        print("cc")
         cc.create_shared(lib_name, source, cflags + ldflags)
         with open(cfg_path, "w") as outputfile:
             outputfile.write(pkg.cfg_json)

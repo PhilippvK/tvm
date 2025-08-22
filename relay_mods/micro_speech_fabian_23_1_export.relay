@@ -1,0 +1,5 @@
+#[version = "0.0.5"]
+def @main(%input: Tensor[(1, 8, 49, 40), int8]) -> Tensor[(1, 8, 24, 20), int8] {
+  %1 = clip(%input, a_min=-128f, a_max=127f) /* ty=Tensor[(1, 8, 49, 40), int8] */;
+  nn.max_pool2d(%1, pool_size=[2, 2], strides=[2, 2], padding=[0, 0, 0, 0]) /* from_string */ /* ty=Tensor[(1, 8, 24, 20), int8] */
+}

@@ -105,6 +105,7 @@ def pool_pext_schedule(outs, layout):
     s = te.create_schedule([x.op for x in outs])
 
     def _callback(op):
+        print("op.input_tensors", op.input_tensors)
         in_dtype = op.input_tensors[0].dtype
         if "pool_max" in op.tag:
             if in_dtype != "int8":

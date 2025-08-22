@@ -1,0 +1,10 @@
+target_str = f"c -keys=arm_cpu -mcpu=cortex-m7 -march=armv7e-m -model=stm32f746xx -runtime=c -link-params=1 --executor=aot --unpacked-api=1 --interface-api=c"
+
+
+python -m tvm.driver.tvmc compile /nfs/TUEIEDAscratch/ga87puy/mlonmcu_shared/models/cifar10/cifar10.tflite --target c --runtime=crt --executor=aot --executor-aot-unpacked-api=1 --pass-config tir.disable_vectorize=1 -f mlf -h
+
+
+cd out && tar xvf ../module.tar && cd -
+
+
+python -m tvm.driver.tvmc compile /nfs/TUEIEDAscratch/ga87puy/custom_model/layers/micro_speech_depthwise_conv2d.tflite --target c --runtime=crt --executor=aot --executor-aot-unpacked-api=1 --pass-config tir.disable_vectorize=1 -f mlf --target-c-device=arm_cpu --target-c-mcpu=cortex-m7 --target-c-march=armv7e-m --target-c-model=stm32f746xx

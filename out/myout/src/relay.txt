@@ -1,0 +1,3 @@
+def @main(%input: Tensor[(1, 8, 49, 40), int16]) -> Tensor[(1, 8, 24, 20), int16] {
+  nn.avg_pool2d(%input, pool_size=[2, 2], strides=[2, 2], padding=[0, 0, 0, 0], out_layout="NCHW") /* from_string */ /* ty=Tensor[(1, 8, 24, 20), int16] */
+}

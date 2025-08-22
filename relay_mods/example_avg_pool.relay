@@ -1,0 +1,4 @@
+#[version = "0.0.5"]
+def @main(%input: Tensor[(1, 8, 49, 40), int8]) -> Tensor[(1, 8, 24, 20), int8] {
+  nn.avg_pool2d(%input, pool_size=[2, 2], strides=[2, 2], padding=[0, 0, 0, 0]) /* from_string */ /* ty=Tensor[(1, 8, 24, 20), int8] */
+}

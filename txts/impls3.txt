@@ -1,0 +1,985 @@
+ETHOSU
+
+python/tvm/relay/backend/contrib/ethosu/op/binary_elementwise.py:    strategy.add_implementation(
+python/tvm/relay/backend/contrib/ethosu/op/binary_elementwise.py-        create_ethosu_binary_elementwise_compute,
+python/tvm/relay/backend/contrib/ethosu/op/binary_elementwise.py-        _strategy.wrap_topi_schedule(schedule_injective),
+python/tvm/relay/backend/contrib/ethosu/op/binary_elementwise.py-        name="ethosu_binary_elementwise",
+python/tvm/relay/backend/contrib/ethosu/op/binary_elementwise.py-    )
+--
+python/tvm/relay/backend/contrib/ethosu/op/convolution.py:    strategy.add_implementation(
+python/tvm/relay/backend/contrib/ethosu/op/convolution.py-        create_ethosu_conv2d_compute,
+python/tvm/relay/backend/contrib/ethosu/op/convolution.py-        _strategy.wrap_topi_schedule(schedule_injective),
+python/tvm/relay/backend/contrib/ethosu/op/convolution.py-        name="ethosu_conv2d",
+python/tvm/relay/backend/contrib/ethosu/op/convolution.py-    )
+--
+python/tvm/relay/backend/contrib/ethosu/op/depthwise.py:    strategy.add_implementation(
+python/tvm/relay/backend/contrib/ethosu/op/depthwise.py-        create_ethosu_depthwise_conv2d_compute,
+python/tvm/relay/backend/contrib/ethosu/op/depthwise.py-        _strategy.wrap_topi_schedule(schedule_injective),
+python/tvm/relay/backend/contrib/ethosu/op/depthwise.py-        name="ethosu_depthwise_conv2d",
+python/tvm/relay/backend/contrib/ethosu/op/depthwise.py-    )
+--
+python/tvm/relay/backend/contrib/ethosu/op/identity.py:    strategy.add_implementation(
+python/tvm/relay/backend/contrib/ethosu/op/identity.py-        create_ethosu_identity_compute,
+python/tvm/relay/backend/contrib/ethosu/op/identity.py-        _strategy.wrap_topi_schedule(schedule_injective),
+python/tvm/relay/backend/contrib/ethosu/op/identity.py-        name="ethosu_identity",
+python/tvm/relay/backend/contrib/ethosu/op/identity.py-    )
+--
+python/tvm/relay/backend/contrib/ethosu/op/pooling.py:    strategy.add_implementation(
+python/tvm/relay/backend/contrib/ethosu/op/pooling.py-        create_ethosu_pooling_compute,
+python/tvm/relay/backend/contrib/ethosu/op/pooling.py-        _strategy.wrap_topi_schedule(schedule_injective),
+python/tvm/relay/backend/contrib/ethosu/op/pooling.py-        name="ethosu_pooling",
+python/tvm/relay/backend/contrib/ethosu/op/pooling.py-    )
+--
+python/tvm/relay/backend/contrib/ethosu/op/unary_elementwise.py:    strategy.add_implementation(
+python/tvm/relay/backend/contrib/ethosu/op/unary_elementwise.py-        create_ethosu_unary_elementwise_compute,
+python/tvm/relay/backend/contrib/ethosu/op/unary_elementwise.py-        _strategy.wrap_topi_schedule(schedule_injective),
+python/tvm/relay/backend/contrib/ethosu/op/unary_elementwise.py-        name="ethosu_unary_elementwise",
+python/tvm/relay/backend/contrib/ethosu/op/unary_elementwise.py-    )
+--
+
+ARM
+python/tvm/relay/op/strategy/arm_cpu.py:                    strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_compute_conv2d(topi.arm_cpu.conv2d_nchw_int8),
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nchw_int8),
+python/tvm/relay/op/strategy/arm_cpu.py-                        name="conv2d_nchw_int8.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-                        plevel=15,
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                    strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_compute_conv2d(topi.arm_cpu.conv2d_nchw_spatial_pack),
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nchw_spatial_pack),
+python/tvm/relay/op/strategy/arm_cpu.py-                        name="conv2d_nchw_spatial_pack.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-                        plevel=10,
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                    strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_compute_conv2d(topi.x86.conv2d_nchw),
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_topi_schedule(topi.x86.schedule_conv2d_nchw),
+python/tvm/relay/op/strategy/arm_cpu.py-                        name="conv2d_nchw.x86",
+python/tvm/relay/op/strategy/arm_cpu.py-                    )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                    strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_compute_conv2d(topi.arm_cpu.conv2d_nchw_winograd),
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nchw_winograd),
+python/tvm/relay/op/strategy/arm_cpu.py-                        name="conv2d_nchw_winograd.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-                        plevel=5,
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                        strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                            wrap_compute_conv2d(topi.arm_cpu.conv2d_nchw_winograd_nnpack),
+python/tvm/relay/op/strategy/arm_cpu.py-                            wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nchw_winograd_nnpack),
+python/tvm/relay/op/strategy/arm_cpu.py-                            name="conv2d_nchw_winograd_nnpack.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-                            plevel=15,
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_compute_conv2d(topi.arm_cpu.conv2d_nchw_spatial_pack),
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nchw_spatial_pack),
+python/tvm/relay/op/strategy/arm_cpu.py-                    name="conv2d_nchw_spatial_pack.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-                )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_compute_conv2d(topi.nn.conv2d_hwcn),
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_topi_schedule(topi.generic.schedule_conv2d_hwcn),
+python/tvm/relay/op/strategy/arm_cpu.py-                name="conv2d_hwcn.generic",
+python/tvm/relay/op/strategy/arm_cpu.py-            )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_dsp),
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_dsp),
+python/tvm/relay/op/strategy/arm_cpu.py-                    name="conv2d_nhwc_dsp.micro_dev",
+python/tvm/relay/op/strategy/arm_cpu.py-                )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                    strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_compute_conv2d(topi.arm_cpu.compute_conv2d_NHWC_quantized_native),
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_NHWC_quantized_native),
+python/tvm/relay/op/strategy/arm_cpu.py-                        name="conv2d_NHWC_quantized_native.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-                    )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                    strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_compute_conv2d(topi.arm_cpu.compute_conv2d_NHWC_quantized_interleaved),
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_NHWC_quantized_interleaved),
+python/tvm/relay/op/strategy/arm_cpu.py-                        name="conv2d_NHWC_quantized_interleaved.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-                    )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                    strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_spatial_pack),
+python/tvm/relay/op/strategy/arm_cpu.py-                        wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_spatial_pack),
+python/tvm/relay/op/strategy/arm_cpu.py-                        name="conv2d_nhwc_spatial_pack.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-                    )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_compute_conv2d(topi.arm_cpu.depthwise_conv2d_nchw),
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_topi_schedule(topi.arm_cpu.schedule_depthwise_conv2d_nchw),
+python/tvm/relay/op/strategy/arm_cpu.py-                    name="depthwise_conv2d_nchw.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-                )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:            # strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-            #     wrap_compute_conv2d(topi.arm_cpu.depthwise_conv2d_nchw_spatial_pack),
+python/tvm/relay/op/strategy/arm_cpu.py-            #     wrap_topi_schedule(topi.arm_cpu.schedule_depthwise_conv2d_nchw_spatial_pack),
+python/tvm/relay/op/strategy/arm_cpu.py-            #     name="depthwise_conv2d_nchw_spatial_pack.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-            #     plevel=15)
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_compute_conv2d(topi.x86.depthwise_conv2d_nchw),
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_topi_schedule(topi.x86.schedule_depthwise_conv2d_nchw),
+python/tvm/relay/op/strategy/arm_cpu.py-                    name="depthwise_conv2d_nchw.x86",
+python/tvm/relay/op/strategy/arm_cpu.py-                )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_compute_conv2d(topi.arm_cpu.compute_depthwise_conv2d_nhwc),
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_topi_schedule(topi.arm_cpu.schedule_depthwise_conv2d_nhwc),
+python/tvm/relay/op/strategy/arm_cpu.py-                    name="depthwise_conv2d_nhwc.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-                )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:                strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_compute_conv2d(topi.nn.depthwise_conv2d_nhwc),
+python/tvm/relay/op/strategy/arm_cpu.py-                    wrap_topi_schedule(conv2d_generic.schedule_depthwise_conv2d_nhwc),
+python/tvm/relay/op/strategy/arm_cpu.py-                    name="depthwise_conv2d_nhwc.generic",
+python/tvm/relay/op/strategy/arm_cpu.py-                )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_compute_conv2d(topi.arm_cpu.group_conv2d_nchw, has_groups=True),
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_topi_schedule(topi.arm_cpu.schedule_group_conv2d_nchw),
+python/tvm/relay/op/strategy/arm_cpu.py-                name="group_conv2d_nchw.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-            )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_compute_conv2d(topi.nn.group_conv2d_nhwc, has_groups=True),
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_topi_schedule(topi.generic.schedule_group_conv2d_nhwc),
+python/tvm/relay/op/strategy/arm_cpu.py-                name="group_conv2d_nhwc.generic",
+python/tvm/relay/op/strategy/arm_cpu.py-            )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_compute_conv2d(topi.arm_cpu.conv2d_NCHWc_int8, True, True),
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_NCHWc_int8),
+python/tvm/relay/op/strategy/arm_cpu.py-            name="conv2d_NCHWc_int8.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-        )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_compute_conv2d(topi.x86.conv2d_NCHWc, True, True),
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_topi_schedule(topi.x86.schedule_conv2d_NCHWc),
+python/tvm/relay/op/strategy/arm_cpu.py-            name="conv2d_NCHWc.x86",
+python/tvm/relay/op/strategy/arm_cpu.py-        )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-        wrap_compute_conv2d(topi.x86.depthwise_conv2d_NCHWc, True, True),
+python/tvm/relay/op/strategy/arm_cpu.py-        wrap_topi_schedule(topi.x86.schedule_depthwise_conv2d_NCHWc),
+python/tvm/relay/op/strategy/arm_cpu.py-        name="depthwise_conv2d_NCHWc.x86",
+python/tvm/relay/op/strategy/arm_cpu.py-    )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_compute_conv2d(topi.arm_cpu.conv2d_nchw_winograd),
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nchw_winograd),
+python/tvm/relay/op/strategy/arm_cpu.py-                name="conv2d_nchw_winograd.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-            )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_compute_conv2d_winograd_nnpack(
+python/tvm/relay/op/strategy/arm_cpu.py-                    topi.arm_cpu.conv2d_nchw_winograd_nnpack_without_weight_transform
+python/tvm/relay/op/strategy/arm_cpu.py-                ),
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_topi_schedule(
+--
+python/tvm/relay/op/strategy/arm_cpu.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_compute_conv2d_gemm(native_compute),
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_topi_schedule(
+python/tvm/relay/op/strategy/arm_cpu.py-                topi.arm_cpu.schedule_conv2d_NHWC_quantized_native_without_transform
+python/tvm/relay/op/strategy/arm_cpu.py-            ),
+--
+python/tvm/relay/op/strategy/arm_cpu.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_compute_conv2d_gemm(interleaved_compute),
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_topi_schedule(
+python/tvm/relay/op/strategy/arm_cpu.py-                topi.arm_cpu.schedule_conv2d_NHWC_quantized_interleaved_without_transform
+python/tvm/relay/op/strategy/arm_cpu.py-            ),
+--
+python/tvm/relay/op/strategy/arm_cpu.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-        wrap_compute_conv2d_transpose(topi.arm_cpu.conv2d_transpose_nchw),
+python/tvm/relay/op/strategy/arm_cpu.py-        wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_transpose_nchw),
+python/tvm/relay/op/strategy/arm_cpu.py-        name="conv2d_tranpose_nchw.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-    )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_compute_bitserial_conv2d(topi.x86.bitserial_conv2d_nchw),
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_topi_schedule(topi.x86.schedule_bitserial_conv2d_nchw),
+python/tvm/relay/op/strategy/arm_cpu.py-            name="bitserial_conv2d_nchw.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-        )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_compute_bitserial_conv2d(topi.arm_cpu.bitserial_conv2d_nhwc),
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_topi_schedule(topi.arm_cpu.schedule_bitserial_conv2d_nhwc),
+python/tvm/relay/op/strategy/arm_cpu.py-            name="bitserial_conv2d_nhwc.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-        )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-        wrap_compute_bitserial_dense(topi.arm_cpu.bitserial_dense),
+python/tvm/relay/op/strategy/arm_cpu.py-        wrap_topi_schedule(topi.arm_cpu.schedule_bitserial_dense),
+python/tvm/relay/op/strategy/arm_cpu.py-        name="bitserial_dense.arm_cpu",
+python/tvm/relay/op/strategy/arm_cpu.py-    )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_compute_dense(topi.nn.dense),
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_topi_schedule(topi.arm_cpu.schedule_dense_dsp),
+python/tvm/relay/op/strategy/arm_cpu.py-            name="dense_dsp",
+python/tvm/relay/op/strategy/arm_cpu.py-        )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_compute_dense(
+python/tvm/relay/op/strategy/arm_cpu.py-                topi.nn.dense, need_auto_scheduler_layout=is_auto_scheduler_enabled()
+python/tvm/relay/op/strategy/arm_cpu.py-            ),
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_topi_schedule(topi.generic.schedule_dense),
+--
+python/tvm/relay/op/strategy/arm_cpu.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_compute_conv1d(topi.arm_cpu.conv1d_nwc_dsp),
+python/tvm/relay/op/strategy/arm_cpu.py-                wrap_topi_schedule(topi.arm_cpu.schedule_conv1d_nwc_dsp),
+python/tvm/relay/op/strategy/arm_cpu.py-                name="conv1d_dsp",
+python/tvm/relay/op/strategy/arm_cpu.py-            )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_compute_conv1d(topi.nn.conv1d_ncw),
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_topi_schedule(topi.generic.schedule_conv1d_ncw),
+python/tvm/relay/op/strategy/arm_cpu.py-            name="conv1d_ncw.generic",
+python/tvm/relay/op/strategy/arm_cpu.py-        )
+--
+python/tvm/relay/op/strategy/arm_cpu.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_compute_conv1d(topi.nn.conv1d_nwc),
+python/tvm/relay/op/strategy/arm_cpu.py-            wrap_topi_schedule(topi.generic.schedule_conv1d_nwc),
+python/tvm/relay/op/strategy/arm_cpu.py-            name="conv1d_nwc.generic",
+python/tvm/relay/op/strategy/arm_cpu.py-        )
+--
+
+GENERIC
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_softmax(topi.nn.softmax),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_softmax),
+python/tvm/relay/op/strategy/generic.py-        name="softmax.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_softmax(topi.nn.fast_softmax),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_fast_softmax),
+python/tvm/relay/op/strategy/generic.py-        name="fast_softmax.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_softmax(topi.nn.log_softmax),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_softmax),
+python/tvm/relay/op/strategy/generic.py-        name="log_softmax.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-                wrap_compute_conv2d(topi.nn.conv2d_nchw),
+python/tvm/relay/op/strategy/generic.py-                wrap_topi_schedule(topi.generic.schedule_conv2d_nchw),
+python/tvm/relay/op/strategy/generic.py-                name="conv2d_nchw.generic",
+python/tvm/relay/op/strategy/generic.py-            )
+--
+python/tvm/relay/op/strategy/generic.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-                wrap_compute_conv2d(topi.nn.conv2d_nhwc),
+python/tvm/relay/op/strategy/generic.py-                wrap_topi_schedule(topi.generic.schedule_conv2d_nhwc),
+python/tvm/relay/op/strategy/generic.py-                name="conv2d_nhwc.generic",
+python/tvm/relay/op/strategy/generic.py-            )
+--
+python/tvm/relay/op/strategy/generic.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-                wrap_compute_conv2d(topi.nn.conv2d_hwcn),
+python/tvm/relay/op/strategy/generic.py-                wrap_topi_schedule(topi.generic.schedule_conv2d_hwcn),
+python/tvm/relay/op/strategy/generic.py-                name="conv2d_hwcn.generic",
+python/tvm/relay/op/strategy/generic.py-            )
+--
+python/tvm/relay/op/strategy/generic.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-                wrap_compute_conv2d(topi.nn.depthwise_conv2d_nchw),
+python/tvm/relay/op/strategy/generic.py-                wrap_topi_schedule(topi.generic.schedule_depthwise_conv2d_nchw),
+python/tvm/relay/op/strategy/generic.py-                name="depthwise_conv2d_nchw.generic",
+python/tvm/relay/op/strategy/generic.py-            )
+--
+python/tvm/relay/op/strategy/generic.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-                wrap_compute_conv2d(topi.nn.depthwise_conv2d_nhwc),
+python/tvm/relay/op/strategy/generic.py-                wrap_topi_schedule(topi.generic.schedule_depthwise_conv2d_nhwc),
+python/tvm/relay/op/strategy/generic.py-                name="depthwise_conv2d_nhwc.generic",
+python/tvm/relay/op/strategy/generic.py-            )
+--
+python/tvm/relay/op/strategy/generic.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-                wrap_compute_conv2d(topi.nn.group_conv2d_nchw, has_groups=True),
+python/tvm/relay/op/strategy/generic.py-                wrap_topi_schedule(topi.generic.schedule_group_conv2d_nchw),
+python/tvm/relay/op/strategy/generic.py-                name="group_conv2d_nchw.generic",
+python/tvm/relay/op/strategy/generic.py-            )
+--
+python/tvm/relay/op/strategy/generic.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-                wrap_compute_conv2d(topi.nn.group_conv2d_nhwc, has_groups=True),
+python/tvm/relay/op/strategy/generic.py-                wrap_topi_schedule(topi.generic.schedule_group_conv2d_nhwc),
+python/tvm/relay/op/strategy/generic.py-                name="group_conv2d_nhwc.generic",
+python/tvm/relay/op/strategy/generic.py-            )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_conv2d(topi.nn.conv2d_NCHWc_int8, True, True),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_conv2d_NCHWc_int8),
+python/tvm/relay/op/strategy/generic.py-            name="conv2d_NCHWc_int8.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_conv2d(topi.nn.conv2d_NCHWc, True, True),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_conv2d_NCHWc),
+python/tvm/relay/op/strategy/generic.py-            name="conv2d_NCHWc.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_conv2d(topi.nn.depthwise_conv2d_NCHWc, True, True),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_depthwise_conv2d_NCHWc),
+python/tvm/relay/op/strategy/generic.py-        name="depthwise_conv2d_NCHWc.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_deformable_conv2d(topi.nn.deformable_conv2d_nchw),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_deformable_conv2d_nchw),
+python/tvm/relay/op/strategy/generic.py-            name="deformable_conv2d_nchw.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_deformable_conv2d(topi.nn.deformable_conv2d_nhwc),
+python/tvm/relay/op/strategy/generic.py-            naive_schedule,
+python/tvm/relay/op/strategy/generic.py-            name="deformable_conv2d_nhwc.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_conv2d_transpose(topi.nn.conv2d_transpose_nchw),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_conv2d_transpose_nchw),
+python/tvm/relay/op/strategy/generic.py-            name="conv2d_transpose_nchw.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_conv2d_transpose(topi.nn.group_conv2d_transpose_nchw, has_groups=True),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_group_conv2d_transpose_nchw),
+python/tvm/relay/op/strategy/generic.py-            name="group_conv2d_transpose_nchw.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_conv3d_transpose(topi.nn.conv3d_transpose_ncdhw),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_conv3d_transpose_ncdhw),
+python/tvm/relay/op/strategy/generic.py-        name="conv3d_transpose_ncdhw.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_conv3d(topi.nn.conv3d_ncdhw),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_conv3d_ncdhw),
+python/tvm/relay/op/strategy/generic.py-            name="conv3d_ncdhw.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_conv3d(topi.nn.conv3d_ndhwc),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_conv3d_ndhwc),
+python/tvm/relay/op/strategy/generic.py-            name="conv3d_ndhwc.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_conv1d(topi.nn.conv1d_ncw),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_conv1d_ncw),
+python/tvm/relay/op/strategy/generic.py-            name="conv1d_ncw.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_conv1d(topi.nn.conv1d_nwc),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_conv1d_nwc),
+python/tvm/relay/op/strategy/generic.py-            name="conv1d_nwc.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_conv1d(topi.nn.group_conv1d_ncw),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_group_conv1d_ncw),
+python/tvm/relay/op/strategy/generic.py-            name="group_conv1d_ncw.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_conv1d(topi.nn.group_conv1d_nwc),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_group_conv1d_nwc),
+python/tvm/relay/op/strategy/generic.py-            name="group_conv1d_nwc.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_conv1d_transpose(topi.nn.conv1d_transpose_ncw),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_conv1d_transpose_ncw),
+python/tvm/relay/op/strategy/generic.py-        name="conv1d_transpose_ncw.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_dilation2d(topi.image.dilation2d_nchw),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_dilation2d_nchw),
+python/tvm/relay/op/strategy/generic.py-            name="dilation2d_nchw.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_dilation2d(topi.image.dilation2d_nhwc),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_dilation2d_nhwc),
+python/tvm/relay/op/strategy/generic.py-            name="dilation2d_nhwc.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_matmul(topi.nn.matmul),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_matmul),
+python/tvm/relay/op/strategy/generic.py-        name="matmul.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_dense(topi.nn.dense),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_dense),
+python/tvm/relay/op/strategy/generic.py-        name="dense.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_dense(topi.nn.dense_pack),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_dense),
+python/tvm/relay/op/strategy/generic.py-        name="dense_pack.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_batch_matmul(topi.nn.batch_matmul),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_batch_matmul),
+python/tvm/relay/op/strategy/generic.py-        name="batch_matmul.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_batch_norm(topi.nn.batch_norm),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_batch_norm),
+python/tvm/relay/op/strategy/generic.py-        name="batch_norm.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_sparse_dense(topi.nn.sparse_dense),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_sparse_dense),
+python/tvm/relay/op/strategy/generic.py-        name="sparse_dense.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_sparse_add(topi.nn.sparse_add),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/generic.py-        name="sparse_add.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_sparse_conv2d(topi.nn.sparse_conv2d),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_sparse_conv2d),
+python/tvm/relay/op/strategy/generic.py-        name="sparse_conv2d.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_sort(topi.sort),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_sort),
+python/tvm/relay/op/strategy/generic.py-        name="sort.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_argsort(topi.argsort),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_argsort),
+python/tvm/relay/op/strategy/generic.py-        name="argsort.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_topk(topi.topk),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_topk),
+python/tvm/relay/op/strategy/generic.py-        name="topk.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_searchsorted(topi.searchsorted),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/generic.py-        name="searchsorted.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_multibox_prior(topi.vision.ssd.multibox_prior),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_multibox_prior),
+python/tvm/relay/op/strategy/generic.py-        name="multibox_prior.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_multibox_transform_loc(topi.vision.ssd.multibox_transform_loc),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_multibox_transform_loc),
+python/tvm/relay/op/strategy/generic.py-        name="multibox_transform_loc.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_get_valid_counts(topi.vision.get_valid_counts),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_get_valid_counts),
+python/tvm/relay/op/strategy/generic.py-        name="get_valid_counts.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_nms(topi.vision.non_max_suppression),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_nms),
+python/tvm/relay/op/strategy/generic.py-        name="nms.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_all_class_nms(topi.vision.all_class_non_max_suppression),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_nms),
+python/tvm/relay/op/strategy/generic.py-        name="all_class_nms.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_roi_align(topi.vision.rcnn.roi_align_nchw),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_roi_align),
+python/tvm/relay/op/strategy/generic.py-            name="roi_align.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_roi_align(topi.vision.rcnn.roi_align_nhwc),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_roi_align),
+python/tvm/relay/op/strategy/generic.py-            name="roi_align.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_sparse_fill_empty_rows(topi.sparse_fill_empty_rows),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_sparse_fill_empty_rows),
+python/tvm/relay/op/strategy/generic.py-        name="sparse_fill_empty_rows.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_sparse_reshape(topi.sparse_reshape),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/generic.py-        name="sparse_reshape.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_proposal(topi.vision.rcnn.proposal),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_proposal),
+python/tvm/relay/op/strategy/generic.py-        name="proposal.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_scatter(topi.scatter),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_scatter),
+python/tvm/relay/op/strategy/generic.py-        name="scatter.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_scatter(topi.scatter_add),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_scatter),
+python/tvm/relay/op/strategy/generic.py-        name="scatter_add.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_scatter_nd(topi.scatter_nd),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/generic.py-        name="scatter_nd.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_bitserial_conv2d(topi.nn.bitserial_conv2d_nchw),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_bitserial_conv2d_nchw),
+python/tvm/relay/op/strategy/generic.py-            name="bitserial_conv2d_nchw.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-            wrap_compute_bitserial_conv2d(topi.nn.bitserial_conv2d_nhwc),
+python/tvm/relay/op/strategy/generic.py-            wrap_topi_schedule(topi.generic.schedule_bitserial_conv2d_nhwc),
+python/tvm/relay/op/strategy/generic.py-            name="bitserial_conv2d_nhwc.generic",
+python/tvm/relay/op/strategy/generic.py-        )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_bitserial_dense(topi.nn.bitserial_dense),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_bitserial_dense),
+python/tvm/relay/op/strategy/generic.py-        name="bitserial_dense.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_correlation(topi.nn.correlation_nchw),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_correlation_nchw),
+python/tvm/relay/op/strategy/generic.py-        name="correlation.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_argwhere(topi.argwhere),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_argwhere),
+python/tvm/relay/op/strategy/generic.py-        name="argwhere.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_threefry_generate(topi.random.threefry_generate),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/generic.py-        name="threefry_generate.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_threefry_split(topi.random.threefry_split),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/generic.py-        name="threefry_split.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_uniform(topi.random.uniform),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/generic.py-        name="uniform.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_sliding_window(),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/generic.py-        name="sliding_window.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_uniform(topi.random.normal),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/generic.py-        name="normal.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_scanop(topi.cumsum),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/generic.py-        name="cumsum.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_scanop(topi.cumprod),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/generic.py-        name="cumprod.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_unique(topi.unique),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_unique),
+python/tvm/relay/op/strategy/generic.py-        name="unique.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_invert_permutation(topi.invert_permutation),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_injective),
+python/tvm/relay/op/strategy/generic.py-        name="invert_permutation.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+python/tvm/relay/op/strategy/generic.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/generic.py-        wrap_compute_einsum(topi.einsum),
+python/tvm/relay/op/strategy/generic.py-        wrap_topi_schedule(topi.generic.schedule_einsum),
+python/tvm/relay/op/strategy/generic.py-        name="einsum.generic",
+python/tvm/relay/op/strategy/generic.py-    )
+--
+
+X86
+python/tvm/relay/op/strategy/x86.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-        wrap_compute_softmax(topi.nn.softmax),
+python/tvm/relay/op/strategy/x86.py-        wrap_topi_schedule(topi.x86.schedule_softmax),
+python/tvm/relay/op/strategy/x86.py-        name="softmax.x86",
+python/tvm/relay/op/strategy/x86.py-    )
+--
+python/tvm/relay/op/strategy/x86.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-        wrap_compute_softmax(topi.nn.fast_softmax),
+python/tvm/relay/op/strategy/x86.py-        wrap_topi_schedule(topi.x86.schedule_softmax),
+python/tvm/relay/op/strategy/x86.py-        name="fast_softmax.x86",
+python/tvm/relay/op/strategy/x86.py-    )
+--
+python/tvm/relay/op/strategy/x86.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-        wrap_compute_softmax(topi.nn.log_softmax),
+python/tvm/relay/op/strategy/x86.py-        wrap_topi_schedule(topi.x86.schedule_softmax),
+python/tvm/relay/op/strategy/x86.py-        name="log_softmax.x86",
+python/tvm/relay/op/strategy/x86.py-    )
+--
+python/tvm/relay/op/strategy/x86.py:                strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                    wrap_compute_conv2d(topi.x86.conv2d_nchw_int8),
+python/tvm/relay/op/strategy/x86.py-                    wrap_topi_schedule(topi.x86.schedule_conv2d_nchw_int8),
+python/tvm/relay/op/strategy/x86.py-                    name="conv2d_nchw_int8.x86",
+python/tvm/relay/op/strategy/x86.py-                )
+--
+python/tvm/relay/op/strategy/x86.py:                strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                    wrap_compute_conv2d(topi.x86.conv2d_nchw),
+python/tvm/relay/op/strategy/x86.py-                    wrap_topi_schedule(topi.x86.schedule_conv2d_nchw),
+python/tvm/relay/op/strategy/x86.py-                    name="conv2d_nchw.x86",
+python/tvm/relay/op/strategy/x86.py-                )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_conv2d(topi.nn.conv2d_nhwc, need_auto_scheduler_layout=True),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc),
+python/tvm/relay/op/strategy/x86.py-                name="conv2d_nhwc.x86",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:                strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                    wrap_compute_conv2d(
+python/tvm/relay/op/strategy/x86.py-                        topi.nn.conv2d_winograd_nhwc, need_auto_scheduler_layout=True
+python/tvm/relay/op/strategy/x86.py-                    ),
+python/tvm/relay/op/strategy/x86.py-                    naive_schedule,  # this implementation should never be picked by autotvm
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_conv2d(topi.nn.conv2d_hwcn),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.generic.schedule_conv2d_hwcn),
+python/tvm/relay/op/strategy/x86.py-                name="conv2d_hwcn.generic",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:                strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                    wrap_compute_conv2d(topi.x86.depthwise_conv2d_nchw),
+python/tvm/relay/op/strategy/x86.py-                    wrap_topi_schedule(topi.x86.schedule_depthwise_conv2d_nchw),
+python/tvm/relay/op/strategy/x86.py-                    name="depthwise_conv2d_nchw.x86",
+python/tvm/relay/op/strategy/x86.py-                )
+--
+python/tvm/relay/op/strategy/x86.py:                strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                    wrap_compute_conv2d(topi.nn.depthwise_conv2d_nchw),
+python/tvm/relay/op/strategy/x86.py-                    wrap_topi_schedule(topi.generic.schedule_depthwise_conv2d_nchw),
+python/tvm/relay/op/strategy/x86.py-                    name="depthwise_conv2d_nchw.generic",
+python/tvm/relay/op/strategy/x86.py-                )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_conv2d(topi.nn.depthwise_conv2d_nhwc),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.generic.schedule_depthwise_conv2d_nhwc),
+python/tvm/relay/op/strategy/x86.py-                name="depthwise_conv2d_nhwc.generic",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_conv2d(topi.x86.group_conv2d_nchw, has_groups=True),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_group_conv2d_nchw),
+python/tvm/relay/op/strategy/x86.py-                name="group_conv2d_nchw.x86",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_conv2d(topi.nn.group_conv2d_nhwc, has_groups=True),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.generic.schedule_group_conv2d_nhwc),
+python/tvm/relay/op/strategy/x86.py-                name="group_conv2d_nhwc.generic",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_conv2d(topi.x86.conv2d_NCHWc_int8, True, True),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.x86.schedule_conv2d_NCHWc_int8),
+python/tvm/relay/op/strategy/x86.py-            name="conv2d_NCHWc_int8.x86",
+python/tvm/relay/op/strategy/x86.py-        )
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_conv2d(topi.x86.conv2d_NCHWc, True, True),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.x86.schedule_conv2d_NCHWc),
+python/tvm/relay/op/strategy/x86.py-            name="conv2d_NCHWc.x86",
+python/tvm/relay/op/strategy/x86.py-        )
+--
+python/tvm/relay/op/strategy/x86.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-        wrap_compute_conv2d(topi.x86.depthwise_conv2d_NCHWc, True, True),
+python/tvm/relay/op/strategy/x86.py-        wrap_topi_schedule(topi.x86.schedule_depthwise_conv2d_NCHWc),
+python/tvm/relay/op/strategy/x86.py-        name="depthwise_conv2d_NCHWc.x86",
+python/tvm/relay/op/strategy/x86.py-    )
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_conv2d_transpose(topi.x86.conv2d_transpose_nchw),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.x86.schedule_conv2d_transpose_nchw),
+python/tvm/relay/op/strategy/x86.py-            name="conv2d_transpose_nchw.x86",
+python/tvm/relay/op/strategy/x86.py-        )
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_conv2d_transpose(topi.nn.group_conv2d_transpose_nchw, has_groups=True),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.generic.schedule_group_conv2d_transpose_nchw),
+python/tvm/relay/op/strategy/x86.py-            name="group_conv2d_transpose_nchw.x86",
+python/tvm/relay/op/strategy/x86.py-        )
+--
+python/tvm/relay/op/strategy/x86.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-        wrap_compute_conv3d_transpose(topi.x86.conv3d_transpose_ncdhw),
+python/tvm/relay/op/strategy/x86.py-        wrap_topi_schedule(topi.x86.schedule_conv3d_transpose_ncdhw),
+python/tvm/relay/op/strategy/x86.py-        name="conv3d_transpose_ncdhw.x86",
+python/tvm/relay/op/strategy/x86.py-    )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_conv3d(topi.nn.conv3d_ncdhw),
+python/tvm/relay/op/strategy/x86.py-                naive_schedule,
+python/tvm/relay/op/strategy/x86.py-                name="conv3d_ncdhw.x86",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_conv3d(topi.nn.conv3d_ndhwc, need_auto_scheduler_layout=True),
+python/tvm/relay/op/strategy/x86.py-                naive_schedule,
+python/tvm/relay/op/strategy/x86.py-                name="conv3d_ndhwc.x86",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_conv3d(topi.x86.conv3d_ncdhw),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_conv3d_ncdhw),
+python/tvm/relay/op/strategy/x86.py-                name="conv3d_ncdhw.x86",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_conv3d(topi.x86.conv3d_ndhwc),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_conv3d_ndhwc),
+python/tvm/relay/op/strategy/x86.py-                name="conv3d_ndhwc.x86",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_conv1d(topi.nn.conv1d_ncw),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_conv1d_ncw),
+python/tvm/relay/op/strategy/x86.py-                name="conv1d_ncw.x86",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_conv1d(topi.nn.conv1d_nwc),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_conv1d_nwc),
+python/tvm/relay/op/strategy/x86.py-                name="conv1d_nwc.x86",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_group_conv1d(topi.nn.group_conv1d_ncw),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_group_conv1d_ncw),
+python/tvm/relay/op/strategy/x86.py-                name="group_conv1d_ncw.x86",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_group_conv1d(topi.nn.group_conv1d_nwc),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_group_conv1d_nwc),
+python/tvm/relay/op/strategy/x86.py-                name="group_conv1d_nwc.x86",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_matmul(topi.x86.matmul_cblas),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_matmul_cblas),
+python/tvm/relay/op/strategy/x86.py-                name="matmul_cblas.x86",
+python/tvm/relay/op/strategy/x86.py-                plevel=13,
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_matmul(topi.x86.matmul_mkl),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_matmul_mkl),
+python/tvm/relay/op/strategy/x86.py-                name="matmul_mkl.x86",
+python/tvm/relay/op/strategy/x86.py-                plevel=14,
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_matmul(topi.x86.matmul_mkldnn),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_matmul_mkldnn),
+python/tvm/relay/op/strategy/x86.py-                name="matmul_mkldnn.x86",
+python/tvm/relay/op/strategy/x86.py-                plevel=15,
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_matmul(topi.nn.matmul, need_auto_scheduler_layout=True),
+python/tvm/relay/op/strategy/x86.py-            naive_schedule,
+python/tvm/relay/op/strategy/x86.py-            name="matmul.generic",
+python/tvm/relay/op/strategy/x86.py-            plevel=11,
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_matmul(topi.nn.matmul),
+python/tvm/relay/op/strategy/x86.py-            naive_schedule,
+python/tvm/relay/op/strategy/x86.py-            name="matmul.generic",
+python/tvm/relay/op/strategy/x86.py-        )
+--
+python/tvm/relay/op/strategy/x86.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-        wrap_compute_dense(topi.x86.dense_nopack),
+python/tvm/relay/op/strategy/x86.py-        wrap_topi_schedule(topi.x86.schedule_dense_nopack),
+python/tvm/relay/op/strategy/x86.py-        name="dense_nopack.x86",
+python/tvm/relay/op/strategy/x86.py-        plevel=5,
+--
+python/tvm/relay/op/strategy/x86.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-        wrap_compute_dense(topi.x86.dense_pack),
+python/tvm/relay/op/strategy/x86.py-        wrap_topi_schedule(topi.x86.schedule_dense_pack),
+python/tvm/relay/op/strategy/x86.py-        name="dense_pack.x86",
+python/tvm/relay/op/strategy/x86.py-        plevel=10,
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_dense(topi.nn.dense, need_auto_scheduler_layout=True),
+python/tvm/relay/op/strategy/x86.py-            naive_schedule,
+python/tvm/relay/op/strategy/x86.py-            name="dense.generic",
+python/tvm/relay/op/strategy/x86.py-            plevel=11,
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_dense(topi.x86.dense_cblas),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_dense_cblas),
+python/tvm/relay/op/strategy/x86.py-                name="dense_cblas.x86",
+python/tvm/relay/op/strategy/x86.py-                plevel=13,
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_dense(topi.x86.dense_mkl),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_dense_mkl),
+python/tvm/relay/op/strategy/x86.py-                name="dense_mkl.x86",
+python/tvm/relay/op/strategy/x86.py-                plevel=14,
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_dense(topi.x86.dense_mkldnn),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_dense_mkldnn),
+python/tvm/relay/op/strategy/x86.py-                name="dense_mkldnn.x86",
+python/tvm/relay/op/strategy/x86.py-                plevel=15,
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_dense(topi.x86.dense_vnni),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.x86.schedule_dense_vnni),
+python/tvm/relay/op/strategy/x86.py-            name="dense_vnni.x86",
+python/tvm/relay/op/strategy/x86.py-            plevel=12,
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_dense(topi.x86.dense_pack),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.x86.schedule_dense_pack),
+python/tvm/relay/op/strategy/x86.py-            name="dense_pack.x86",
+python/tvm/relay/op/strategy/x86.py-            plevel=10,
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_batch_matmul(topi.x86.batch_matmul_vnni_compute, need_out_dtype=True),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.x86.schedule_batch_matmul_vnni),
+python/tvm/relay/op/strategy/x86.py-            name="batch_matmul_vnni.x86",
+python/tvm/relay/op/strategy/x86.py-            plevel=10,
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_batch_matmul(
+python/tvm/relay/op/strategy/x86.py-                topi.nn.batch_matmul, need_auto_scheduler_layout=True, need_out_dtype=True
+python/tvm/relay/op/strategy/x86.py-            ),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.generic.nn.schedule_batch_matmul),
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_batch_matmul(topi.x86.batch_matmul, need_out_dtype=True),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.x86.schedule_batch_matmul),
+python/tvm/relay/op/strategy/x86.py-            name="batch_matmul.x86",
+python/tvm/relay/op/strategy/x86.py-            plevel=10,
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_batch_matmul(topi.x86.batch_matmul_cblas),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.x86.schedule_batch_matmul_cblas),
+python/tvm/relay/op/strategy/x86.py-            name="batch_matmul_cblas.x86",
+python/tvm/relay/op/strategy/x86.py-            plevel=15,
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_batch_matmul(topi.x86.batch_matmul_mkl),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.x86.schedule_batch_matmul_mkl),
+python/tvm/relay/op/strategy/x86.py-            name="batch_matmul_mkl.x86",
+python/tvm/relay/op/strategy/x86.py-            plevel=15,
+--
+python/tvm/relay/op/strategy/x86.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-        wrap_compute_sparse_dense(topi.nn.sparse_dense),
+python/tvm/relay/op/strategy/x86.py-        wrap_topi_schedule(topi.x86.schedule_sparse_dense),
+python/tvm/relay/op/strategy/x86.py-        name="sparse_dense.x86",
+python/tvm/relay/op/strategy/x86.py-        plevel=10,
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_sparse_conv2d(topi.nn.sparse_conv2d),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.generic.schedule_sparse_conv2d),
+python/tvm/relay/op/strategy/x86.py-            name="sparse_conv2d.generic",
+python/tvm/relay/op/strategy/x86.py-        )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_sparse_conv2d(topi.x86.spconv2d_3x3_nhwc),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_spconv2d_3x3_nhwc),
+python/tvm/relay/op/strategy/x86.py-                name="conv3x3_spNHWC.x86",
+python/tvm/relay/op/strategy/x86.py-            )
+--
+python/tvm/relay/op/strategy/x86.py:            strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-                wrap_compute_sparse_conv2d(topi.x86.spconv2d_3x3_nchw),
+python/tvm/relay/op/strategy/x86.py-                wrap_topi_schedule(topi.x86.schedule_spconv2d_3x3_nchw),
+python/tvm/relay/op/strategy/x86.py-            )
+python/tvm/relay/op/strategy/x86.py-    return strategy
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_roi_align(topi.x86.roi_align_nchw),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.generic.schedule_roi_align),
+python/tvm/relay/op/strategy/x86.py-            name="roi_align.x86",
+python/tvm/relay/op/strategy/x86.py-        )
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_roi_align(topi.vision.rcnn.roi_align_nhwc),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.generic.schedule_roi_align),
+python/tvm/relay/op/strategy/x86.py-            name="roi_align.x86",
+python/tvm/relay/op/strategy/x86.py-        )
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_bitserial_conv2d(topi.x86.bitserial_conv2d_nchw),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.x86.schedule_bitserial_conv2d_nchw),
+python/tvm/relay/op/strategy/x86.py-            name="bitserial_conv2d_nchw.x86",
+python/tvm/relay/op/strategy/x86.py-        )
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_bitserial_conv2d(topi.x86.bitserial_conv2d_nhwc),
+python/tvm/relay/op/strategy/x86.py-            wrap_topi_schedule(topi.x86.schedule_bitserial_conv2d_nhwc),
+python/tvm/relay/op/strategy/x86.py-            name="bitserial_conv2d_nhwc.x86",
+python/tvm/relay/op/strategy/x86.py-        )
+--
+python/tvm/relay/op/strategy/x86.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-        wrap_compute_bitserial_dense(topi.x86.bitserial_dense),
+python/tvm/relay/op/strategy/x86.py-        wrap_topi_schedule(topi.x86.schedule_bitserial_dense),
+python/tvm/relay/op/strategy/x86.py-        name="bitserial_dense.x86",
+python/tvm/relay/op/strategy/x86.py-    )
+--
+python/tvm/relay/op/strategy/x86.py:    strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-        wrap_compute_scatter_nd(topi.x86.scatter_nd),
+python/tvm/relay/op/strategy/x86.py-        wrap_topi_schedule(topi.generic.schedule_extern),
+python/tvm/relay/op/strategy/x86.py-        name="scatter_nd.x86",
+python/tvm/relay/op/strategy/x86.py-        plevel=10,
+--
+python/tvm/relay/op/strategy/x86.py:        strategy.add_implementation(
+python/tvm/relay/op/strategy/x86.py-            wrap_compute_conv2d(
+python/tvm/relay/op/strategy/x86.py-                topi.nn.conv2d_winograd_nhwc_without_weight_transform,
+python/tvm/relay/op/strategy/x86.py-                need_auto_scheduler_layout=True,
+python/tvm/relay/op/strategy/x86.py-            ),

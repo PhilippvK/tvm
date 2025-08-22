@@ -1,0 +1,10 @@
+#[version = "0.0.5"]
+def @main(%input: Tensor[(1, 1960), int8], %v_param_1: Tensor[(20, 8, 1, 8), int8], %v_param_2: Tensor[(8), int32], %v_param_3: Tensor[(10, 4, 8, 8), int8], %v_param_4: Tensor[(8), int32], %v_param_5: Tensor[(4, 3840), int8], %v_param_6: Tensor[(4), int32], output_tensor_names=["Identity"]) -> Tensor[(1, 8, 1, 1), int32] {
+  %0 = reshape(%input, newshape=[-1, 49, 40, 1]) /* ty=Tensor[(1, 49, 40, 1), int8] */;
+  %1 = layout_transform(%0, src_layout="NHWC", dst_layout="NCHW") /* ty=Tensor[(1, 1, 49, 40), int8] */;
+  %2 = layout_transform(%v_param_1, src_layout="HWIO", dst_layout="OIHW") /* ty=Tensor[(8, 1, 20, 8), int8] */;
+  %3 = expand_dims(%v_param_2, axis=0, num_newaxis=3) /* ty=Tensor[(1, 1, 1, 8), int32] */;
+  %4 = qnn.conv2d(%1, %2, -128 /* ty=int32 */, 0 /* ty=int32 */, 0.101562f /* ty=float32 */, meta[relay.Constant][0] /* ty=Tensor[(8), float32] */, padding=[9, 3, 10, 4], channels=8, kernel_size=[20, 8], out_dtype="int32") /* ty=Tensor[(1, 8, 49, 40), int32] */;
+  %5 = layout_transform(%3, src_layout="NHWC", dst_layout="NCHW") /* ty=Tensor[(1, 8, 1, 1), int32] */;
+  %5
+}

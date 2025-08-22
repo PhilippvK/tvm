@@ -546,6 +546,7 @@ def load_module(path, fmt=""):
         tar_temp = _utils.tempdir(custom_path=path.replace(".tar", ""))
         _tar.untar(path, tar_temp.temp_dir)
         files = [tar_temp.relpath(x) for x in tar_temp.listdir()]
+        print("files", files)
         _cc.create_shared(path + ".so", files)
         path += ".so"
     # Redirect to the load API

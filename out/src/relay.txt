@@ -1,0 +1,3 @@
+def @main(%input: Tensor[(1, 49, 40, 8), int8], output_tensor_names=["Identity"]) -> Tensor[(1, 24, 20, 8), int8] {
+  nn.max_pool2d(%input, pool_size=[2, 2], strides=[2, 2], padding=[0, 0, 0, 0], layout="NHWC", out_layout="NHWC") /* from_string */ /* ty=Tensor[(1, 24, 20, 8), int8] */
+}

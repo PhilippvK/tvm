@@ -99,6 +99,8 @@ class Target(Object):
             mfloat-abi : str (optional)
                 An llvm setting that is one of 'hard' or 'soft' indicating whether to use
                 hardware or software floating-point operations.
+            march : str (optional)
+                An llvm setting. Generate code for the specified architecture, for example "rv32gc".
             mabi : str (optional)
                 An llvm setting. Generate code for the specified ABI, for example "lp64d".
             host : Union[str, Dict[str, Any]] (optional)

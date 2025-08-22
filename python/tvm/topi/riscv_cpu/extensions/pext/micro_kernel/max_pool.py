@@ -30,8 +30,9 @@ def intrin_max(shape, in_dtype, out_dtype):
     UNIQ_ID_LEN = 8
     uniq_id = "".join(random.choices(string.ascii_uppercase, k=UNIQ_ID_LEN))
 
-    assert in_dtype == ["int8", "int16"]
-    assert out_dtype == ["int8", "int16"]
+    print("in_dtype", in_dtype)
+    assert in_dtype in ["int8", "int16"]
+    assert out_dtype in ["int8", "int16"]
     assert in_dtype == out_dtype
 
     func_prefix = "max8" if in_dtype == "int8" else "max16"

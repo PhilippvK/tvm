@@ -1,0 +1,221 @@
+#[version = "0.0.5"]
+def @main(%input: Tensor[(1, 1960), int8], %v_param_1: Tensor[(20, 8, 1, 8), int8], %v_param_2: Tensor[(8), int32], %v_param_3: Tensor[(10, 4, 8, 8), int8], %v_param_4: Tensor[(8), int32], %v_param_5: Tensor[(4, 3840), int8], %v_param_6: Tensor[(4), int32], output_tensor_names=["Identity"]) -> Tensor[(1, 4), int8] {
+  %0 = reshape(%input, newshape=[-1, 49, 40, 1]) /* from_string */ /* ty=Tensor[(1, 49, 40, 1), int8] */;
+  %1 = qnn.conv2d(%0, %v_param_1, -128 /* ty=int32 */, 0 /* ty=int32 */, 0.101562f /* ty=float32 */, meta[relay.Constant][0] /* ty=Tensor[(8), float32] */, padding=[9, 3, 10, 4], channels=8, kernel_size=[20, 8], data_layout="NHWC", kernel_layout="HWIO", out_dtype="int32") /* from_string */ /* ty=Tensor[(1, 49, 40, 8), int32] */;
+  %2 = nn.bias_add(%1, %v_param_2, axis=3) /* from_string */ /* ty=Tensor[(1, 49, 40, 8), int32] */;
+  %3 = qnn.requantize(%2, meta[relay.Constant][1] /* ty=Tensor[(8), float32] */, 0 /* ty=int32 */, 0.141817f /* ty=float32 */, -128 /* ty=int32 */, axis=3, rounding="UPWARD", compute_dtype="int64", out_dtype="int8") /* from_string */ /* ty=Tensor[(1, 49, 40, 8), int8] */;
+  %4 = clip(%3, a_min=-128f, a_max=127f) /* from_string */ /* ty=Tensor[(1, 49, 40, 8), int8] */;
+  %5 = nn.max_pool2d(%4, pool_size=[2, 2], strides=[2, 2], padding=[0, 0, 0, 0], layout="NHWC") /* from_string */ /* ty=Tensor[(1, 24, 20, 8), int8] */;
+  %6 = qnn.conv2d(%5, %v_param_3, -128 /* ty=int32 */, 0 /* ty=int32 */, 0.141817f /* ty=float32 */, meta[relay.Constant][2] /* ty=Tensor[(8), float32] */, padding=[4, 1, 5, 2], channels=8, kernel_size=[10, 4], data_layout="NHWC", kernel_layout="HWIO", out_dtype="int32") /* from_string */ /* ty=Tensor[(1, 24, 20, 8), int32] */;
+  %7 = nn.bias_add(%6, %v_param_4, axis=3) /* from_string */ /* ty=Tensor[(1, 24, 20, 8), int32] */;
+  %8 = qnn.requantize(%7, meta[relay.Constant][3] /* ty=Tensor[(8), float32] */, 0 /* ty=int32 */, 0.0582336f /* ty=float32 */, -128 /* ty=int32 */, axis=3, rounding="UPWARD", compute_dtype="int64", out_dtype="int8") /* from_string */ /* ty=Tensor[(1, 24, 20, 8), int8] */;
+  %9 = clip(%8, a_min=-128f, a_max=127f) /* from_string */ /* ty=Tensor[(1, 24, 20, 8), int8] */;
+  %10 = reshape(%9, newshape=[-1, 3840]) /* from_string */ /* ty=Tensor[(1, 3840), int8] */;
+  %11 = reshape(%10, newshape=[-1, 3840]) /* from_string */ /* ty=Tensor[(1, 3840), int8] */;
+  %12 = qnn.dense(%11, %v_param_5, -128 /* ty=int32 */, 0 /* ty=int32 */, 0.0582336f /* ty=float32 */, 0.00373117f /* ty=float32 */, units=4, out_dtype="int32") /* from_string */ /* ty=Tensor[(1, 4), int32] */;
+  %13 = nn.bias_add(%12, %v_param_6) /* from_string */ /* ty=Tensor[(1, 4), int32] */;
+  %14 = qnn.requantize(%13, 0.000217279f /* ty=float32 */, 0 /* ty=int32 */, 0.264173f /* ty=float32 */, 27 /* ty=int32 */, rounding="UPWARD", compute_dtype="int64", out_dtype="int8") /* from_string */ /* ty=Tensor[(1, 4), int8] */;
+  %15 = qnn.dequantize(%14, 0.264173f /* ty=float32 */, 27 /* ty=int32 */) /* from_string */ /* ty=Tensor[(1, 4), float32] */;
+  %16 = nn.softmax(%15) /* from_string */ /* ty=Tensor[(1, 4), float32] */;
+  qnn.quantize(%16, 0.00390625f /* ty=float32 */, -128 /* ty=int32 */, out_dtype="int8") /* from_string */ /* ty=Tensor[(1, 4), int8] */
+}
+
+#[metadata]
+{
+  "root": 1, 
+  "nodes": [
+    {
+      "type_key": ""
+    }, 
+    {
+      "type_key": "Map", 
+      "keys": [
+        "relay.Constant"
+      ], 
+      "data": [2]
+    }, 
+    {
+      "type_key": "Array", 
+      "data": [3, 11, 16, 21]
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "8", 
+        "data": "0", 
+        "span": "6", 
+        "virtual_device_": "4"
+      }
+    }, 
+    {
+      "type_key": "VirtualDevice", 
+      "attrs": {
+        "device_type_int": "-1", 
+        "memory_scope": "5", 
+        "target": "0", 
+        "virtual_device_id": "-1"
+      }
+    }, 
+    {
+      "type_key": "runtime.String"
+    }, 
+    {
+      "type_key": "Span", 
+      "attrs": {
+        "column": "59", 
+        "end_column": "78", 
+        "end_line": "4", 
+        "line": "4", 
+        "source_name": "7"
+      }
+    }, 
+    {
+      "type_key": "SourceName", 
+      "repr_str": "from_string"
+    }, 
+    {
+      "type_key": "relay.TensorType", 
+      "attrs": {
+        "dtype": "float32", 
+        "shape": "9", 
+        "span": "0"
+      }
+    }, 
+    {
+      "type_key": "Array", 
+      "data": [10]
+    }, 
+    {
+      "type_key": "IntImm", 
+      "attrs": {
+        "dtype": "int32", 
+        "span": "0", 
+        "value": "8"
+      }
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "13", 
+        "data": "1", 
+        "span": "12", 
+        "virtual_device_": "4"
+      }
+    }, 
+    {
+      "type_key": "Span", 
+      "attrs": {
+        "column": "31", 
+        "end_column": "50", 
+        "end_line": "6", 
+        "line": "6", 
+        "source_name": "7"
+      }
+    }, 
+    {
+      "type_key": "relay.TensorType", 
+      "attrs": {
+        "dtype": "float32", 
+        "shape": "14", 
+        "span": "0"
+      }
+    }, 
+    {
+      "type_key": "Array", 
+      "data": [15]
+    }, 
+    {
+      "type_key": "IntImm", 
+      "attrs": {
+        "dtype": "int32", 
+        "span": "0", 
+        "value": "8"
+      }
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "18", 
+        "data": "2", 
+        "span": "17", 
+        "virtual_device_": "4"
+      }
+    }, 
+    {
+      "type_key": "Span", 
+      "attrs": {
+        "column": "59", 
+        "end_column": "78", 
+        "end_line": "9", 
+        "line": "9", 
+        "source_name": "7"
+      }
+    }, 
+    {
+      "type_key": "relay.TensorType", 
+      "attrs": {
+        "dtype": "float32", 
+        "shape": "19", 
+        "span": "0"
+      }
+    }, 
+    {
+      "type_key": "Array", 
+      "data": [20]
+    }, 
+    {
+      "type_key": "IntImm", 
+      "attrs": {
+        "dtype": "int32", 
+        "span": "0", 
+        "value": "8"
+      }
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "23", 
+        "data": "3", 
+        "span": "22", 
+        "virtual_device_": "4"
+      }
+    }, 
+    {
+      "type_key": "Span", 
+      "attrs": {
+        "column": "31", 
+        "end_column": "50", 
+        "end_line": "11", 
+        "line": "11", 
+        "source_name": "7"
+      }
+    }, 
+    {
+      "type_key": "relay.TensorType", 
+      "attrs": {
+        "dtype": "float32", 
+        "shape": "24", 
+        "span": "0"
+      }
+    }, 
+    {
+      "type_key": "Array", 
+      "data": [25]
+    }, 
+    {
+      "type_key": "IntImm", 
+      "attrs": {
+        "dtype": "int32", 
+        "span": "0", 
+        "value": "8"
+      }
+    }
+  ], 
+  "b64ndarrays": [
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAArzPhOk3quDqsa7c6SRf0OpHf1TrV3sI6LtgEO9hpDTs=", 
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAA/vk2OV8+Fjl8BxU561JGOabFLTkNVR45S99XOf/LZTk=", 
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAAi4FDO26mZzvbq/M6aq7MOvrYUTup1h87elA5O19oPzs=", 
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAA9c7dOVdoAzoQOoo51TdoOVMU7jmmV7U54T7SOaIo2Tk="
+  ], 
+  "attrs": {"tvm_version": "0.9.dev0"}
+}

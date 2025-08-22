@@ -49,6 +49,7 @@ def intrin_gemm_MxKxN(M, K, N, in_dtype, out_dtype, stride_w=1):
     if isinstance(N, tvm.tir.IntImm):
         N = N.value
     # TODO(weberlo, areusch): support more dtypes?
+    print("in_dtype", in_dtype)
     assert in_dtype in ("int8", "int16")
     assert out_dtype == "int32"
     A = te.placeholder((M * stride_w - (stride_w - 1), K), name="a", dtype=in_dtype)

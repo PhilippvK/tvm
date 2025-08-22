@@ -1,0 +1,204 @@
+#[version = "0.0.5"]
+def @main(%input: Tensor[(1, 49, 40, 8), int8], output_tensor_names=["Identity"]) -> Tensor[(1, 24, 20, 8), int8] {
+  nn.max_pool2d(%input, pool_size=[2, 2], strides=[2, 2], padding=[0, 0, 0, 0], layout="NHWC") /* ty=Tensor[(1, 24, 20, 8), int8] */
+}
+
+#[metadata]
+{
+  "root": 1, 
+  "nodes": [
+    {
+      "type_key": ""
+    }, 
+    {
+      "type_key": "Map", 
+      "keys": [
+        "relay.Constant"
+      ], 
+      "data": [2]
+    }, 
+    {
+      "type_key": "Array", 
+      "data": [3, 11, 16, 21]
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "8", 
+        "data": "0", 
+        "span": "6", 
+        "virtual_device_": "4"
+      }
+    }, 
+    {
+      "type_key": "VirtualDevice", 
+      "attrs": {
+        "device_type_int": "-1", 
+        "memory_scope": "5", 
+        "target": "0", 
+        "virtual_device_id": "-1"
+      }
+    }, 
+    {
+      "type_key": "runtime.String"
+    }, 
+    {
+      "type_key": "Span", 
+      "attrs": {
+        "column": "59", 
+        "end_column": "78", 
+        "end_line": "4", 
+        "line": "4", 
+        "source_name": "7"
+      }
+    }, 
+    {
+      "type_key": "SourceName", 
+      "repr_str": "from_string"
+    }, 
+    {
+      "type_key": "relay.TensorType", 
+      "attrs": {
+        "dtype": "float32", 
+        "shape": "9", 
+        "span": "0"
+      }
+    }, 
+    {
+      "type_key": "Array", 
+      "data": [10]
+    }, 
+    {
+      "type_key": "IntImm", 
+      "attrs": {
+        "dtype": "int32", 
+        "span": "0", 
+        "value": "8"
+      }
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "13", 
+        "data": "1", 
+        "span": "12", 
+        "virtual_device_": "4"
+      }
+    }, 
+    {
+      "type_key": "Span", 
+      "attrs": {
+        "column": "31", 
+        "end_column": "50", 
+        "end_line": "6", 
+        "line": "6", 
+        "source_name": "7"
+      }
+    }, 
+    {
+      "type_key": "relay.TensorType", 
+      "attrs": {
+        "dtype": "float32", 
+        "shape": "14", 
+        "span": "0"
+      }
+    }, 
+    {
+      "type_key": "Array", 
+      "data": [15]
+    }, 
+    {
+      "type_key": "IntImm", 
+      "attrs": {
+        "dtype": "int32", 
+        "span": "0", 
+        "value": "8"
+      }
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "18", 
+        "data": "2", 
+        "span": "17", 
+        "virtual_device_": "4"
+      }
+    }, 
+    {
+      "type_key": "Span", 
+      "attrs": {
+        "column": "59", 
+        "end_column": "78", 
+        "end_line": "9", 
+        "line": "9", 
+        "source_name": "7"
+      }
+    }, 
+    {
+      "type_key": "relay.TensorType", 
+      "attrs": {
+        "dtype": "float32", 
+        "shape": "19", 
+        "span": "0"
+      }
+    }, 
+    {
+      "type_key": "Array", 
+      "data": [20]
+    }, 
+    {
+      "type_key": "IntImm", 
+      "attrs": {
+        "dtype": "int32", 
+        "span": "0", 
+        "value": "8"
+      }
+    }, 
+    {
+      "type_key": "relay.Constant", 
+      "attrs": {
+        "_checked_type_": "23", 
+        "data": "3", 
+        "span": "22", 
+        "virtual_device_": "4"
+      }
+    }, 
+    {
+      "type_key": "Span", 
+      "attrs": {
+        "column": "31", 
+        "end_column": "50", 
+        "end_line": "11", 
+        "line": "11", 
+        "source_name": "7"
+      }
+    }, 
+    {
+      "type_key": "relay.TensorType", 
+      "attrs": {
+        "dtype": "float32", 
+        "shape": "24", 
+        "span": "0"
+      }
+    }, 
+    {
+      "type_key": "Array", 
+      "data": [25]
+    }, 
+    {
+      "type_key": "IntImm", 
+      "attrs": {
+        "dtype": "int32", 
+        "span": "0", 
+        "value": "8"
+      }
+    }
+  ], 
+  "b64ndarrays": [
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAArzPhOk3quDqsa7c6SRf0OpHf1TrV3sI6LtgEO9hpDTs=", 
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAA/vk2OV8+Fjl8BxU561JGOabFLTkNVR45S99XOf/LZTk=", 
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAAi4FDO26mZzvbq/M6aq7MOvrYUTup1h87elA5O19oPzs=", 
+    "P6G0lvBAXt0AAAAAAAAAAAEAAAAAAAAAAQAAAAIgAQAIAAAAAAAAACAAAAAAAAAA9c7dOVdoAzoQOoo51TdoOVMU7jmmV7U54T7SOaIo2Tk="
+  ], 
+  "attrs": {"tvm_version": "0.9.dev0"}
+}

@@ -1,0 +1,4 @@
+#[version = "0.0.5"]
+def @main(%data : Tensor[(16, 29), int8]) -> Tensor[(16, 29), int8] {
+    add(%data, %data)
+}
