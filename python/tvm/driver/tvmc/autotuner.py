@@ -328,8 +328,8 @@ def drive_tune(args):
         logger.info("RPC tracker hostname: %s", rpc_hostname)
         logger.info("RPC tracker port: %s", rpc_port)
 
-        if not args.rpc_key:
-            raise TVMCException("need to provide an RPC tracker key (--rpc-key) for remote tuning")
+        # if not args.rpc_key:
+        #     raise TVMCException("need to provide an RPC tracker key (--rpc-key) for remote tuning")
     else:
         rpc_hostname = None
         rpc_port = None

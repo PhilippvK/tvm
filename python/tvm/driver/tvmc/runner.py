@@ -144,6 +144,11 @@ def add_run_parser(subparsers, main_parser, json_params):
         "e.g. '192.168.0.100:9999'. (non-micro devices only)",
     )
     parser.add_argument(
+        "--rpc-server",
+        help="hostname (required) and port (optional, defaults to 9090) of the RPC server, "
+        "e.g. '192.168.0.100:9999'. (non-micro devices only)",
+    )
+    parser.add_argument(
         "PATH",
         help="path to the compiled module file or to the project directory if '--device micro' "
         "is selected.",
