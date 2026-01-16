@@ -38,311 +38,23 @@ import tvm.micro.testing
 from tvm.meta_schedule.runner import EvaluatorConfig
 from tvm.meta_schedule.logging import get_logger
 from tvm import transform
-from tvm.tir.tensor_intrin.cfu import CFU_32X_INTRIN, CFU_24X_INTRIN, CFU_16X_INTRIN, CFU_8X_INTRIN
-from tvm.tir.tensor_intrin.cfu import CFU_40X_INTRIN, CFU_48X_INTRIN, CFU_56X_INTRIN, CFU_64X_INTRIN
 from tvm.contrib.micro.meta_schedule.local_builder_micro import get_local_builder_micro
 from tvm.contrib.micro.meta_schedule.rpc_runner_micro import get_rpc_runner_micro
-from tvm.contrib.micro.cfu.wca import CompressWeights, ImportCPostprocess
+
+
+from tvm.contrib.micro.cfu.wca import CompressWeights, ImportCPostprocess, get_wca_tuning_config
+from tvm.contrib.micro.cfu.model_utils import lookup_model_by_name
+from tvm.contrib.micro.cfu.tuning_utils import _schedule_dummy
 
 
 logging.basicConfig(level=logging.ERROR)
 get_logger("xgb_model").setLevel(logging.ERROR)
 
 DIR = Path(__file__).parent.resolve()
-BASE_DIR = DIR / "../../../../"
-# BASE_DIR = DIR / "../../../../../"
+BASE_DIR = Path(os.environ.get("BASE_DIR", DIR / "../../../../"))
 print("BASE_DIR", BASE_DIR.resolve())
 BASE_OUT_DIR = Path(os.environ.get("BASE_OUT_DIR", "/tmp/base"))
 print("BASE_DIR_DIR", BASE_OUT_DIR.resolve())
-# input("!")
-
-MS_DISPATCH = 1  # silent?
-# MS_DISPATCH = 2  # verbose
-# MS_DISPATCH = ?  # error
-
-
-def lookup_model_by_name(model):
-    def _load_model(path):
-        model = tvmc.load(str(path))
-        mod = model.mod
-        params = model.params
-        return mod, params
-
-    if model == "default":
-        # input("1")
-        mod, params, model_info = create_relay_module()
-        input_name = model_info["in_tensor"]
-        input_shape = model_info["in_shape"]
-        input_dtype = model_info["in_dtype"]
-    else:
-        MODELS_DIR = (BASE_DIR / "models").resolve()
-
-        INPUT_SHAPE_LOOKUP = {
-            "pretrainedResnet_clustered_quant_remap": [1, 32, 32, 3],
-            "pretrainedResnet_clustered_quant_remap_packed": [1, 32, 32, 3],
-        }
-        DEFAULT_INPUT_SHAPE = [1, 32, 32, 3]
-        INPUT_DTYPE_LOOKUP = {
-            "pretrainedResnet_clustered_quant_remap": "int8",
-            "pretrainedResnet_clustered_quant_remap_packed": "int8",
-        }
-        DEFAULT_INPUT_DTYPE = "int8"
-        INPUT_NAME_LOOKUP = {
-            "pretrainedResnet_clustered_quant_remap": "input",
-            "pretrainedResnet_clustered_quant_remap_packed": "input",
-        }
-        DEFAULT_INPUT_NAME = "input"
-
-        model_file = model if ".tflite" in model else f"{model}.tflite"
-        model_name = Path(model).stem
-        model_path = MODELS_DIR / model_file
-        assert model_path.is_file(), f"Model not found: {model_path}"
-        mod, params = _load_model(model_path)
-
-        input_shape = INPUT_SHAPE_LOOKUP.get(model_name, DEFAULT_INPUT_SHAPE)
-        input_dtype = INPUT_DTYPE_LOOKUP.get(model_name, DEFAULT_INPUT_DTYPE)
-        input_name = INPUT_NAME_LOOKUP.get(model_name, DEFAULT_INPUT_NAME)
-    data_sample = np.random.rand(*input_shape).astype(input_dtype)
-    return mod, params, input_name, input_shape, input_dtype, data_sample
-
-
-def get_tuning_config(
-    enable_intrin: bool = False,
-    num_clusters: Optional[int] = None,
-    cfu_mode: Optional[str] = None,
-    channel_count: Optional[int] = None,
-):
-    # print("get_tuning_config", enable_intrin, num_clusters, cfu_mode, channel_count)
-    if num_clusters is not None:
-        assert channel_count is not None
-        from math import log2
-
-        max_channels = 64 // int(log2(num_clusters))
-        channel_count = min(max_channels, channel_count)
-    # print("channel_count", channel_count)
-
-    # def _get_sch_rules(intrin: Optional[str] = None, num_clusters: Optional[int] = None, channel_count: Optional[int] = None):
-    def _get_sch_rules(
-        intrin: Optional[str] = None, num_clusters: Optional[int] = None, channel_count: Optional[int] = None
-    ):
-        # print("_get_sch_rules", intrin, num_clusters, channel_count)
-        # init_intrin = DP4A_S8S8S32_INIT_INTRIN
-        # structure_lookup = {
-        #     AMDGPU_SDOT4_INTRIN: "SSSRRSRS",
-        #     VRMPY_i8i8i32_INTRIN: "SRSRS",
-        #     DP4A_S8S8S32_INTRIN: "SR",
-        #     # DP4A_S8S8S32_INIT_INTRIN: "SR",
-        #     # ARM_DOT_4x4_i8_NEON_INTRIN: "SR",
-        #     ARM_DOT_4x4_i8_NEON_INTRIN: "RS",
-        # }
-        if intrin is None:
-            intrins = []
-        elif intrin == "all":
-            intrins = [
-                CFU_64X_INTRIN,
-                CFU_56X_INTRIN,
-                CFU_48X_INTRIN,
-                CFU_40X_INTRIN,
-                CFU_32X_INTRIN,
-                CFU_24X_INTRIN,
-                CFU_16X_INTRIN,
-                CFU_8X_INTRIN,
-            ]
-        elif intrin == "auto":
-            assert channel_count is not None
-
-            intrin_lookup = {
-                # 32: DP4A_S8S8S32_INTRIN,
-                64: CFU_64X_INTRIN,
-                56: CFU_56X_INTRIN,
-                48: CFU_48X_INTRIN,
-                40: CFU_40X_INTRIN,
-                32: CFU_32X_INTRIN,
-                24: CFU_24X_INTRIN,
-                16: CFU_16X_INTRIN,
-                8: CFU_8X_INTRIN,
-            }
-            intrin = intrin_lookup.get(channel_count)
-            assert intrin is not None, f"Could not determine intrin for channel_count: {channel_count}"
-            intrins = [intrin]
-        else:
-            intrins = [intrin]
-
-        structure = "SR"
-        # print("intrin", intrin)
-        return [
-            ms.schedule_rule.ApplyCustomRule(),
-            ms.schedule_rule.InlineConstantScalars(),
-            ms.schedule_rule.AutoInline(
-                into_producer=False,
-                into_consumer=True,
-                inline_const_tensor=True,
-                disallow_if_then_else=True,
-                require_injective=True,
-                require_ordered=True,
-                disallow_op=["tir.exp"],
-            ),
-            # ms.schedule_rule.AddRFactor(max_jobs_per_core=1, max_innermost_factor=64),
-            *(
-                [
-                    ms.schedule_rule.MultiLevelTilingWithIntrin(
-                        intrin,
-                        # structure=structure_lookup[intrin],
-                        structure=structure,
-                        # tile_binds=["blockIdx.x", "vthread.x", "threadIdx.x"],
-                        # max_innermost_factor=32,
-                        # vector_load_lens=[1, 2, 3, 4],
-                        # reuse_read=ms.schedule_rule.ReuseType(
-                        #     req="must",
-                        #     levels=[4],
-                        #     scope="shared",
-                        # ),
-                        # reuse_write=ms.schedule_rule.ReuseType(
-                        #     req="must",
-                        #     levels=[3],
-                        #     scope="local",
-                        # ),
-                    )
-                    for intrin in intrins
-                ]
-            ),
-            # *([ms.schedule_rule.MultiLevelTilingWithIntrin(
-            #         init_intrin,
-            #         structure=structure_lookup[init_intrin],
-            #         # tile_binds=["blockIdx.x", "vthread.x", "threadIdx.x"],
-            #         # max_innermost_factor=32,
-            #         # vector_load_lens=[1, 2, 3, 4],
-            #         # reuse_read=ms.schedule_rule.ReuseType(
-            #         #     req="must",
-            #         #     levels=[4],
-            #         #     scope="shared",
-            #         # ),
-            #         # reuse_write=ms.schedule_rule.ReuseType(
-            #         #     req="must",
-            #         #     levels=[3],
-            #         #     scope="local",
-            #         # ),
-            #     )] if init_intrin is not None else []),
-            ms.schedule_rule.MultiLevelTiling(
-                structure="SSRSRS",
-                # structure="SSRSRS",
-                tile_binds=None,
-                max_innermost_factor=64,
-                vector_load_lens=None,
-                reuse_read=None,
-                reuse_write=ms.schedule_rule.ReuseType(
-                    req="may",
-                    levels=[1, 2],
-                    scope="global",
-                ),
-            ),
-            ms.schedule_rule.ParallelizeVectorizeUnroll(
-                max_jobs_per_core=-1,  # disable parallelize
-                max_vectorize_extent=-1,  # disable vectorize
-                unroll_max_steps=[0, 2, 4, 8, 16, 32, 64],
-                unroll_explicit=True,
-                # unroll_explicit=False,
-            ),
-            ms.schedule_rule.RandomComputeLocation(),
-        ]
-
-    # def _get_postprocs(num_clusters: Optional[int] = None, cfu_mode: Optional[str] = None, channel_count: Optional[int] = None):
-    def _get_postprocs(cfu_mode: Optional[str] = None):
-        # print("_get_postprocs", num_clusters, cfu_mode, channel_count)
-        # print("_get_postprocs", cfu_mode)
-        return [
-            ms.postproc.DisallowDynamicLoop(),
-            ms.postproc.RewriteParallelVectorizeUnroll(),
-            ms.postproc.RewriteReductionBlock(),
-            # *([ImportCPostprocess(num_clusters, cfu_mode, channel_count)] if enable_intrin and num_clusters is not None else []),
-            *([ImportCPostprocess(cfu_mode)] if enable_intrin else []),
-            ms.postproc.RewriteTensorize(),
-            # *([ImportC2Postprocess(num_clusters, cfu_mode, channel_count)] if enable_intrin and num_clusters is not None else []),
-            # ms.postproc.RewriteTensorize(vectorize_init_loop=True),
-        ]
-
-    def _get_mutator_probs():
-        return {
-            ms.mutator.MutateTileSize(): 0.9,
-            ms.mutator.MutateComputeLocation(): 0.05,
-            ms.mutator.MutateUnroll(): 0.03,
-            # ms.mutator.Parallel(): 0.02,
-        }
-
-    # default_intrin = DP4A_S8S8S32_INTRIN
-    # default_intrin = "auto"
-    default_intrin = "all" if channel_count is None else "auto"
-    intrin = default_intrin if enable_intrin else None
-    sch_rules = _get_sch_rules(intrin, num_clusters, channel_count)
-    # sch_rules = _get_sch_rules(intrin)
-    # postprocs = _get_postprocs(num_clusters, cfu_mode, channel_count)
-    postprocs = _get_postprocs(cfu_mode)
-    mutator_probs = _get_mutator_probs()
-    # input(">>>")
-    return sch_rules, postprocs, mutator_probs
-
-
-def _schedule_dummy():
-
-    def schedule_fn(sch, block=None) -> bool:
-        return True
-
-    return schedule_fn
-
-
-def create_relay_module():
-    data_shape = (1, 3, 16, 16)
-    weight_shape = (8, 3, 5, 5)
-    data = relay.var("data", relay.TensorType(data_shape, "float32"))
-    weight = relay.var("weight", relay.TensorType(weight_shape, "float32"))
-    y = relay.nn.conv2d(
-        data,
-        weight,
-        padding=(2, 2),
-        kernel_size=(5, 5),
-        kernel_layout="OIHW",
-        out_dtype="float32",
-    )
-    f = relay.Function([data, weight], y)
-    mod = tvm.IRModule.from_expr(f)
-    mod = relay.transform.InferType()(mod)
-
-    np.random.seed(seed=1234)
-    weight_sample = np.random.rand(weight_shape[0], weight_shape[1], weight_shape[2], weight_shape[3]).astype("float32")
-    params = {mod["main"].params[1].name_hint: weight_sample}
-
-    model_info = {
-        "in_tensor": "data",
-        "in_shape": data_shape,
-        "in_dtype": "float32",
-    }
-
-    return mod, params, model_info
-
-
-###
-
-# def CompressWeights():
-#     def _transform(func, mod, ctx):
-#         print("CompressWeights")
-#         print("func", func)
-#         print("mod", mod)
-#         print("ctx", ctx)
-#         input("@A")
-#         def stmt_post(stmt):
-#             print("stmt_post", stmt)
-#             return stmt
-#
-#         new_body = tvm.tir.stmt_functor.ir_transform(
-#             func.body,
-#             None,
-#             stmt_post,
-#             ["tir.Evaluate", "tir.Call"],
-#         )
-#         print("new_body", new_body)
-#         input("@B")
-#         return func.with_body(new_body)
-#     return tvm.tir.transform.prim_func_pass(_transform, opt_level=0, name="CompressWeights")
 
 
 def run_micro_tuning_with_meta_schedule(
@@ -363,6 +75,7 @@ def run_micro_tuning_with_meta_schedule(
     channel_count,
     transform_layout,
     options,
+    ms_dispatch,
     ms_db=None,
     out_dir=None,
 ):
@@ -419,7 +132,7 @@ def run_micro_tuning_with_meta_schedule(
         # assert work_dir_path.is_dir()
     print("work_dir_path", work_dir_path)
 
-    mod, params, input_name, input_shape, input_dtype, data_sample = lookup_model_by_name(model)
+    mod, params, input_name, input_shape, input_dtype, data_sample = lookup_model_by_name(model, base_dir=BASE_DIR)
 
     if transform_layout:
         with tvm.transform.PassContext(
@@ -455,7 +168,7 @@ def run_micro_tuning_with_meta_schedule(
         if not skip_tuning:
             # print("a1")
             if enable_custom:
-                sch_rules, postprocs, mutator_probs = get_tuning_config(
+                sch_rules, postprocs, mutator_probs = get_wca_tuning_config(
                     enable_intrin, num_clusters, cfu_mode, channel_count
                 )
                 space = ms.space_generator.PostOrderApply(
@@ -542,7 +255,7 @@ def run_micro_tuning_with_meta_schedule(
                         **pass_config,
                         "relay.backend.use_meta_schedule": True,
                         "relay.backend.tir_converter": "default",
-                        "relay.backend.use_meta_schedule_dispatch": MS_DISPATCH,
+                        "relay.backend.use_meta_schedule_dispatch": ms_dispatch,
                         # "tir.enable_debug": True,
                     }
                 ),
@@ -681,6 +394,9 @@ def parse_args():
     parser.add_argument("--skip-tuning", action="store_true", default=False)
     parser.add_argument("--skip-bench", action="store_true", default=False)
     parser.add_argument("--ms-db", default=None)
+    parser.add_argument("--ms-dispatch", default=1, choices=[0, 1, 2, 4, 6], help="Metascheduler dispatch verbosity")
+    # (dispatch & 2): controls whether to print TVMScript for missing TIR
+    # (dispatch & 4): controls whether to raise fatal errors for missing TIR
 
     # === Feature flags ===
     parser.add_argument("--alter-op", action="store_true", default=True)
@@ -747,6 +463,7 @@ def main():
         num_clusters=args.num_clusters,
         channel_count=args.channel_count,
         transform_layout=args.transform_layout,
+        ms_dispatch=args.ms_dispatch,
         options=options,
         out_dir=args.output,
     )

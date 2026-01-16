@@ -31,10 +31,6 @@ from tvm.contrib.tar import tar
 from tvm.relay.backend import Runtime
 from tvm.driver import build as tvm_build
 from tvm.tir.transform import RemoveWeightLayoutRewriteBlock
-# from tvm.tir.tensor_intrin.cfu import CFU_32X_INTRIN, CFU_24X_INTRIN, CFU_16X_INTRIN, CFU_8X_INTRIN
-# from tvm.tir.tensor_intrin.cfu import CFU_40X_INTRIN, CFU_48X_INTRIN, CFU_56X_INTRIN, CFU_64X_INTRIN
-
-from tvm.contrib.micro.cfu.wca import CompressWeights
 
 
 def get_local_builder_micro():

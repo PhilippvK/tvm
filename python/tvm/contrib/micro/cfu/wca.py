@@ -23,8 +23,10 @@ import numpy as np
 
 import tvm
 from tvm.runtime import ndarray
-# from tvm.tir.tensor_intrin.cfu import CFU_32X_INTRIN, CFU_24X_INTRIN, CFU_16X_INTRIN, CFU_8X_INTRIN
-# from tvm.tir.tensor_intrin.cfu import CFU_40X_INTRIN, CFU_48X_INTRIN, CFU_56X_INTRIN, CFU_64X_INTRIN
+
+from tvm.tir.tensor_intrin.cfu import CFU_32X_INTRIN, CFU_24X_INTRIN, CFU_16X_INTRIN, CFU_8X_INTRIN
+from tvm.tir.tensor_intrin.cfu import CFU_40X_INTRIN, CFU_48X_INTRIN, CFU_56X_INTRIN, CFU_64X_INTRIN
+
 from tvm import meta_schedule as ms
 from tvm.meta_schedule.utils import derived_object
 from tvm.tir.schedule import Schedule
@@ -664,3 +666,127 @@ def CompressWeights():
             # return func
 
     return tvm.tir.transform.prim_func_pass(_transform, opt_level=0, name="CompressWeights")
+
+
+def get_wca_tuning_config(
+    enable_intrin: bool = False,
+    num_clusters: Optional[int] = None,
+    cfu_mode: Optional[str] = None,
+    channel_count: Optional[int] = None,
+):
+    # print("get_tuning_config", enable_intrin, num_clusters, cfu_mode, channel_count)
+    if num_clusters is not None:
+        assert channel_count is not None
+        from math import log2
+
+        max_channels = 64 // int(log2(num_clusters))
+        channel_count = min(max_channels, channel_count)
+    # print("channel_count", channel_count)
+
+    def _get_sch_rules(
+        intrin: Optional[str] = None, num_clusters: Optional[int] = None, channel_count: Optional[int] = None
+    ):
+        if intrin is None:
+            intrins = []
+        elif intrin == "all":
+            intrins = [
+                CFU_64X_INTRIN,
+                CFU_56X_INTRIN,
+                CFU_48X_INTRIN,
+                CFU_40X_INTRIN,
+                CFU_32X_INTRIN,
+                CFU_24X_INTRIN,
+                CFU_16X_INTRIN,
+                CFU_8X_INTRIN,
+            ]
+        elif intrin == "auto":
+            assert channel_count is not None
+
+            intrin_lookup = {
+                # 32: DP4A_S8S8S32_INTRIN,
+                64: CFU_64X_INTRIN,
+                56: CFU_56X_INTRIN,
+                48: CFU_48X_INTRIN,
+                40: CFU_40X_INTRIN,
+                32: CFU_32X_INTRIN,
+                24: CFU_24X_INTRIN,
+                16: CFU_16X_INTRIN,
+                8: CFU_8X_INTRIN,
+            }
+            intrin = intrin_lookup.get(channel_count)
+            assert intrin is not None, f"Could not determine intrin for channel_count: {channel_count}"
+            intrins = [intrin]
+        else:
+            intrins = [intrin]
+
+        structure = "SR"
+        # print("intrin", intrin)
+        return [
+            ms.schedule_rule.ApplyCustomRule(),
+            ms.schedule_rule.InlineConstantScalars(),
+            ms.schedule_rule.AutoInline(
+                into_producer=False,
+                into_consumer=True,
+                inline_const_tensor=True,
+                disallow_if_then_else=True,
+                require_injective=True,
+                require_ordered=True,
+                disallow_op=["tir.exp"],
+            ),
+            # ms.schedule_rule.AddRFactor(max_jobs_per_core=1, max_innermost_factor=64),
+            *(
+                [
+                    ms.schedule_rule.MultiLevelTilingWithIntrin(
+                        intrin,
+                        structure=structure,
+                    )
+                    for intrin in intrins
+                ]
+            ),
+            ms.schedule_rule.MultiLevelTiling(
+                structure="SSRSRS",
+                # structure="SSRSRS",
+                tile_binds=None,
+                max_innermost_factor=64,
+                vector_load_lens=None,
+                reuse_read=None,
+                reuse_write=ms.schedule_rule.ReuseType(
+                    req="may",
+                    levels=[1, 2],
+                    scope="global",
+                ),
+            ),
+            ms.schedule_rule.ParallelizeVectorizeUnroll(
+                max_jobs_per_core=-1,  # disable parallelize
+                max_vectorize_extent=-1,  # disable vectorize
+                unroll_max_steps=[0, 2, 4, 8, 16, 32, 64],
+                unroll_explicit=True,
+                # unroll_explicit=False,
+            ),
+            ms.schedule_rule.RandomComputeLocation(),
+        ]
+
+    def _get_postprocs(cfu_mode: Optional[str] = None):
+        # print("_get_postprocs", cfu_mode)
+        return [
+            ms.postproc.DisallowDynamicLoop(),
+            ms.postproc.RewriteParallelVectorizeUnroll(),
+            ms.postproc.RewriteReductionBlock(),
+            *([ImportCPostprocess(cfu_mode)] if enable_intrin else []),
+            ms.postproc.RewriteTensorize(),
+        ]
+
+    def _get_mutator_probs():
+        return {
+            ms.mutator.MutateTileSize(): 0.9,
+            ms.mutator.MutateComputeLocation(): 0.05,
+            ms.mutator.MutateUnroll(): 0.03,
+            # ms.mutator.Parallel(): 0.02,
+        }
+
+    default_intrin = "all" if channel_count is None else "auto"
+    intrin = default_intrin if enable_intrin else None
+    sch_rules = _get_sch_rules(intrin, num_clusters, channel_count)
+    postprocs = _get_postprocs(cfu_mode)
+    mutator_probs = _get_mutator_probs()
+    return sch_rules, postprocs, mutator_probs
