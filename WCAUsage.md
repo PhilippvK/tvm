@@ -169,7 +169,13 @@ outputs/tune_resnet_cfu
 
 **Relevant files:**
 
-TODO
+```
+tests/python/micro/cfu_wca_etiss_script.py    # Tuning and benchmarkming script
+python/tvm/tir/tensor_intrin/cfu.py           # tensor intrinsics for WCA
+python/tvm/contrib/micro/cfu/wca.py           # Utilities & passes for WCA
+python/tvm/contrib/micro/cfu/model_utils.py   # TFLite Model support
+python/tvm/contrib/micro/cfu/tuning_utils.py  # Misc Tuning utils
+```
 
 ## WCA ISA
 
@@ -626,5 +632,6 @@ TODO
 - [ ] Support tuning on RTL via CFU Playground (Renode)
 - [ ] Integrate tuning with MLonMCU
 - [ ] Finish CFUWCA feature for MLonMCU
-- [ ] TODO: Support more models
+- [ ] Support more models
 - [ ] Implement fallback to normal vector dotproduct if weight clustering is not feasible
+- [ ] Document TVMC usage with CFU/WCA
