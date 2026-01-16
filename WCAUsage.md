@@ -36,37 +36,53 @@ Hint: Don't forget `export PYTHONPATH=$(pwd)/python`
 ### Run untuned Resnet Model via MicroTVM (WCA disabled)
 
 ```sh
-python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap --skip-tuning --out outputs/bench_resnet_baseline
+python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
+    --skip-tuning \
+    --out outputs/bench_resnet_baseline
 ```
 
 ### Tune Resnet Model (WCA disabled)
 
 ```sh
-python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap --num-trials-per-iter 5 --max-trials-per-task 50 --skip-bench --out outputs/tune_resnet_baseline
+python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
+    --num-trials-per-iter 5 --max-trials-per-task 50 --skip-bench \
+    --out outputs/tune_resnet_baseline
 ```
 
 ### Tune and Run Resnet Model (WCA enabled)
 
 ```sh
-python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap --num-trials-per-iter 5 --max-trials-per-task 50 --enable-custom --enable-intrin --cfu-mode=MODE_CFU --out outputs/tune_resnet_wca
+python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
+    --num-trials-per-iter 5 --max-trials-per-task 50 \
+    --enable-custom --enable-intrin --cfu-mode=MODE_CFU \
+    --out outputs/tune_resnet_wca
 ```
 
 ### Run Tuned Resnet Model via MicroTVM (WCA disabled)
 
 ```sh
-python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap --ms-db ? --out outputs/run_resnet_baseline_tuned
+python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
+    --ms-db ? \
+    --out outputs/run_resnet_baseline_tuned
 ```
 
 ### Run Tuned Resnet Model via MicroTVM (WCA enabled)
 
 ```sh
-python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap --enable-custom --enable-intrin --cfu-mode=MODE_CFU --ms-db ? --out outputs/run_resnet_wca_tuned
+python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
+    --enable-custom --enable-intrin --cfu-mode=MODE_CFU \
+    --ms-db ? \
+    --out outputs/run_resnet_wca_tuned
 ```
 
 ### Single layer tuning run with higher verbosity to see errors
 
 ```sh
-python3 tests/python/micro/cfu_wca_etiss_script.py --model layers_unpacked/pretrainedResnet_clustered_quant_remap_layer5 --num-trials-per-iter 1 --max-trials-per-task 1 --max-trials-global 1 --enable-custom --enable-intrin --cfu-mode=MODE_CFU --out outputs/debug_resnet_cfu
+python3 tests/python/micro/cfu_wca_etiss_script.py --model layers_unpacked/pretrainedResnet_clustered_quant_remap_layer5 \
+    --num-trials-per-iter 1 --max-trials-per-task 1 --max-trials-global 1 \
+    --enable-custom --enable-intrin --cfu-mode=MODE_CFU \
+    --verbose \
+    --out outputs/debug_resnet_cfu
 ```
 
 Output artifacts:
