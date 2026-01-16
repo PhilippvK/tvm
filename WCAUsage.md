@@ -437,18 +437,12 @@ Before the tuning trial is evaluated the defined postprocesses are applied. The 
 ...
 is_legal = ...  # Check if valid cfu kernel
 if has_tensorize:
-    # print("tensorize_func", tensorize_func)
-    # input(">>>")
     if is_legal:
         num_clusters = len(codebook_arr)
-        # code = _gen_cfu_kernel_code(num_clusters, self.mode, tensorize_count, tensorize_func)
         func_name = f"cfu_kernel_{tensorize_count}x_{num_clusters}c"
-        # print("func_name", func_name)
         code = _gen_cfu_kernel_code(num_clusters, self.mode, tensorize_count, func_name)
-        # print("code", code)
         sch.annotate(block, "pragma_import_c", code)
     else:
-        # print("illegal!")
         block_ = sch.get_block(tensorize_block)
         sch.unannotate(block_, "meta_schedule.auto_tensorize")
 ```
