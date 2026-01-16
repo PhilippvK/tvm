@@ -47,9 +47,12 @@ get_logger("xgb_model").setLevel(logging.ERROR)
 
 DIR = Path(__file__).parent.resolve()
 BASE_DIR = DIR / "../../../../"
+# BASE_DIR = DIR / "../../../../../"
+print("BASE_DIR", BASE_DIR.resolve())
+# input("!")
 
-MS_DISPATCH = 1  # silent?
-# MS_DISPATCH = 2  # verbose
+# MS_DISPATCH = 1  # silent?
+MS_DISPATCH = 2  # verbose
 # MS_DISPATCH = ?  # error
 
 
@@ -69,7 +72,7 @@ def lookup_model_by_name(model):
         input_shape = model_info["in_shape"]
         input_dtype = model_info["in_dtype"]
     else:
-        MODELS_DIR = BASE_DIR / "models"
+        MODELS_DIR = (BASE_DIR / "models").resolve()
 
         INPUT_SHAPE_LOOKUP = {
             "pretrainedResnet_clustered_quant_remap": [1, 32, 32, 3],
@@ -342,7 +345,7 @@ def create_relay_module():
 ])
 @pytest.mark.parametrize("num_trials_per_iter,max_trials_per_task,max_trials_global", [
     # (0, 0, 1000000),
-    # (1, 1, 1000000),
+    (1, 1, 1000000),
     # (5, 10, 1000000),
     # (5, 20, 1000000),
     # (5, 50, 1000000),
@@ -351,7 +354,7 @@ def create_relay_module():
     # (10, 200, 1000000),
     # (20, 200, 1000000),
     # (5, 10, 1000000),
-    (5, 100, 1000000),
+    # (5, 100, 1000000),
     # (1, 200, 1000000),
     # (1, 1, 1000000),
     # (5, 400, 1000000),
@@ -360,10 +363,10 @@ def create_relay_module():
     # (5, 1600, 1000000),
 ])
 @pytest.mark.parametrize("enable_custom,enable_intrin,cfu_mode", [
-    # (False, False, None),
+    (False, False, None),
     # (True, False, None),
     # (True, True, "MODE_EMUL"),
-    (True, True, "MODE_CFU"),
+    # (True, True, "MODE_CFU"),
 ])
 @pytest.mark.parametrize("module_equality", ["ignore-ndarray"])
 @pytest.mark.parametrize("model,num_clusters,channel_count", [  # in or out?
@@ -372,7 +375,7 @@ def create_relay_module():
     # ("pretrainedResnet_clustered_quant_remap_packed", None, None),
     # ("layers/pretrainedResnet_clustered_quant_remap_layer0", 4, 3),  # conv2d, 3 in channels, no accel?
     # ("layers/pretrainedResnet_clustered_quant_remap_layer0", None, None),  # conv2d, 3 in channels, no accel?
-    # ("layers/pretrainedResnet_clustered_quant_remap_layer1", 4, 16),  # conv2d
+    # ("layers_unpacked/pretrainedResnet_clustered_quant_remap_layer1", 4, 16),  # conv2d
     # ("layers/pretrainedResnet_clustered_quant_remap_layer2", 4, 16),  # conv2d
     # ("layers/pretrainedResnet_clustered_quant_remap_layer3", None, None),  # add
     # ("layers/pretrainedResnet_clustered_quant_remap_layer4", 4, 16),  # conv2d
@@ -422,6 +425,7 @@ def test_micro_tuning_with_meta_schedule(alter_op, toolchain, target, num_trials
     options = {
         "verbose": True,
         "quiet": True,
+        # "quiet": False,
         "gcc_prefix": str(BASE_DIR / "install/rv32gc_ilp32d"),
         "gcc_name": "riscv32-unknown-elf",
         "llvm_dir": str(BASE_DIR / "install/seal5_llvm"),
