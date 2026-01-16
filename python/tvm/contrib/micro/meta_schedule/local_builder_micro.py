@@ -75,11 +75,29 @@ def get_local_builder_micro():
         # cur_pass_ctx = tvm.transform.PassContext.current()
         # print("mod", mod)
         # # print("cur_pass_ctx", cur_pass_ctx)
-        # # input(">>>")
-        pass_config = {
-            "tir.disable_vectorize": True,
-            "tir.add_lower_pass": [(3, CompressWeights())],
-        }
+        try:
+            # print("try")
+            from tvm.contrib.micro.cfu.wca import CompressWeights
+
+            # print("A")
+            # input(">>>")
+            gf = tvm.get_global_func("tvm.tir.transform.CompressWeights", None)
+            # gf = tvm.get_global_func("tir.transform.CompressWeights", None)
+            # print("gf", gf)
+            # input(">>>")
+            gf_ = gf()
+            # print("gf_", gf_)
+            # input(">>>")
+            pass_config = {
+                "tir.disable_vectorize": True,
+                # "tir.add_lower_pass": [(3, CompressWeights())],
+                # "tir.add_lower_pass": [(3, tvm.get_global_func("tvm.tir.transform.CompressWeights")())],
+                "tir.add_lower_pass": [(3, gf_)],
+            }
+        except Exception as ex:
+            print(ex)
+            print(traceback.format_exc())
+            input("$$$0")
         with tvm.transform.PassContext(
             opt_level=3,
             config=pass_config,
