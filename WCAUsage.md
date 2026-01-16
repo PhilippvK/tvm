@@ -221,7 +221,92 @@ As a worksround to avoid generating unsupported ARM instructions, they are disab
 
 Used custom tuning config:
 
-TODO
+```python
+def get_wca_tuning_config(
+    enable_intrin: bool = False,
+    num_clusters: Optional[int] = None,
+    cfu_mode: Optional[str] = None,
+    channel_count: Optional[int] = None,
+):
+    ...
+    def _get_sch_rules(
+        intrin: Optional[str] = None, num_clusters: Optional[int] = None, channel_count: Optional[int] = None
+    ):
+        intrins = [
+            CFU_64X_INTRIN,
+            CFU_56X_INTRIN,
+            CFU_48X_INTRIN,
+            CFU_40X_INTRIN,
+            CFU_32X_INTRIN,
+            CFU_24X_INTRIN,
+            CFU_16X_INTRIN,
+            CFU_8X_INTRIN,
+        ]
+        structure = "SR"
+        return [
+            ms.schedule_rule.ApplyCustomRule(),
+            ms.schedule_rule.InlineConstantScalars(),
+            ms.schedule_rule.AutoInline(
+                into_producer=False,
+                into_consumer=True,
+                inline_const_tensor=True,
+                disallow_if_then_else=True,
+                require_injective=True,
+                require_ordered=True,
+                disallow_op=["tir.exp"],
+            ),
+            *(  # CUSTOM
+                [
+                    ms.schedule_rule.MultiLevelTilingWithIntrin(
+                        intrin,
+                        structure=structure,
+                    )
+                    for intrin in intrins
+                ]
+            ),
+            ms.schedule_rule.MultiLevelTiling(
+                structure="SSRSRS",
+                tile_binds=None,
+                max_innermost_factor=64,
+                vector_load_lens=None,
+                reuse_read=None,
+                reuse_write=ms.schedule_rule.ReuseType(
+                    req="may",
+                    levels=[1, 2],
+                    scope="global",
+                ),
+            ),
+            ms.schedule_rule.ParallelizeVectorizeUnroll(
+                max_jobs_per_core=-1,  # disable parallelize
+                max_vectorize_extent=-1,  # disable vectorize
+                unroll_max_steps=[0, 2, 4, 8, 16, 32, 64],
+                unroll_explicit=True,
+            ),
+            ms.schedule_rule.RandomComputeLocation(),
+        ]
+
+    def _get_postprocs(cfu_mode: Optional[str] = None):
+        # print("_get_postprocs", cfu_mode)
+        return [
+            ms.postproc.DisallowDynamicLoop(),
+            ms.postproc.RewriteParallelVectorizeUnroll(),
+            ms.postproc.RewriteReductionBlock(),
+            *([ImportCPostprocess(cfu_mode)] if enable_intrin else []),  # CUSTOM
+            ms.postproc.RewriteTensorize(),
+        ]
+
+     def _get_mutator_probs():
+        return {
+            ms.mutator.MutateTileSize(): 0.9,
+            ms.mutator.MutateComputeLocation(): 0.05,
+            ms.mutator.MutateUnroll(): 0.03,
+        }
+    ...
+    sch_rules = _get_sch_rules(intrin, num_clusters, channel_count)
+    postprocs = _get_postprocs(cfu_mode)
+    mutator_probs = _get_mutator_probs()
+    return sch_rules, postprocs, mutator_probs
+```
 
 Used tensor intrinsics (see `python/tvm/tir/tensor_intrin/cfu.py`):
 
