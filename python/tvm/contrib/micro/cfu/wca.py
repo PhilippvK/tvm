@@ -91,13 +91,20 @@ def _gen_cfu_kernel_code(num_clusters: int, cfu_mode: str, channel_count: int, k
     assert cfu_mode in ["MODE_EMUL", "MODE_CFU"]
     assert channel_count in [8, 16, 24, 32, 40, 48, 56, 64]
     cfg = f"{num_clusters}_{channel_count}"
-    ret = """
-#ifndef CFU_KERNEL_CODE_""" + cfg.upper() + """
-#define CFU_KERNEL_CODE_""" + cfg.upper() + """
+    ret = (
+        """
+#ifndef CFU_KERNEL_CODE_"""
+        + cfg.upper()
+        + """
+#define CFU_KERNEL_CODE_"""
+        + cfg.upper()
+        + """
 #include <stdint.h>
 
 #ifndef MODE
-#define MODE """ + cfu_mode + """
+#define MODE """
+        + cfu_mode
+        + """
 #include "cfu_wca.h"
 #undef MODE
 #else
@@ -105,164 +112,231 @@ def _gen_cfu_kernel_code(num_clusters: int, cfu_mode: str, channel_count: int, k
 #endif
 
 
-static int32_t __attribute__((always_inline)) inline """ + kernel_name + """(int8_t* data_ptr, int8_t* weights_ptr, int32_t* acc) {
-    // COUNT=""" + str(channel_count) + """, NUM_CLUSTERS=""" + str(num_clusters) + """
+static int32_t __attribute__((always_inline)) inline """
+        + kernel_name
+        + """(int8_t* data_ptr, int8_t* weights_ptr, int32_t* acc) {
+    // COUNT="""
+        + str(channel_count)
+        + """, NUM_CLUSTERS="""
+        + str(num_clusters)
+        + """
 
     alu_rst();
 """
+    )
     if num_clusters == 2:
         if channel_count == 64:
-            ret += """
+            ret += (
+                """
     uint32_t code_word0 = *((uint32_t*)weights_ptr);
     uint32_t code_word1 = *((uint32_t*)(weights_ptr + 4));
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_2b(code_word0, code_word1);
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
         elif channel_count == 56:
-            ret += """
+            ret += (
+                """
     uint32_t code_word0 = *((uint32_t*)weights_ptr);
     uint16_t code_word1_lo = *((uint16_t*)(weights_ptr + 4));
     uint8_t code_word1_hi = *((uint8_t*)(weights_ptr + 6));
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_2b(code_word0, (uint32_t)code_word1 | ((uint32_t)code_word1_hi << 16));
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
         elif channel_count == 48:
-            ret += """
+            ret += (
+                """
     uint32_t code_word0 = *((uint32_t*)weights_ptr);
     uint16_t code_word1 = *((uint16_t*)(weights_ptr + 4));
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_2b(code_word0, (uint32_t)code_word1);
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
         elif channel_count == 40:
-            ret += """
+            ret += (
+                """
     uint32_t code_word0 = *((uint32_t*)weights_ptr);
     uint8_t code_word1 = *((uint8_t*)(weights_ptr + 4));
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_2b(code_word0, (uint32_t)code_word1);
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
         elif channel_count == 32:
-            ret += """
+            ret += (
+                """
     uint32_t code_word0 = *((uint32_t*)weights_ptr);
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_2b(code_word0, 0);
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
         elif channel_count == 24:
-            ret += """
+            ret += (
+                """
     uint16_t code_word0_lo = *((uint16_t*)(weights_ptr));
     uint8_t code_word0_hi = *((uint8_t*)(weights_ptr + 2));
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_2b((uint32_t)code_word0 | ((uint32_t)code_word0_hi << 16), 0);
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
         elif channel_count == 16:
-            ret += """
+            ret += (
+                """
     uint16_t code_word0 = *((uint16_t*)weights_ptr);
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_2b((uint32_t)code_word0, 0);
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
         elif channel_count == 8:
-            ret += """
+            ret += (
+                """
     uint8_t code_word0 = *((uint8_t*)weights_ptr);
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_2b((uint32_t)code_word0, 0);
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
     elif num_clusters == 4:
         if channel_count == 32:
-            ret += """
+            ret += (
+                """
     uint32_t code_word0 = *((uint32_t*)weights_ptr);
     uint32_t code_word1 = *((uint32_t*)(weights_ptr + 4));
     uint32_t* act_words = (uint32_t*)data_ptr;
     // cfu_op0(CFU_FUNCT7_PUSH_WEIGHTS, code_word0, code_word1);
     push_weights_4b(code_word0, code_word1);
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         // cfu_op0(CFU_FUNCT7_ALU_MAC, act_words[2 * i], act_words[2 * i + 1]);
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
         elif channel_count == 24:
-            ret += """
+            ret += (
+                """
     uint32_t code_word0 = *((uint32_t*)weights_ptr);
     uint16_t code_word1 = *((uint16_t*)(weights_ptr + 4));
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_4b(code_word0, (uint32_t)code_word1);
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
         elif channel_count == 16:
-            ret += """
+            ret += (
+                """
     uint32_t code_word0 = *((uint32_t*)weights_ptr);
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_4b(code_word0, 0);
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
         elif channel_count == 8:
-            ret += """
+            ret += (
+                """
     uint16_t code_word0 = *((uint16_t*)weights_ptr);
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_4b((uint32_t)code_word0, 0);
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
     elif num_clusters == 16:
         if channel_count == 16:
-            ret += """
+            ret += (
+                """
     uint32_t code_word0 = *((uint32_t*)weights_ptr);
     uint32_t code_word1 = *((uint32_t*)(weights_ptr + 4));
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_16b(code_word0, code_word1); // rename?
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
+            )
         elif channel_count == 8:
-            ret += """
+            ret += (
+                """
     uint32_t code_word0 = *((uint32_t*)weights_ptr);
     uint32_t* act_words = (uint32_t*)data_ptr;
     push_weights_16b(code_word0, 0); // rename?
-    for (int i = 0; i < (""" + str(channel_count) + """ / 8); i++) {
+    for (int i = 0; i < ("""
+                + str(channel_count)
+                + """ / 8); i++) {
         alu_mac(act_words[2 * i], act_words[2 * i + 1]);
     }
 """
-    ret += """
+            )
+    ret += (
+        """
     return get_acc();
 }
-#endif  // CFU_KERNEL_CODE_""" + cfg.upper() + """
+#endif  // CFU_KERNEL_CODE_"""
+        + cfg.upper()
+        + """
 """
+    )
     return ret
 
 
@@ -387,29 +461,20 @@ def pack_bits(arr, n_bits: int):
     if n_bits == 1:
         # Pack each group of 8 uint1s into a uint8
         packed = (
-            (grouped[..., 0] << 7) |
-            (grouped[..., 1] << 6) |
-            (grouped[..., 2] << 5) |
-            (grouped[..., 3] << 4)
-            (grouped[..., 4] << 3) |
-            (grouped[..., 5] << 2) |
-            (grouped[..., 6] << 1) |
-            (grouped[..., 7])
+            (grouped[..., 0] << 7)
+            | (grouped[..., 1] << 6)
+            | (grouped[..., 2] << 5)
+            | (grouped[..., 3] << 4)(grouped[..., 4] << 3)
+            | (grouped[..., 5] << 2)
+            | (grouped[..., 6] << 1)
+            | (grouped[..., 7])
         )
     elif n_bits == 2:
         # Pack each group of 4 uint2s into a uint8
-        packed = (
-            (grouped[..., 0] << 6) |
-            (grouped[..., 1] << 4) |
-            (grouped[..., 2] << 2) |
-            (grouped[..., 3])
-        )
+        packed = (grouped[..., 0] << 6) | (grouped[..., 1] << 4) | (grouped[..., 2] << 2) | (grouped[..., 3])
     elif n_bits == 4:
         # Pack each group of 2 uint4s into a uint8
-        packed = (
-            (grouped[..., 0] << 4) |
-            (grouped[..., 1])
-        )
+        packed = (grouped[..., 0] << 4) | (grouped[..., 1])
     packed = packed.astype(np.uint8)
 
     return packed, factor
@@ -417,6 +482,8 @@ def pack_bits(arr, n_bits: int):
 
 # This seems to break the coudpickle dump required for the rpc-based builder....
 from tvm._ffi.registry import register_func
+
+
 @register_func("tvm.tir.transform.CompressWeights")
 def CompressWeights():
     # print("CompressWeights")
@@ -500,7 +567,16 @@ def CompressWeights():
                             # print("func_name.value", func_name.value)
                             tensorize_count = int(func_name.value.split("x", 1)[0].split("_")[-1])
                             # print("tensorize_count", tensorize_count)
-                            assert tensorize_count in [8, 16, 24, 32, 40, 48, 56, 64], f"tensorize_count={tensorize_count}"
+                            assert tensorize_count in [
+                                8,
+                                16,
+                                24,
+                                32,
+                                40,
+                                48,
+                                56,
+                                64,
+                            ], f"tensorize_count={tensorize_count}"
                             new_func_name = f"cfu_kernel_{tensorize_count}x_{tensorize_num_clusters}c"
                             new_args = list(stmt.args)
                             new_args[0] = new_func_name
@@ -535,21 +611,37 @@ def CompressWeights():
                         codebook_name = name_supply.fresh_name("codebook_")
                         codebook_var = tvm.tir.Var(codebook_name, tvm.ir.PointerType(tvm.ir.PrimType("int8")))
                         codebook_buf = tvm.tir.decl_buffer(
-                            shape=[len(codebook_arr)],
-                            dtype="int8",
-                            data=codebook_var  # Bind it to the actual var
+                            shape=[len(codebook_arr)], dtype="int8", data=codebook_var  # Bind it to the actual var
                         )
-                        set_codebook_stmt = tvm.tir.Evaluate(tvm.tir.call_extern(
-                            "void",
-                            f"set_codebook_{tensorize_num_clusters}",
-                            codebook_buf.access_ptr("r", offset=0),
-                        ))
+                        set_codebook_stmt = tvm.tir.Evaluate(
+                            tvm.tir.call_extern(
+                                "void",
+                                f"set_codebook_{tensorize_num_clusters}",
+                                codebook_buf.access_ptr("r", offset=0),
+                            )
+                        )
                         new_body = tvm.tir.SeqStmt([set_codebook_stmt, stmt.body])
                         # annotations=None will lead to segfault in usmp pass
-                        newer_body = tvm.tir.AllocateConst(buffer_var=codebook_var, dtype="int8", extents=[len(codebook_arr)], data_or_idx=ndarray.array(codebook_arr), body=new_body, annotations={})
-                        ret = tvm.tir.AllocateConst(buffer_var=stmt.buffer_var, dtype=stmt.dtype, extents=new_extents, data_or_idx=new_data, body=newer_body, annotations=stmt.annotations, span=stmt.span)
+                        newer_body = tvm.tir.AllocateConst(
+                            buffer_var=codebook_var,
+                            dtype="int8",
+                            extents=[len(codebook_arr)],
+                            data_or_idx=ndarray.array(codebook_arr),
+                            body=new_body,
+                            annotations={},
+                        )
+                        ret = tvm.tir.AllocateConst(
+                            buffer_var=stmt.buffer_var,
+                            dtype=stmt.dtype,
+                            extents=new_extents,
+                            data_or_idx=new_data,
+                            body=newer_body,
+                            annotations=stmt.annotations,
+                            span=stmt.span,
+                        )
                         return ret
                 return stmt
+
             # print("D")
 
             new_body = tvm.tir.stmt_functor.ir_transform(
@@ -557,7 +649,7 @@ def CompressWeights():
                 _visit,
                 _mutate,
                 # ["tir.Evaluate", "tir.Call", "tir.Block", "tir.AllocateConst"]
-                ["tir.Call", "tir.AllocateConst"]
+                ["tir.Call", "tir.AllocateConst"],
             )
             # print("E")
             # print("body", func.body)
@@ -570,6 +662,5 @@ def CompressWeights():
             # print("G")
             return func
             # return func
+
     return tvm.tir.transform.prim_func_pass(_transform, opt_level=0, name="CompressWeights")
-
-
