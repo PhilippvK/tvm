@@ -191,7 +191,8 @@ def run_micro_tuning_with_meta_schedule(
             with get_rpc_runner_micro(
                 platform=platform,
                 options=options,
-                session_timeout_sec=120,
+                # session_timeout_sec=120,
+                session_timeout_sec=120*2,
                 evaluator_config=evaluator_config,
                 # serial_numbers=["server:micro", "server:micro"],
                 # serial_numbers=["server:micro", "server:micro"] * 5,
