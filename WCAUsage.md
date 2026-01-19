@@ -43,46 +43,46 @@ BASE_OUT_DIR=/tmp/base/  # destination for session artifacts if --out is undefin
 Hint: Don't forget `export PYTHONPATH=$(pwd)/python`
 
 
-### Run untuned Resnet Model via MicroTVM (WCA disabled)
+### Run untuned Resnet Model via MicroTVM on ETISS (WCA disabled)
 
 ```sh
 python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
     --skip-tuning \
-    --out outputs/bench_resnet_baseline
+    --template etiss --out outputs/bench_resnet_baseline_etiss_etiss
 ```
 
-### Tune Resnet Model (WCA disabled)
+### Tune Resnet Model on ETISS (WCA disabled)
 
 ```sh
 python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
     --num-trials-per-iter 5 --max-trials-per-task 50 --skip-bench \
-    --out outputs/tune_resnet_baseline
+    --template etiss --out outputs/tune_resnet_baseline_etiss
 ```
 
-### Tune and Run Resnet Model (WCA enabled)
+### Tune and Run Resnet Model on ETISS (WCA enabled)
 
 ```sh
 python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
     --num-trials-per-iter 5 --max-trials-per-task 50 \
     --enable-custom --enable-intrin --cfu-mode=MODE_CFU \
-    --out outputs/tune_resnet_wca
+    --template etiss --out outputs/tune_resnet_wca_etiss
 ```
 
-### Run Tuned Resnet Model via MicroTVM (WCA disabled)
+### Run Tuned Resnet Model via MicroTVM on ETISS (WCA disabled)
 
 ```sh
 python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
-    --ms-db outputs/tune_resnet_baseline \
-    --out outputs/run_resnet_baseline_tuned
+    --ms-db outputs/tune_resnet_baseline_etiss \
+    --template etiss --out outputs/run_resnet_baseline_tuned_etiss
 ```
 
-### Run Tuned Resnet Model via MicroTVM (WCA enabled)
+### Run Tuned Resnet Model via MicroTVM on ETISS (WCA enabled)
 
 ```sh
 python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
     --enable-custom --enable-intrin --cfu-mode=MODE_CFU \
-    --ms-db outputs/tune_resnet_wca \
-    --out outputs/run_resnet_wca_tuned
+    --ms-db outputs/tune_resnet_wca_etiss \
+    --template etiss --out outputs/run_resnet_wca_tuned_etiss
 ```
 
 The results are also printed to the terminal (in seconds):
@@ -95,6 +95,16 @@ Metrics:
 2      REL  0.268789
 ```
 
+### Tuning and benchmarking via MicroTVM on Renode
+
+Replace `--template etiss` with `--template cfu` in the commands above!
+Make sure to setup the multilib RISC-V toolchain and CFU Playground repo before and export the relevant paths to the environment:
+
+```sh
+export CFU_ROOT=/path/to/cfu-playground
+export PATH=/path/to/riscv_gcc_multilib/bin:$PATH
+```
+
 ### Single layer tuning run with higher verbosity to see errors
 
 ```sh
@@ -102,7 +112,7 @@ python3 tests/python/micro/cfu_wca_etiss_script.py --model layers_unpacked/pretr
     --num-trials-per-iter 1 --max-trials-per-task 1 --max-trials-global 1 \
     --enable-custom --enable-intrin --cfu-mode=MODE_CFU \
     --verbose \
-    --out outputs/debug_resnet_layer_cfu
+    --template etiss --out outputs/debug_resnet_layer_cfu_etiss
 ```
 
 ### Debug auto-tensorization issues by increasing Metascheduler dispatch verbosity
@@ -113,7 +123,7 @@ python3 tests/python/micro/cfu_wca_etiss_script.py --model layers_unpacked/pretr
     --num-trials-per-iter 1 --max-trials-per-task 1 --max-trials-global 1 \
     --enable-custom --enable-intrin --cfu-mode=MODE_CFU \
     --ms-dispatch 2 \
-    --out outputs/debug_resnet_layer_cfu_dispatch
+    --template --out outputs/debug_resnet_layer_cfu_dispatch_etiss
 
 # (dispatch & 1): unused
 # (dispatch & 2): controls whether to print TVMScript for missing TIR
