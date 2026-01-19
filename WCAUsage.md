@@ -72,7 +72,7 @@ python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_
 
 ```sh
 python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
-    --ms-db ? \
+    --ms-db outputs/tune_resnet_baseline \
     --out outputs/run_resnet_baseline_tuned
 ```
 
@@ -81,7 +81,7 @@ python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_
 ```sh
 python3 tests/python/micro/cfu_wca_etiss_script.py --model new/pretrainedResnet_clustered_quant_remap \
     --enable-custom --enable-intrin --cfu-mode=MODE_CFU \
-    --ms-db ? \
+    --ms-db outputs/tune_resnet_wca \
     --out outputs/run_resnet_wca_tuned
 ```
 
