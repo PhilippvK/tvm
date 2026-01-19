@@ -60,7 +60,8 @@ print("BASE_DIR_DIR", BASE_OUT_DIR.resolve())
 def run_micro_tuning_with_meta_schedule(
     alter_op,
     toolchain,
-    target,
+    tvm_target,
+    template,
     num_trials_per_iter,
     max_trials_per_task,
     max_trials_global,
@@ -80,7 +81,7 @@ def run_micro_tuning_with_meta_schedule(
     out_dir=None,
 ):
     print()
-    platform = BASE_DIR / "microtvm-etiss-template/template_project"
+    platform = BASE_DIR / f"microtvm-{template}-template/template_project"
     # print("platform", platform)
     opt_level = 3
     pass_config = {
@@ -103,7 +104,7 @@ def run_micro_tuning_with_meta_schedule(
             return x
 
         fields = [
-            target,
+            tvm_target,
             toolchain,
             alter_op,
             num_trials_per_iter,
@@ -217,7 +218,7 @@ def run_micro_tuning_with_meta_schedule(
                     db: ms.Database = ms.relay_integration.tune_relay(
                         mod=mod,
                         params=params,
-                        target=target,
+                        target=tvm_target,
                         builder=builder,
                         runner=runner,
                         strategy=strategy,
@@ -248,7 +249,7 @@ def run_micro_tuning_with_meta_schedule(
             ms_mod: tvm.runtime.Module = ms.relay_integration.compile_relay(
                 database=db,
                 mod=mod,
-                target=target,
+                target=tvm_target,
                 params=params,
                 pass_config=MappingProxyType(
                     {
@@ -275,14 +276,14 @@ def run_micro_tuning_with_meta_schedule(
             ms_mod: tvm.runtime.Module = ms.relay_integration.compile_relay(
                 database=db,
                 mod=mod,
-                target=target,
+                target=tvm_target,
                 params=params,
                 pass_config=MappingProxyType(
                     {
                         **pass_config,
                         "relay.backend.use_meta_schedule": True,
                         "relay.backend.tir_converter": "default",
-                        "relay.backend.use_meta_schedule_dispatch": MS_DISPATCH,
+                        "relay.backend.use_meta_schedule_dispatch": ms_dispatch,
                         # "tir.enable_debug": True,
                     }
                 ),
@@ -297,12 +298,12 @@ def run_micro_tuning_with_meta_schedule(
     non_ms_mod: tvm.runtime.Module = ms.relay_integration.compile_relay(
         None,
         mod=mod,
-        target=target,
+        target=tvm_target,
         params=params,
         pass_config=MappingProxyType(
             {
                 **pass_config,
-                "relay.backend.use_meta_schedule_dispatch": MS_DISPATCH,
+                "relay.backend.use_meta_schedule_dispatch": ms_dispatch,
             }
         ),
         disabled_pass=disabled_pass,
@@ -384,8 +385,9 @@ def parse_args():
 
     # === Core execution ===
     parser.add_argument("--model", type=str, default="new/pretrainedResnet_clustered_quant_remap")
-    parser.add_argument("--target", type=str, default="c -device=arm_cpu -mcpu=cortex-m7 -num-cores=1")
-    parser.add_argument("--toolchain", type=str, default="gcc")
+    parser.add_argument("--tvm-target", type=str, default="c -device=arm_cpu -mcpu=cortex-m7 -num-cores=1")
+    parser.add_argument("--toolchain", type=str, choices=["gcc", "llvm"], default="gcc")
+    parser.add_argument("--template", type=str, choices=["etiss", "cfu"], default="etiss")
 
     # === Tuning parameters ===
     parser.add_argument("--num-trials-per-iter", type=int, default=1)
@@ -428,27 +430,43 @@ def parse_args():
 def main():
     args = parse_args()
 
-    options = {
+    common_options = {
         "verbose": args.verbose,
         "quiet": not args.verbose,
         # "quiet": False,
-        "gcc_prefix": str(BASE_DIR / "install/rv32gc_ilp32d"),
-        "gcc_name": "riscv32-unknown-elf",
-        "llvm_dir": str(BASE_DIR / "install/seal5_llvm"),
-        "toolchain": args.toolchain,
-        "etiss_script": str(BASE_DIR / "etiss/build/install/bin/run_helper.sh"),
-        "etiss_args": "",
-        "arch": args.arch,
-        "abi": args.abi,
-        # "cpu_arch": "RV32IMACFD",
-        "cpu_arch": args.etiss_arch,
-        "cpu_freq": 100000000,
     }
+    if args.template == "etiss":
+        options = {
+            **common_options,
+            "toolchain": args.toolchain,
+            "etiss_script": str(BASE_DIR / "etiss/build/install/bin/run_helper.sh"),
+            "etiss_args": "",
+            "arch": args.arch,
+            "abi": args.abi,
+            # "cpu_arch": "RV32IMACFD",
+            "cpu_arch": args.etiss_arch,
+            "cpu_freq": 100000000,
+            "gcc_prefix": str(BASE_DIR / "install/rv32gc_ilp32d"),
+            "gcc_name": "riscv32-unknown-elf",
+            "llvm_dir": str(BASE_DIR / "install/seal5_llvm"),
+        }
+    elif args.template == "cfu":
+        assert args.toolchain == "gcc"
+        options = {
+            **common_options,
+            # "cfu_root": "?",
+            # "verilator_install_dir": "?",
+            "gcc_prefix": str(BASE_DIR / "install/multilib_old"),
+            "debug": True,
+        }
+    else:
+        raise ValueError(f"Unsupported template: {args.template}")
 
     run_micro_tuning_with_meta_schedule(
         alter_op=args.alter_op,
         toolchain=args.toolchain,
-        target=args.target,
+        tvm_target=args.tvm_target,
+        template=args.template,
         num_trials_per_iter=args.num_trials_per_iter,
         max_trials_per_task=args.max_trials_per_task,
         max_trials_global=args.max_trials_global,
