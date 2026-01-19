@@ -18,6 +18,7 @@
 
 import traceback
 from math import log2
+from typing import Optional
 
 import numpy as np
 
