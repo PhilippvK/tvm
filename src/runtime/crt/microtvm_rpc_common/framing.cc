@@ -218,7 +218,12 @@ tvm_crt_error_t Unframer::FindPacketLength() {
     return to_return;
   }
 
-  num_payload_bytes_remaining_ = *reinterpret_cast<uint32_t*>(buffer_);
+  // num_payload_bytes_remaining_ = *reinterpret_cast<uint32_t*>(buffer_);
+  num_payload_bytes_remaining_ =
+    (uint32_t)buffer_[0] |
+    ((uint32_t)buffer_[1] << 8) |
+    ((uint32_t)buffer_[2] << 16) |
+    ((uint32_t)buffer_[3] << 24);
   TVM_UNFRAMER_DEBUG_LOG("payload length: 0x%zx", num_payload_bytes_remaining_);
   ClearBuffer();
   state_ = State::kFindPacketCrc;
@@ -295,7 +300,8 @@ tvm_crt_error_t Unframer::FindCrcEnd() {
   }
 
   // TODO(areusch): Handle endianness.
-  stream_->PacketDone(crc_ == *reinterpret_cast<uint16_t*>(buffer_));
+  // stream_->PacketDone(crc_ == *reinterpret_cast<uint16_t*>(buffer_));
+  stream_->PacketDone(crc_ == ((uint16_t)buffer_[0] | ((uint16_t)buffer_[1] << 8)));
   ClearBuffer();
   state_ = State::kFindPacketStart;
   return kTvmErrorNoError;
