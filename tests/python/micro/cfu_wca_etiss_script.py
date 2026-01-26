@@ -413,6 +413,7 @@ def parse_args():
     parser.add_argument("--cfu-mode", type=str, default=None, choices=[None, "MODE_EMUL", "MODE_CFU"])
     parser.add_argument("--num-clusters", type=int, default=None)
     parser.add_argument("--channel-count", type=int, default=None)
+    parser.add_argument("--cfu-verilog", type=str, default=None)
 
     # === Misc ===
     parser.add_argument("--module-equality", type=str, default="ignore-ndarray")
@@ -460,6 +461,8 @@ def main():
             "gcc_prefix": str(BASE_DIR / "install/multilib_old"),
             "debug": True,
         }
+        if args.cfu_verilog is not None:
+            options["verilog_file"] = args.cfu_verilog
     else:
         raise ValueError(f"Unsupported template: {args.template}")
 
