@@ -55,6 +55,12 @@ BASE_DIR = Path(os.environ.get("BASE_DIR", DIR / "../../../../"))
 print("BASE_DIR", BASE_DIR.resolve())
 BASE_OUT_DIR = Path(os.environ.get("BASE_OUT_DIR", "/tmp/base"))
 print("BASE_DIR_DIR", BASE_OUT_DIR.resolve())
+ETISS_INSTALL_DIR = Path(os.environ.get("ETISS_INSTALL_DIR", BASE_DIR / "etiss/build/install/bin/run_helper.sh"))
+LLVM_INSTALL_DIR = Path(os.environ.get("LLVM_INSTALL_DIR", BASE_DIR / "install/llvm"))
+# SEAL5_LLVM_INSTALL_DIR = os.environ.get(str(BASE_DIR / "install/seal5_llvm"),
+GNU_PREFIX = Path(os.environ.get("GNU_PREFIX", BASE_DIR / "install/rv32gc_ilp32d"))
+GNU_NAME = os.environ.get("GNU_NAME", "riscv32-unknown-elf")
+GNU_MULTILIB_PREFIX = Path(os.environ.get("GNU_MULTILIB_PREFIX", BASE_DIR / "install/multilib_old"))
 
 
 def run_micro_tuning_with_meta_schedule(
@@ -422,8 +428,8 @@ def parse_args():
     # === MicroTVM flags ===
     parser.add_argument("--verbose", action="store_true", default=False)
     parser.add_argument("--no-verbose", dest="verbose", action="store_false")
-    parser.add_argument("--arch", type=str, default="rv32gc_zicsr_zifencei")
-    parser.add_argument("--abi", type=str, default="ilp32d")
+    parser.add_argument("--arch", type=str, default="rv32im_zicsr_zifencei")
+    parser.add_argument("--abi", type=str, default="ilp32")
     parser.add_argument("--etiss-arch", type=str, default="RV32IMACFDXCFU0")
 
     return parser.parse_args()
@@ -441,16 +447,16 @@ def main():
         options = {
             **common_options,
             "toolchain": args.toolchain,
-            "etiss_script": str(BASE_DIR / "etiss/build/install/bin/run_helper.sh"),
+            "etiss_script": str(ETISS_INSTALL_DIR / "bin" / "run_helper.sh"),
             "etiss_args": "",
             "arch": args.arch,
             "abi": args.abi,
             # "cpu_arch": "RV32IMACFD",
             "cpu_arch": args.etiss_arch,
             "cpu_freq": 100000000,
-            "gcc_prefix": str(BASE_DIR / "install/rv32gc_ilp32d"),
-            "gcc_name": "riscv32-unknown-elf",
-            "llvm_dir": str(BASE_DIR / "install/seal5_llvm"),
+            "gcc_prefix": str(GNU_PREFIX),
+            "gcc_name": GNU_NAME,
+            "llvm_dir": str(LLVM_INSTALL_DIR),
         }
     elif args.template == "cfu":
         assert args.toolchain == "gcc"
@@ -458,7 +464,7 @@ def main():
             **common_options,
             # "cfu_root": "?",
             # "verilator_install_dir": "?",
-            "gcc_prefix": str(BASE_DIR / "install/multilib_old"),
+            "gcc_prefix": str(GNU_MULTILIB_PREFIX),
             "debug": True,
         }
         if args.cfu_verilog is not None:
