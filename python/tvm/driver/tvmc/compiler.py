@@ -50,8 +50,6 @@ from .transform import generate_transform_args, parse_graph_transform_args, appl
 from .shape_parser import parse_shape_string
 from .workspace_pools import generate_workspace_pools_args, workspace_pools_recombobulate
 
-import tvm.contrib.micro.cfu.wca
-
 # pylint: disable=invalid-name
 logger = logging.getLogger("TVMC")
 
