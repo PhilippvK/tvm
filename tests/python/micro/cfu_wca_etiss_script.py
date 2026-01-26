@@ -46,6 +46,9 @@ from tvm.contrib.micro.cfu.wca import CompressWeights, ImportCPostprocess, get_w
 from tvm.contrib.micro.cfu.model_utils import lookup_model_by_name
 from tvm.contrib.micro.cfu.tuning_utils import _schedule_dummy
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 
 logging.basicConfig(level=logging.ERROR)
 get_logger("xgb_model").setLevel(logging.ERROR)
