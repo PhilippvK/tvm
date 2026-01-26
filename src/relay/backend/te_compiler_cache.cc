@@ -668,13 +668,16 @@ class ScheduleBuilder : public ExprVisitor {
             prim_func = WithAttrs(prim_func, relay_func->attrs->dict);
           } else {
             int dispatch = backend::UseMetaScheduleDispatch();
+            // (dispatch & 1): controls whether to print or hide the warning for missing TIR
             // (dispatch & 2): controls whether to print TVMScript for missing TIR
             // (dispatch & 4): controls whether to raise fatal errors for missing TIR
-            if (dispatch & 2) {
+            if (dispatch & 1) {
+              LOG(WARNING) << "Cannot find workload: " << prim_fn_var->name_hint;
+            } else if (dispatch & 2) {
               LOG(WARNING) << "Cannot find workload: " << prim_fn_var->name_hint << "\n"
                            << f.value();
             } else {
-              LOG(WARNING) << "Cannot find workload: " << prim_fn_var->name_hint;
+              // ignore
             }
             if (dispatch & 4) {
               LOG(FATAL);
