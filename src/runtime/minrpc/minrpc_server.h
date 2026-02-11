@@ -568,19 +568,106 @@ class MinRPCServer {
    * \param io The IO handler.
    */
   MinRPCServer(TIOHandler* io, std::unique_ptr<MinRPCExecInterface>&& exec_handler)
-      : io_(io), arena_(PageAllocator(io_)), exec_handler_(std::move(exec_handler)) {}
+      : io_(io), arena_(PageAllocator(io_)),
+      // exec_handler_(std::move(exec_handler)) {}
+      exec_handler_(
+          std::unique_ptr<
+              MinRPCExecInterface,
+              void(*)(MinRPCExecInterface*)
+          >(
+              exec_handler.release(),
+              [](MinRPCExecInterface* p) { delete p; }
+          )
+      ) {
+      }
 
+  // explicit MinRPCServer(TIOHandler* io)
+  //     : io_(io),
+  //       arena_(PageAllocator(io)),
+  //       ret_handler_(new MinRPCReturns<TIOHandler>(io_)),
+  //       exec_handler_(std::unique_ptr<MinRPCExecInterface>(
+  //           new MinRPCExecute<TIOHandler>(io_, ret_handler_))) {
+  //             uart_printf("MinRPCServer::MinRPCServer() alt");
+  //           }
   explicit MinRPCServer(TIOHandler* io)
       : io_(io),
-        arena_(PageAllocator(io)),
-        ret_handler_(new MinRPCReturns<TIOHandler>(io_)),
-        exec_handler_(std::unique_ptr<MinRPCExecInterface>(
-            new MinRPCExecute<TIOHandler>(io_, ret_handler_))) {}
+        arena_(PageAllocator(io_)) {
+      // Allocate raw memory directly from the arena
+      void* ret_mem;
+if (TVMDeviceAllocDataSpace(
+        DLDevice{kDLCPU, 0},
+        sizeof(MinRPCReturns<TIOHandler>),
+        alignof(MinRPCReturns<TIOHandler>),
+        DLDataType{kDLInt, 1, 1},
+        &ret_mem) != 0) {
+    io_->Exit(static_cast<int>(RPCServerStatus::kAllocError));
+}
+
+ret_handler_ = new (ret_mem) MinRPCReturns<TIOHandler>(io_);
+
+void* exec_mem;
+if (TVMDeviceAllocDataSpace(
+        DLDevice{kDLCPU, 0},
+        sizeof(MinRPCExecute<TIOHandler>),
+        alignof(MinRPCExecute<TIOHandler>),
+        DLDataType{kDLInt, 1, 1},
+        &exec_mem) != 0) {
+    io_->Exit(static_cast<int>(RPCServerStatus::kAllocError));
+}
+
+// exec_handler_ = std::unique_ptr<MinRPCExecInterface>(
+//     new (exec_mem) MinRPCExecute<TIOHandler>(io_, ret_handler_),
+//     [](MinRPCExecInterface* p){ /* noop deleter */ });
+
+      // ret_handler_ = reinterpret_cast<MinRPCReturns<TIOHandler>*>(
+      //     arena_.template allocate_<uint8_t>(sizeof(MinRPCReturns<TIOHandler>)));
+      // ret_handler_ = ArenaAllocAligned<MinRPCReturns<TIOHandler>>();
+      // new (ret_handler_) MinRPCReturns<TIOHandler>(io_);
+#ifdef VICUNA
+      uart_printf("ret_handler_=0x%x\n", ret_handler_);
+#endif
+
+      // auto* exec_mem = reinterpret_cast<MinRPCExecute<TIOHandler>*>(
+      //     arena_.template allocate_<uint8_t>(sizeof(MinRPCExecute<TIOHandler>)));
+      // new (exec_mem) MinRPCExecute<TIOHandler>(io_, ret_handler_);
+      // auto* exec_mem = ArenaAllocAligned<MinRPCExecute<TIOHandler>>();
+      new (exec_mem) MinRPCExecute<TIOHandler>(io_, ret_handler_);
+#ifdef VICUNA
+      uart_printf("exec_mem=0x%x\n", exec_mem);
+      uart_printf("sizeof(MinRPCReturns)=%u\n",
+            (unsigned)sizeof(MinRPCReturns<TIOHandler>));
+
+uart_printf("sizeof(MinRPCExecute)=%u\n",
+            (unsigned)sizeof(MinRPCExecute<TIOHandler>));
+#endif
+
+      // Wrap in unique_ptr with NO-OP deleter
+      // exec_handler_ = std::unique_ptr<MinRPCExecInterface>(
+      //   exec_mem,
+      //   [](MinRPCExecInterface*) {
+      //       // do nothing — arena owns memory
+      // });
+      auto noop_deleter = [](MinRPCExecInterface*) {};
+
+      exec_handler_ = std::unique_ptr<
+          MinRPCExecInterface,
+          void(*)(MinRPCExecInterface*)
+      >(
+          // exec_mem,
+          static_cast<MinRPCExecInterface*>(exec_mem),
+          noop_deleter
+      );
+// #ifdef VICUNA
+//       uart_printf("exec_handler_=0x%x\n", (unsigned int)(exec_handler_.get()));
+// #endif
+  }
 
   ~MinRPCServer() {
-    if (ret_handler_ != nullptr) {
-      delete ret_handler_;
-    }
+    // if (ret_handler_ != nullptr) {
+    //   delete ret_handler_;
+    // }
+    if (exec_handler_) exec_handler_.get()->~MinRPCExecInterface();
+    if (ret_handler_) ret_handler_->~MinRPCReturns<TIOHandler>();
   }
 
   /*! \brief Process a single request.
@@ -802,7 +889,11 @@ class MinRPCServer {
   /*! \brief internal arena. */
   support::GenericArena<PageAllocator> arena_;
   MinRPCReturns<TIOHandler>* ret_handler_ = nullptr;
-  std::unique_ptr<MinRPCExecInterface> exec_handler_;
+  // std::unique_ptr<MinRPCExecInterface> exec_handler_;
+  std::unique_ptr<
+    MinRPCExecInterface,
+    void(*)(MinRPCExecInterface*)
+  > exec_handler_{nullptr, nullptr};
   /*! \brief Whether we are in a state that allows clean shutdown. */
   bool allow_clean_shutdown_{true};
   static_assert(DMLC_LITTLE_ENDIAN == 1, "MinRPC only works on little endian.");
