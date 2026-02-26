@@ -42,6 +42,12 @@
 #include "minrpc_interfaces.h"
 #include "rpc_reference.h"
 
+#ifdef VICUNA
+extern "C" {
+#include "uart.h"
+}
+#endif
+
 #ifndef MINRPC_CHECK
 #define MINRPC_CHECK(cond) \
   if (!(cond)) this->ThrowError(RPCServerStatus::kCheckError);
@@ -85,10 +91,16 @@ class MinRPCReturns : public MinRPCReturnInterface {
   }
 
   void ReturnHandle(void* handle) {
+#ifdef VICUNA
+    uart_printf("ReturnHandle\n");
+#endif
     int32_t num_args = 1;
     int32_t tcode = kTVMOpaqueHandle;
     RPCCode code = RPCCode::kReturn;
     uint64_t encode_handle = reinterpret_cast<uint64_t>(handle);
+#ifdef VICUNA
+    uart_printf("encode_handle=%x\n", encode_handle);
+#endif
     uint64_t packet_nbytes =
         sizeof(code) + sizeof(num_args) + sizeof(tcode) + sizeof(encode_handle);
 
@@ -275,6 +287,10 @@ class MinRPCExecute : public MinRPCExecInterface {
   }
 
   void SysCallFunc(RPCCode code, TVMValue* values, int* tcodes, int num_args) {
+#ifdef VICUNA
+    uart_printf("SysCallFunc\n");
+    uart_printf("code=%d\n", code);
+#endif
     switch (code) {
       case RPCCode::kFreeHandle: {
         SyscallFreeHandle(values, tcodes, num_args);
@@ -359,10 +375,18 @@ class MinRPCExecute : public MinRPCExecInterface {
   }
 
   void SyscallGetGlobalFunc(TVMValue* values, int* tcodes, int num_args) {
+#ifdef VICUNA
+    uart_printf("SyscallGetGlobalFunc\n");
+#endif
     MINRPC_CHECK(num_args == 1);
     MINRPC_CHECK(tcodes[0] == kTVMStr);
     void* handle;
     int call_ecode = TVMFuncGetGlobal(values[0].v_str, &handle);
+#ifdef VICUNA
+    uart_printf("call_ecode=%d\n", call_ecode);
+    uart_printf("ret_handler_=%x\n", ret_handler_);
+    // uart_printf("ret_handler_->ReturnHandle=%x\n", ret_handler_->ReturnHandle);
+#endif
 
     if (call_ecode == 0) {
       ret_handler_->ReturnHandle(handle);
@@ -579,6 +603,10 @@ class MinRPCServer {
               [](MinRPCExecInterface* p) { delete p; }
           )
       ) {
+#ifdef VICUNA
+    uart_printf("!!!!!!!!\n");
+#endif
+
       }
 
   // explicit MinRPCServer(TIOHandler* io)
@@ -811,12 +839,31 @@ uart_printf("sizeof(MinRPCExecute)=%u\n",
   }
 
   void HandleSyscallFunc(RPCCode code) {
+#ifdef VICUNA
+    uart_printf("HandleSyscallFunc\n");
+    // uart_printf("exec_handler_=0x%x\n", exec_handler_.get());
+    // uart_printf("ret_handler_=0x%x\n", ret_handler_);
+    // uart_printf("ret_handler_->ReturnHandle=%x\n", ret_handler_->ReturnHandle);
+#endif
     TVMValue* values;
     int* tcodes;
     int num_args;
     RecvPackedSeq(&values, &tcodes, &num_args);
+#ifdef VICUNA
+    uart_printf("RecvPackedSeq done\n");
+    // uart_printf("exec_handler_=0x%x\n", exec_handler_.get());
+    // uart_printf("ret_handler_=0x%x\n", ret_handler_);
+    // uart_printf("ret_handler_->ReturnHandle=%x\n", ret_handler_->ReturnHandle);
+    uart_printf("alignof(MinRPCExecute)=%u\n", alignof(MinRPCExecute<TIOHandler>));
+    uart_printf("vtable=0x%x\n", (unsigned int)*(void**)exec_handler_.get());
+#endif
 
     exec_handler_->SysCallFunc(code, values, tcodes, num_args);
+#ifdef VICUNA
+    uart_printf("exec_handler_->SysCallFunc\n");
+    // uart_printf("exec_handler_=0x%x\n", exec_handler_.get());
+    // uart_printf("ret_handler_=0x%x\n", ret_handler_);
+#endif
   }
 
   void ThrowError(RPCServerStatus code, RPCCode info = RPCCode::kNone) {
@@ -829,6 +876,18 @@ uart_printf("sizeof(MinRPCExecute)=%u\n",
                   "need to be trival");
     return arena_.template allocate_<T>(count);
   }
+  template <typename T>
+T* ArenaAllocAligned() {
+    void* mem = arena_.template allocate_<uint8_t>(
+        sizeof(T) + alignof(T));
+
+    uintptr_t addr = reinterpret_cast<uintptr_t>(mem);
+    uintptr_t aligned =
+        (addr);
+        // (addr + alignof(T) - 1) & ~(alignof(T) - 1);
+
+    return reinterpret_cast<T*>(aligned);
+}
 
   template <typename T>
   void Read(T* data) {
@@ -894,6 +953,7 @@ uart_printf("sizeof(MinRPCExecute)=%u\n",
     MinRPCExecInterface,
     void(*)(MinRPCExecInterface*)
   > exec_handler_{nullptr, nullptr};
+  // MinRPCExecute<TIOHandler>* exec_handler_;
   /*! \brief Whether we are in a state that allows clean shutdown. */
   bool allow_clean_shutdown_{true};
   static_assert(DMLC_LITTLE_ENDIAN == 1, "MinRPC only works on little endian.");
