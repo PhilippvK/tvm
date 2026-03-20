@@ -190,7 +190,7 @@ def add_compile_parser(subparsers, _, json_params):
         help="The output module name. Defaults to 'default'.",
     )
     parser.add_argument(
-        "--disable_legalize",
+        "--disable-legalize",
         action="store_true",
         help="TODO",
     )
