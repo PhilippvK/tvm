@@ -66,6 +66,7 @@ from .target import (
     intel_graphics,
     arm_cpu,
     rasp,
+    riscv_cpu,
     vta,
     bifrost,
     riscv_cpu,
