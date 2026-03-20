@@ -41,6 +41,7 @@ from .model import TVMCModel
 from .target import target_from_cli, generate_target_args, reconstruct_target_args
 from .shape_parser import parse_shape_string
 from .transform import generate_transform_args, parse_graph_transform_args, apply_graph_transforms
+from .compiler import OptionallyDisableLegalize
 
 
 # pylint: disable=invalid-name
@@ -128,6 +129,11 @@ def add_tune_parser(subparsers, _, json_params):
         "--tuning-records",
         metavar="PATH",
         help="path to an auto-tuning log file by AutoTVM.",
+    )
+    parser.add_argument(
+        "--disable-legalize",
+        action="store_true",
+        help="TODO",
     )
     generate_transform_args(parser)
     parser.add_argument(
@@ -289,31 +295,32 @@ def drive_tune(args):
 
     transform_args = parse_graph_transform_args(args)
 
-    tune_model(
-        tvmc_model,
-        args.target,
-        tuning_records=args.output,
-        prior_records=args.tuning_records,
-        enable_autoscheduler=args.enable_autoscheduler,
-        rpc_key=args.rpc_key,
-        hostname=rpc_hostname,
-        port=rpc_port,
-        trials=args.trials,
-        target_host=args.target_host,
-        tuner=args.tuner,
-        min_repeat_ms=args.min_repeat_ms,
-        early_stopping=args.early_stopping,
-        timeout=args.timeout,
-        repeat=args.repeat,
-        number=args.number,
-        parallel=args.parallel,
-        hardware_params=hardware_params,
-        include_simple_tasks=args.include_simple_tasks,
-        log_estimated_latency=args.log_estimated_latency,
-        additional_target_options=reconstruct_target_args(args),
-        tasks_filter=args.tasks,
-        **transform_args,
-    )
+    with OptionallyDisableLegalize(args.disable_legalize):
+        tune_model(
+            tvmc_model,
+            args.target,
+            tuning_records=args.output,
+            prior_records=args.tuning_records,
+            enable_autoscheduler=args.enable_autoscheduler,
+            rpc_key=args.rpc_key,
+            hostname=rpc_hostname,
+            port=rpc_port,
+            trials=args.trials,
+            target_host=args.target_host,
+            tuner=args.tuner,
+            min_repeat_ms=args.min_repeat_ms,
+            early_stopping=args.early_stopping,
+            timeout=args.timeout,
+            repeat=args.repeat,
+            number=args.number,
+            parallel=args.parallel,
+            hardware_params=hardware_params,
+            include_simple_tasks=args.include_simple_tasks,
+            log_estimated_latency=args.log_estimated_latency,
+            additional_target_options=reconstruct_target_args(args),
+            tasks_filter=args.tasks,
+            **transform_args,
+        )
 
 
 def filter_tasks(
