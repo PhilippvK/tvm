@@ -171,19 +171,23 @@ void CodeGenLLVM::InitTarget() {
   module_->setDataLayout(tm->createDataLayout());
   data_layout_.reset(new llvm::DataLayout(module_.get()));
   if (native_vector_bits_ == 0) {
-    const auto& arch = tm->getTargetTriple().getArch();
-    if (arch == llvm::Triple::x86_64) {
-      // for avx512
-      native_vector_bits_ = 512;
-    } else if (arch == llvm::Triple::x86) {
-      native_vector_bits_ = 256;
-    } else if (arch == llvm::Triple::arm || arch == llvm::Triple::aarch64) {
-      native_vector_bits_ = 128;
-    } else {
-      native_vector_bits_ = 128;
-      std::string arch_name = std::string(tm->getTargetTriple().getArchName());
-      LOG(WARNING) << "Set native vector bits to be 128 for " << arch_name;
-    }
+    native_vector_bits_ = llvm_target_->GetVectorWidth();
+    // LOG(INFO) << "native_vector_bits_=" << native_vector_bits_;
+    // const auto& arch = tm->getTargetTriple().getArch();
+    // if (arch == llvm::Triple::x86_64) {
+    //   // for avx512
+    //   native_vector_bits_ = 512;
+    // } else if (arch == llvm::Triple::x86) {
+    //   native_vector_bits_ = 256;
+    // } else if (arch == llvm::Triple::arm || arch == llvm::Triple::aarch64) {
+    //   native_vector_bits_ = 128;
+    // } else if (arch == llvm::Triple::riscv32 || arch == llvm::Triple::riscv64) {
+    //   native_vector_bits_ = 128;
+    // } else {
+    //   native_vector_bits_ = 128;
+    //   std::string arch_name = std::string(tm->getTargetTriple().getArchName());
+    //   LOG(WARNING) << "Set native vector bits to be 128 for " << arch_name;
+    // }
   }
 
 #if TVM_LLVM_VERSION >= 60
