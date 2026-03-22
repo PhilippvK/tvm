@@ -794,8 +794,8 @@ def tune_model(
 
         # Filter extracted tasks by provided user expression
         if tasks_filter:
-            if enable_metascheduler:
-                raise NotImplementedError
+            # if enable_metascheduler:
+            #     raise NotImplementedError
             tasks, do_list = filter_tasks(tasks, tasks_filter)
             if do_list:
                 print(gen_task_list(tasks, enable_autoscheduler))
