@@ -163,6 +163,12 @@ def add_compile_parser(subparsers, _, json_params):
         default="",
         help="TODO",
     )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-module-equality",
+        choices=["structural", "ignore-ndarray", "anchor-block"],
+        default="structural",
+        help="TODO",
+    )
     generate_registry_args(parser, Executor, "graph")
     generate_registry_args(parser, Runtime, "cpp")
 
@@ -361,6 +367,7 @@ def drive_compile(args):
             print_pass_times=args.print_pass_times,
             print_ir_before=args.print_ir_before,
             print_ir_after=args.print_ir_after,
+            module_equality=args.metascheduler_module_equality,
             **transform_args,
         )
 
@@ -400,6 +407,7 @@ def compile_model(
     mixed_precision_ops: Optional[List[str]] = None,
     mixed_precision_calculation_type: Optional[str] = None,
     mixed_precision_acc_type: Optional[str] = None,
+    module_equality: str = "structural",
 ):
     """Compile a model from a supported framework into a TVM module.
 
@@ -483,6 +491,8 @@ def compile_model(
         The calculation dtype to be used while mixed precision. Set to "float16" by default.
     mixed_precision_acc_type: str
         The accumulation data type to be used while mixed precision. Set to "float16" by default.
+    module_equality: str
+        TODO
 
     Returns
     -------
@@ -571,7 +581,6 @@ def compile_model(
                 path_tuning_record = Path("{db_path}_tuning_record.json")
             assert path_workload.is_file(), f"Not found: {path_workload}"
             assert path_tuning_record.is_file(), f"Not found: {path_tuning_record}"
-            module_equality = "ignore-ndarray"
             ms_db = ms.database.JSONDatabase(
                 path_workload=str(path_workload),
                 path_tuning_record=str(path_tuning_record),
