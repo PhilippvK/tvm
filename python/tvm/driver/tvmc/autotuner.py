@@ -366,9 +366,6 @@ def drive_tune(args):
 
     transform_args = parse_graph_transform_args(args)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
     with OptionallyDisableLegalize(args.disable_legalize):
         tune_model(
             tvmc_model,
