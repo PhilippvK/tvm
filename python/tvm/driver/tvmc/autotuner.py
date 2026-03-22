@@ -800,6 +800,8 @@ def tune_model(
                 transform_args=transform_args,
                 executor=executor,
                 runtime=runtime,
+                opt_level=opt_level,
+                module_equality=module_equality,
             )
             if prior_records:
                 prior_workloads_path = f"{prior_records}_workload.json"
