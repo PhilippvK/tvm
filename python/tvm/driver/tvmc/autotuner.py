@@ -863,8 +863,10 @@ def tune_model(
                 # Copy new records to desired destination
                 workloads_path = f"{tuning_records}_workload.json"
                 records_path = f"{tuning_records}_tuning_record.json"
+                logs_path = Path(records_path).parent / "logs"
                 shutil.copyfile(database_.path_tuning_record, records_path)
                 shutil.copyfile(database_.path_workload, workloads_path)
+                shutil.copytree(Path(work_dir) / "logs", logs_path)
         else:
             # In autotvm, trials is specified per task. We can convert the per-model input
             # provided to per-task trials by dividing by the number of tasks.
