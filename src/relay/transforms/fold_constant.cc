@@ -258,7 +258,14 @@ class ConstantFolder : public MixedModeMutator {
 
     // Use a fresh build context in case we are already in a build context.
     // needed for both execution and creation(due to JIT)
-    With<transform::PassContext> fresh_build_ctx(transform::PassContext::Create());
+    // With<transform::PassContext> fresh_build_ctx(transform::PassContext::Create());
+    auto context_node = make_object<tvm::transform::PassContextNode>();
+    // auto ms_dispatch = UseMetaScheduleDispatch();
+    // context_node->config = {{"relay.backend.use_meta_schedule_dispatch", Integer(ms_dispatch)}};
+    context_node->config = {{"relay.backend.use_meta_schedule_dispatch", Integer(1)}};
+
+    tvm::transform::PassContext context = tvm::transform::PassContext(context_node);
+    With<transform::PassContext> fresh_build_ctx(context);
 
     Map<String, ObjectRef> dict = (module_->attrs.defined())
                                       ? Map<String, ObjectRef>(module_->attrs.CopyOnWrite()->dict)
