@@ -94,6 +94,15 @@ def add_tune_parser(subparsers, _, json_params):
         required=True,
         help="output file to store the tuning records for the tuning process",
     )
+    parser.add_argument(
+        "-O",
+        "--opt-level",
+        default=3,
+        type=int,
+        choices=range(0, 4),
+        metavar="[0-3]",
+        help="specify which optimization level to use. Defaults to '3'.",
+    )
     generate_registry_args(parser, Executor, "graph")
     generate_registry_args(parser, Runtime, "cpp")
     parser.add_argument("-v", "--verbose", action="count", default=0, help="increase verbosity.")
@@ -132,6 +141,12 @@ def add_tune_parser(subparsers, _, json_params):
         type=int,
         default=1000,
         help="the maximum number of tuning trials to perform",
+    )
+    parser.add_argument(
+        "--trials-single",
+        type=int,
+        default=None,
+        help="the maximum number of tuning trials to perform per task (MS only)",
     )
     parser.add_argument(
         "--tuning-records",
@@ -286,6 +301,12 @@ def add_tune_parser(subparsers, _, json_params):
         default="gradient",
         help="",
     )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-module-equality",
+        choices=["structural", "ignore-ndarray", "anchor-block"],
+        default="structural",
+        help="",
+    )
     autotvm_group = parser.add_argument_group(
         "AutoTVM options",
         "AutoTVM options, used when the AutoScheduler or MetaScheduler is not enabled",
@@ -375,6 +396,7 @@ def drive_tune(args):
         tune_model(
             tvmc_model,
             args.target,
+            opt_level=args.opt_level,
             tuning_records=args.output,
             executor=reconstruct_registry_entity(args, Executor),
             runtime=reconstruct_registry_entity(args, Runtime),
@@ -406,6 +428,7 @@ def drive_tune(args):
             metascheduler_model=args.metascheduler_model,
             metascheduler_strategy=args.metascheduler_strategy,
             metascheduler_scheduler=args.metascheduler_scheduler,
+            metascheduler_module_equality=args.metascheduler_module_equality,
             additional_target_options=reconstruct_target_args(args),
             tasks_filter=args.tasks,
             **transform_args,
@@ -504,6 +527,7 @@ def gen_task_list(
 def tune_model(
     tvmc_model: TVMCModel,
     target: str,
+    opt_level: int = 3,
     executor: Optional[Executor] = Executor("graph"),
     runtime: Optional[Runtime] = Runtime("cpp"),
     tuning_records: Optional[str] = None,
@@ -514,6 +538,7 @@ def tune_model(
     hostname: Optional[str] = None,
     port: Optional[Union[int, str]] = 9090,
     trials: int = 10000,
+    trials_single: Optional[int] = None,
     target_host: Optional[str] = None,
     tuner: str = "xgb",
     min_repeat_ms: Optional[int] = None,
@@ -535,6 +560,7 @@ def tune_model(
     metascheduler_model: str = "xgb",
     metascheduler_strategy: str = "evolutionaly_search",
     metascheduler_scheduler: str = "gradient",
+    metascheduler_module_equality: str = "structural",
     additional_target_options: Optional[Dict[str, Dict[str, Any]]] = None,
     tasks_filter: str = "all",
     desired_layout: Optional[str] = None,
@@ -575,6 +601,8 @@ def tune_model(
         value is chosen as a decent average for most models, but larger models may need
         more trials to reach a good result while smaller models will converge with fewer
         trials.
+    trials_single : int, optional
+        The number of schedules to try out for the each task.
     tuner : str, optional
         The type of tuner to use when tuning with autotvm. Can be one of
         "ga", "gridsearch", "random", "xgb", "xgb_knob", "xgb_itervar", "xgb_curve",
@@ -620,6 +648,8 @@ def tune_model(
         TODO
     metascheduler_scheduler: str
         TODO
+    metascheduler_module_equality: str
+        TODO
     additional_target_options: Optional[Dict[str, Dict[str, Any]]]
         Additional target options in a dictionary to combine with initial Target arguments
     tasks_filter : str, optional
@@ -658,7 +688,7 @@ def tune_model(
             "Autoscheduler and Metascheduler can not be enabled at the same time."
         )
 
-    with tvm.transform.PassContext(opt_level=3):  # TODO: opt_level
+    with tvm.transform.PassContext(opt_level=opt_level):
         if tuning_records is None:
             tuning_records = tvmc_model.default_tuning_records_path()
 
@@ -807,6 +837,7 @@ def tune_model(
             logger.info("Selected %s tasks for tuning.", len(tasks))
 
         if enable_autoscheduler:
+            assert trials_single is None, "--trials-single is only supported by MS"
             # Create the autoscheduler tuning options
             tuning_options = auto_scheduler.TuningOptions(
                 num_measure_trials=trials,
@@ -831,6 +862,9 @@ def tune_model(
         elif enable_metascheduler:
             tuning_options = {
                 "trials": trials,
+                "trials_single": trials_single,
+                "max_trials_per_task": trials_single,
+                "num_trials_per_iter": max(parallel, 5),
                 "space": metascheduler_space,
                 "strategy": metascheduler_strategy,
                 "builder": builder,
@@ -840,6 +874,7 @@ def tune_model(
                 "rules": metascheduler_rules,
                 "postprocs": metascheduler_postprocs,
                 "probs": metascheduler_mutator_probs,
+                "module_equality": metascheduler_module_equality,
             }
             logger.info("Metascheduling with configuration: %s", tuning_options)
             with tempfile.TemporaryDirectory() as work_dir:
@@ -851,7 +886,9 @@ def tune_model(
                     database_records_path = str(Path(work_dir) / "database_tuning_record.json")
                     shutil.copyfile(prior_workloads_path, database_workload_path)
                     shutil.copyfile(prior_records_path, database_records_path)
-                    database = ms.database.JSONDatabase(path_workload=database_workload_path, path_tuning_record=database_records_path)
+                    database = ms.database.JSONDatabase(
+                        path_workload=database_workload_path, path_tuning_record=database_records_path
+                    )
                 else:
                     database = "json"
                 database_ = schedule_tasks_ms(
@@ -868,6 +905,7 @@ def tune_model(
                 shutil.copyfile(database_.path_workload, workloads_path)
                 shutil.copytree(Path(work_dir) / "logs", logs_path)
         else:
+            assert trials_single is None, "--trials-single is only supported by MS"
             # In autotvm, trials is specified per task. We can convert the per-model input
             # provided to per-task trials by dividing by the number of tasks.
             trials = int(max(1, trials / max(len(tasks), 1)))
@@ -986,6 +1024,8 @@ def metascheduler_get_tuning_tasks(
     transform_args: Optional[Dict[str, Any]] = None,
     executor: Optional[Executor] = Executor("graph"),
     runtime: Optional[Runtime] = Runtime("cpp"),
+    metascheduler_module_equality: str = "structural",
+    opt_level: int = 3,
 ):
     """Get the autoscheduler tuning tasks for a given relay module.
 
@@ -1016,10 +1056,10 @@ def metascheduler_get_tuning_tasks(
         mod["main"],
         target,
         params,
-        # opt_level=?,
+        opt_level=opt_level,
         executor=executor,
         runtime=runtime,
-        # module_equality=?
+        module_equality=module_equality,
     )
 
     return tasks
@@ -1080,16 +1120,19 @@ def schedule_tasks_ms(
     tasks: List[ms.ExtractedTask],
     work_dir: str,
     trials: int,
+    max_trials_per_task: Optional[int] = None,
+    num_trials_per_iter: int = 64,
     space: ms.SpaceGenerator.SpaceGeneratorType = "post-order-apply",
     strategy: ms.SearchStrategy.SearchStrategyType = "evolutionary",
-    database = "json",  # TODO
-    builder = "local",  # TODO
-    runner = "local",  # TODO
-    cost_model = "xgb",
-    scheduler = "gradient",
-    rules = "from-target",
-    postprocs = "from-target",
-    probs = "from-target",
+    database="json",  # TODO
+    builder="local",  # TODO
+    runner="local",  # TODO
+    cost_model="xgb",
+    scheduler="gradient",
+    rules="from-target",
+    postprocs="from-target",
+    probs="from-target",
+    module_equality="structural",
     executor: Optional[Executor] = Executor("graph"),
     runtime: Optional[Runtime] = Runtime("cpp"),
 ):
@@ -1101,6 +1144,10 @@ def schedule_tasks_ms(
         A list of meta_schedule.ExtractedTask to tune.
     trials : int
         The number of schedules to try out for the entire model.
+    max_trials_per_task : int
+        The number of schedules to try for each task.
+    num_trials_per_iter : int
+        How many trials to submit in parallel.
     work_dir : TODO
         TODO
     space ; TODO
@@ -1132,6 +1179,7 @@ def schedule_tasks_ms(
         work_dir,
         space=space,
         strategy=strategy,
+        num_tuning_cores="logical",
     )
 
     database = ms.tune.tune_tasks(
@@ -1139,15 +1187,15 @@ def schedule_tasks_ms(
         task_weights=task_weights,
         work_dir=work_dir,
         max_trials_global=trials,
-        # max_trials_per_task=None
-        # num_trials_per_iter=64
+        max_trials_per_task=max_trials_per_task,
+        num_trials_per_iter=num_trials_per_iter,
         builder=builder,
         runner=runner,
         database=database,
         cost_model=cost_model,
         measure_callbacks=callbacks,
         task_scheduler=scheduler,
-        # module_equality="structural"
+        module_equality=module_equality,
     )
     return database
 
