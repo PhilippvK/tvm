@@ -24,6 +24,7 @@ import time
 import tempfile
 import shutil
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Optional, Dict, List, Union
 
 from urllib.parse import urlparse
@@ -37,9 +38,11 @@ from tvm.autotvm.tuner import RandomTuner
 from tvm.autotvm.tuner import XGBTuner
 from tvm import meta_schedule as ms
 from tvm.target import Target
+from tvm.relay.backend import Executor, Runtime
 
 from . import TVMCException, composite_target, frontends
 from .main import register_parser
+from tvm.driver.tvmc.registry import generate_registry_args, reconstruct_registry_entity
 from .model import TVMCModel
 from .target import target_from_cli, generate_target_args, reconstruct_target_args
 from .shape_parser import parse_shape_string
@@ -91,6 +94,8 @@ def add_tune_parser(subparsers, _, json_params):
         required=True,
         help="output file to store the tuning records for the tuning process",
     )
+    generate_registry_args(parser, Executor, "graph")
+    generate_registry_args(parser, Runtime, "cpp")
     parser.add_argument("-v", "--verbose", action="count", default=0, help="increase verbosity.")
     parser.add_argument(
         "--parallel",
@@ -371,6 +376,8 @@ def drive_tune(args):
             tvmc_model,
             args.target,
             tuning_records=args.output,
+            executor=reconstruct_registry_entity(args, Executor),
+            runtime=reconstruct_registry_entity(args, Runtime),
             prior_records=args.tuning_records,
             enable_autoscheduler=args.enable_autoscheduler,
             enable_metascheduler=args.enable_metascheduler,
@@ -497,6 +504,8 @@ def gen_task_list(
 def tune_model(
     tvmc_model: TVMCModel,
     target: str,
+    executor: Optional[Executor] = Executor("graph"),
+    runtime: Optional[Runtime] = Runtime("cpp"),
     tuning_records: Optional[str] = None,
     prior_records: Optional[str] = None,
     enable_autoscheduler: bool = False,
@@ -649,7 +658,7 @@ def tune_model(
             "Autoscheduler and Metascheduler can not be enabled at the same time."
         )
 
-    with tvm.transform.PassContext(opt_level=3):
+    with tvm.transform.PassContext(opt_level=3):  # TODO: opt_level
         if tuning_records is None:
             tuning_records = tvmc_model.default_tuning_records_path()
 
@@ -759,6 +768,8 @@ def tune_model(
                 params=params,
                 target=target,
                 transform_args=transform_args,
+                executor=executor,
+                runtime=runtime,
             )
             if prior_records:
                 prior_workloads_path = f"{prior_records}_workload.json"
@@ -971,6 +982,8 @@ def metascheduler_get_tuning_tasks(
     target: Union[Target, str],
     target_host: Optional[str] = None,
     transform_args: Optional[Dict[str, Any]] = None,
+    executor: Optional[Executor] = Executor("graph"),
+    runtime: Optional[Runtime] = Runtime("cpp"),
 ):
     """Get the autoscheduler tuning tasks for a given relay module.
 
@@ -1002,7 +1015,8 @@ def metascheduler_get_tuning_tasks(
         target,
         params,
         # opt_level=?,
-        # executor=?,
+        executor=executor,
+        runtime=runtime,
         # module_equality=?
     )
 
@@ -1074,6 +1088,8 @@ def schedule_tasks_ms(
     rules = "from-target",
     postprocs = "from-target",
     probs = "from-target",
+    executor: Optional[Executor] = Executor("graph"),
+    runtime: Optional[Runtime] = Runtime("cpp"),
 ):
     """TODO
 
