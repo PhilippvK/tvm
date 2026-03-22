@@ -16,10 +16,12 @@
 # under the License.
 # pylint: disable=unused-argument
 import tempfile
+import tarfile
 import subprocess
 
 from anytree import Node
 from anytree import RenderTree
+
 
 class Context:
     def __init__(self) -> None:
@@ -69,6 +71,7 @@ from tvm.target import Target
 from tvm.relay.backend import Executor, Runtime
 from tvm.relay.analysis.operations_distribution import analyze_operations_distribution
 from tvm.relay.transform.suffixes import tag_suffixes
+from tvm import meta_schedule as ms
 
 from . import composite_target, frontends, TVMCException
 from .model import TVMCModel, TVMCPackage
@@ -532,82 +535,114 @@ def compile_model(
         )
         instruments = [print_ir_instr] if instruments is None else [print_ir_instr] + instruments
 
-    if ms_db is None or len(ms_db) == 0:
-        ms_db = ms.database.MemoryDatabase()
-    else:
-        config["relay.backend.use_meta_schedule_dispatch"] = True
-        db_path = Path(ms_db)
-        path_workload = db_path / "database_workload.json"
-        assert path_workload.is_file(), f"Not found: {path_workload}"
-        path_tuning_record = db_path / "database_tuning_record.json"
-        assert path_tuning_record.is_file(), f"Not found: {path_tuning_record}"
-        ms_db = ms.database.JSONDatabase(path_workload=str(path_workload), path_tuning_record=str(path_tuning_record))
-    with tvm.transform.PassContext(
-        opt_level=opt_level,
-        config=config,
-        disabled_pass=disabled_pass,
-        instruments=instruments,
-    ):
-        transform_args = parse_graph_transform_args(locals())
-        mod = apply_graph_transforms(mod, transform_args)
-        mod = tvm.relay.transform.InferType()(mod)
-
-        for partition_function, opts in zip(partition_functions, partition_opts):
-            mod = partition_function(mod, params, mod_name=mod_name, **opts)
-
-        if initial_relay:
-            # dump which operations are offloaded to which backend
-            dump_operation_offloads(mod, initial_relay, dump_offloads)
-
-        if tuning_records and os.path.exists(tuning_records):
-            logger.debug("tuning records file provided: %s", tuning_records)
-
-            use_autoscheduler = True
-            try:
-                auto_scheduler.load_records(tuning_records)
-            except tvm._ffi.base.TVMError:
-                use_autoscheduler = False
-
-            if use_autoscheduler:
-                with auto_scheduler.ApplyHistoryBest(tuning_records):
-                    config["relay.backend.use_auto_scheduler"] = True
-                    logger.debug("building relay graph with autoscheduler")
-                    graph_module = build(
-                        mod,
-                        tvm_target=tvm_target,
-                        executor=executor,
-                        runtime=runtime,
-                        params=params,
-                        use_vm=use_vm,
-                        mod_name=mod_name,
-                        workspace_pools=workspace_pools,
-                    )
-            else:
-                with autotvm.apply_history_best(tuning_records):
-                    logger.debug("building relay graph with tuning records")
-                    graph_module = build(
-                        mod,
-                        tvm_target=tvm_target,
-                        executor=executor,
-                        runtime=runtime,
-                        params=params,
-                        use_vm=use_vm,
-                        mod_name=mod_name,
-                        workspace_pools=workspace_pools,
-                    )
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        if ms_db is None or len(ms_db) == 0:
+            ms_db = ms.database.MemoryDatabase()
         else:
-            logger.debug("building relay graph (no tuning records provided)")  # TODO: update
-            with ms_db:
-                graph_module = build(
-                    mod,
-                    tvm_target=tvm_target,
-                    executor=executor,
-                    runtime=runtime,
-                    params=params,
-                    use_vm=use_vm,
-                    mod_name=mod_name,
-                    workspace_pools=workspace_pools,
-                )
+            config["relay.backend.use_meta_schedule_dispatch"] = True
+            # config["relay.backend.use_meta_schedule_dispatch"] = 7
+            db_path = Path(ms_db)
+            if db_path.is_dir():
+                path_workload = db_path / "database_workload.json"
+                path_tuning_record = db_path / "database_tuning_record.json"
+            elif db_path.is_file():
+                suffix = db_path.suffix
+                if suffix == ".json":
+                    if "workload" in db_path.stem:
+                        path_workload = db_path
+                        path_tuning_record = db_path.parent / db_path.name.replace("workload", "tuning_record")
+                    elif "tuning_record" in db_path.stem:
+                        path_tuning_record = db_path
+                        path_workload = db_path.parent / db_path.name.replace("tuning_record", "workload")
+                    else:
+                        raise ValueError("Invalid MS DB file name: {db_path.name}")
+                    raise NotImplementedError("ms_db json")
+                elif tarfile.is_tarfile(db_path):
+                    db_out_path = Path(tmpdirname)
+                    with tarfile.open(db_path) as f:
+                        f.extractall(path=db_out_path)
+                    db_out_path = db_out_path / "work_dir"  # TODO: fix
+                    path_workload = db_out_path / "database_workload.json"
+                    path_tuning_record = db_out_path / "database_tuning_record.json"
+                else:
+                    raise ValueError(f"Unsupported suffix: {suffix}")
+            else:
+                path_workload = Path(f"{db_path}_workload.json")
+                path_tuning_record = Path("{db_path}_tuning_record.json")
+            assert path_workload.is_file(), f"Not found: {path_workload}"
+            assert path_tuning_record.is_file(), f"Not found: {path_tuning_record}"
+            module_equality = "ignore-ndarray"
+            ms_db = ms.database.JSONDatabase(
+                path_workload=str(path_workload),
+                path_tuning_record=str(path_tuning_record),
+                module_equality=module_equality,
+            )
+        with tvm.transform.PassContext(
+            opt_level=opt_level,
+            config=config,
+            disabled_pass=disabled_pass,
+            instruments=instruments,
+        ):
+            transform_args = parse_graph_transform_args(locals())
+            mod = apply_graph_transforms(mod, transform_args)
+            mod = tvm.relay.transform.InferType()(mod)
+
+            for partition_function, opts in zip(partition_functions, partition_opts):
+                mod = partition_function(mod, params, mod_name=mod_name, **opts)
+
+            if initial_relay:
+                # dump which operations are offloaded to which backend
+                dump_operation_offloads(mod, initial_relay, dump_offloads)
+
+            if tuning_records and os.path.exists(tuning_records):
+                logger.debug("tuning records file provided: %s", tuning_records)
+
+                use_autoscheduler = True
+                try:
+                    auto_scheduler.load_records(tuning_records)
+                except tvm._ffi.base.TVMError:
+                    use_autoscheduler = False
+
+                if use_autoscheduler:
+                    with auto_scheduler.ApplyHistoryBest(tuning_records):
+                        config["relay.backend.use_auto_scheduler"] = True
+                        logger.debug("building relay graph with autoscheduler")
+                        graph_module = build(
+                            mod,
+                            tvm_target=tvm_target,
+                            executor=executor,
+                            runtime=runtime,
+                            params=params,
+                            use_vm=use_vm,
+                            mod_name=mod_name,
+                            workspace_pools=workspace_pools,
+                        )
+                else:
+                    with autotvm.apply_history_best(tuning_records):
+                        logger.debug("building relay graph with tuning records")
+                        graph_module = build(
+                            mod,
+                            tvm_target=tvm_target,
+                            executor=executor,
+                            runtime=runtime,
+                            params=params,
+                            use_vm=use_vm,
+                            mod_name=mod_name,
+                            workspace_pools=workspace_pools,
+                        )
+            else:
+                logger.debug("building relay graph (no tuning records provided)")  # TODO: update
+                with ms_db:
+                    graph_module = build(
+                        mod,
+                        tvm_target=tvm_target,
+                        executor=executor,
+                        runtime=runtime,
+                        params=params,
+                        use_vm=use_vm,
+                        mod_name=mod_name,
+                        workspace_pools=workspace_pools,
+                    )
         dso_modules = graph_module.get_lib()._collect_dso_modules()
         for dso in dso_modules:
             dso_src = dso.get_source()
