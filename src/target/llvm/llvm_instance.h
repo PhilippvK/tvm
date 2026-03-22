@@ -226,6 +226,11 @@ class LLVMTargetInfo {
    */
   const std::string GetJITEngine() const { return jit_engine_; }
   /*!
+   * \brief Get the TVM & LLVM vector_width
+   * \return number of bits for vector width
+   */
+  const int GetVectorWidth() const { return vector_width_; }
+  /*!
    * \brief Get the LLVM optimization level
    * \return optimization level for this target
    */
@@ -339,6 +344,7 @@ class LLVMTargetInfo {
   llvm::CodeModel::Model code_model_ = llvm::CodeModel::Small;
   std::shared_ptr<llvm::TargetMachine> target_machine_;
   std::string jit_engine_ = "mcjit";
+  int vector_width_{0};
 };
 
 /*!
