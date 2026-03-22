@@ -693,9 +693,9 @@ def tune_model(
 
             if enable_metascheduler:
                 rpc_config = ms.runner.RPCConfig(
-                    tracker_host=rpc.tracker_host,
-                    tracker_port=rpc.tracker_port,
-                    tracker_key=rpc.tracker_key,
+                    tracker_host=hostname,
+                    tracker_port=port,
+                    tracker_key=rpc_key,
                     session_priority=1,
                     session_timeout_sec=100,
                 )
