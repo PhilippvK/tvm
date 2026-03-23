@@ -342,28 +342,33 @@ Array<ScheduleRule> ScheduleRule::DefaultRISCV(const int vlen) {
   rules.push_back(ScheduleRule::AddRFactor(
       /*max_jobs_per_core=*/16,
       /*max_innermost_factor=*/Integer(64)));
-  // auto current_target = tvm::Target::Current();
-  // const auto reg_rvv_intrinsics =
-  //     tvm::ffi::Function::GetGlobalRequired("tir.tensor_intrin.register_rvv_isa_intrinsics");
-  // const auto rvv_kernels_inventory =
-  //     reg_rvv_intrinsics(current_target, /* inventory_only */ true).cast<Map<String, int>>();
-  // for (const auto& intrin : rvv_kernels_inventory) {
-  //   if (!tir::TensorIntrin::Get(intrin.first, /*allow_missing*/ true)) {
-  //     // on demand intrinsic register
-  //     reg_rvv_intrinsics(current_target, /* inventory_only */ false);
-  //   }
-  //   rules.push_back(ScheduleRule::MultiLevelTilingWithIntrin(
-  //       /*intrin_name=*/intrin.first,
-  //       /*structure=*/"SSRSRS",
-  //       /*tile_binds=*/NullOpt,
-  //       /*max_innermost_factor=*/Integer(intrin.second),
-  //       /*vector_load_lens=*/NullOpt,
-  //       /*reuse_read=*/NullOpt,
-  //       /*reuse_write=*/
-  //       Map<String, ObjectRef>{{"req", String("may")},
-  //                             {"levels", Array<Integer>{1, 2}},
-  //                             {"scope", String("global")}}));
-  // }
+  auto current_target = tvm::Target::Current();
+  const auto* reg_rvv_intrinsics = tvm::runtime::Registry::Get("tir.tensor_intrin.register_rvv_isa_intrinsics");
+  ICHECK(reg_rvv_intrinsics != nullptr) << "Cannot find register_rvv_isa_intrinsics func.";
+  // const auto rvv_kernels_inventory = (*reg_rvv_intrinsics)(current_target, /* inventory_only */ true);
+  Optional<Map<String, ObjectRef>> rvv_kernels_inventory = (*reg_rvv_intrinsics)(current_target, /* inventory_only */ true);
+  if (!rvv_kernels_inventory.defined()) {
+    throw Error("rvv_kernels_inventory undefined");
+  }
+  for (auto it = std::begin(rvv_kernels_inventory.value());
+      it != std::end(rvv_kernels_inventory.value()); ++it) {
+    const auto& intrin = *it;
+    if (!tir::TensorIntrin::Get(intrin.first, /*allow_missing*/ true)) {
+      // on demand intrinsic register
+      (*reg_rvv_intrinsics)(current_target, /* inventory_only */ false);
+    }
+    rules.push_back(ScheduleRule::MultiLevelTilingWithIntrin(
+        /*intrin_name=*/intrin.first,
+        /*structure=*/"SSRSRS",
+        /*tile_binds=*/NullOpt,
+        /*max_innermost_factor=*/Downcast<Integer>(intrin.second),
+        /*vector_load_lens=*/NullOpt,
+        /*reuse_read=*/NullOpt,
+        /*reuse_write=*/
+        Map<String, ObjectRef>{{"req", String("may")},
+                              {"levels", Array<Integer>{1, 2}},
+                              {"scope", String("global")}}));
+  }
   rules.push_back(ScheduleRule::MultiLevelTiling(
       /*structure=*/"SSRSRS",
       /*tile_binds=*/NullOpt,
