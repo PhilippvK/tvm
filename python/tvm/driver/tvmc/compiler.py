@@ -163,7 +163,7 @@ def add_compile_parser(subparsers, _, json_params):
         default="",
         help="TODO",
     )
-    meta_scheduler_group.add_argument(
+    parser.add_argument(
         "--metascheduler-module-equality",
         choices=["structural", "ignore-ndarray", "anchor-block"],
         default="structural",
