@@ -39,6 +39,7 @@ from tvm.autotvm.tuner import XGBTuner
 from tvm import meta_schedule as ms
 from tvm.target import Target
 from tvm.relay.backend import Executor, Runtime
+from tvm.tir.tensor_intrin.riscv_cpu import *
 
 from . import TVMCException, composite_target, frontends
 from .main import register_parser
