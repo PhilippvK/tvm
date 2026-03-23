@@ -865,7 +865,6 @@ def tune_model(
         elif enable_metascheduler:
             tuning_options = {
                 "trials": trials,
-                "trials_single": trials_single,
                 "max_trials_per_task": trials_single,
                 "num_trials_per_iter": max(parallel, 5),
                 "space": metascheduler_space,
@@ -1027,7 +1026,7 @@ def metascheduler_get_tuning_tasks(
     transform_args: Optional[Dict[str, Any]] = None,
     executor: Optional[Executor] = Executor("graph"),
     runtime: Optional[Runtime] = Runtime("cpp"),
-    metascheduler_module_equality: str = "structural",
+    module_equality: str = "structural",
     opt_level: int = 3,
 ):
     """Get the autoscheduler tuning tasks for a given relay module.
@@ -1182,7 +1181,7 @@ def schedule_tasks_ms(
         work_dir,
         space=space,
         strategy=strategy,
-        num_tuning_cores="logical",
+        num_tuning_cores="logical",  # TODO: expose
     )
 
     database = ms.tune.tune_tasks(
