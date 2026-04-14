@@ -30,15 +30,10 @@ from tvm.driver.tvmc.composite_target import get_codegen_by_target, get_codegen_
 from tvm.ir.attrs import make_node, _ffi_api as attrs_api
 from tvm.ir.transform import PassContext
 from tvm.target import Target, TargetKind
+from .registry import INTERNAL_TO_NATIVE_TYPE, INTERNAL_TO_HELP
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("TVMC")
-
-# We can't tell the type inside an Array but all current options are strings so
-# it can default to that. Bool is used alongside Integer but aren't distinguished
-# between as both are represented by IntImm
-INTERNAL_TO_NATIVE_TYPE = {"runtime.String": str, "IntImm": int, "Array": str}
-INTERNAL_TO_HELP = {"runtime.String": " string", "IntImm": "", "Array": " options"}
 
 
 def _valid_target_kinds():
