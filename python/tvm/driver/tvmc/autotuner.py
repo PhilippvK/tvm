@@ -131,7 +131,7 @@ def add_tune_args(parser, micro=False):
         default=1,
         help="how many times to repeat each measurement",
     )
-    if not micro:
+    if not micro:  # TODO: support micro rpc tuning
         parser.add_argument(
             "--rpc-key",
             help="the RPC tracker key of the target device. "
