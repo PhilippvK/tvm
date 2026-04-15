@@ -46,6 +46,8 @@ from .main import register_parser
 from tvm.driver.tvmc.registry import generate_registry_args, reconstruct_registry_entity
 from .model import TVMCModel
 from .target import target_from_cli, generate_target_args, reconstruct_target_args
+from .pass_config import parse_configs
+from .pass_list import parse_pass_list_str
 from .shape_parser import parse_shape_string
 from .transform import generate_transform_args, parse_graph_transform_args, apply_graph_transforms
 from .compiler import OptionallyDisableLegalize
@@ -95,6 +97,15 @@ def add_tune_args(parser, micro=False):
         "--output",
         required=True,
         help="output file to store the tuning records for the tuning process",
+    )
+    parser.add_argument(
+        "--pass-config",
+        action="append",
+        metavar=("name=value"),
+        help="configurations to be used at compile time. This option can be provided multiple "
+        "times, each one to set one configuration value, "
+        "e.g. '--pass-config relay.backend.use_auto_scheduler=0', "
+        "e.g. '--pass-config tir.add_lower_pass=opt_level1,pass1,opt_level2,pass2'.",
     )
     parser.add_argument(
         "-O",
@@ -424,6 +435,7 @@ def drive_tune(args):
             trials=args.trials,
             target_host=args.target_host,
             disabled_pass=args.disabled_pass,
+            pass_context_configs=args.pass_config,
             tuner=args.tuner,
             min_repeat_ms=args.min_repeat_ms,
             early_stopping=args.early_stopping,
@@ -557,6 +569,7 @@ def tune_model(
     trials_single: Optional[int] = None,
     target_host: Optional[str] = None,
     disabled_pass: Optional[str] = None,
+    pass_context_configs: Optional[List[str]] = None,
     tuner: str = "xgb",
     min_repeat_ms: Optional[int] = None,
     early_stopping: Optional[int] = None,
@@ -625,7 +638,10 @@ def tune_model(
         The port of the RPC tracker to connect to. Defaults to 9090.
     disabled_pass: str, optional
         Comma-separated list of passes which needs to be disabled
-        during compilation
+        during compilation.
+    pass_context_configs: list[str], optional
+        List of strings containing a set of configurations to be passed to the
+        PassContext.
     trials : int, optional
         The number of schedules to try out for the entire model. Note that the default
         value is chosen as a decent average for most models, but larger models may need
@@ -713,6 +729,7 @@ def tune_model(
     tuning_records : str
         The path to the produced tuning log file.
     """
+    config = parse_configs(pass_context_configs)
     transform_args = parse_graph_transform_args(locals())
     target, extra_targets = target_from_cli(target, additional_target_options)
     target, target_host = Target.canon_target_and_host(target, target_host)
@@ -726,7 +743,6 @@ def tune_model(
             "Autoscheduler and Metascheduler can not be enabled at the same time."
         )
 
-    config = {}
     if extra_config:
         assert isinstance(extra_config, dict)
         config.update(extra_config)
