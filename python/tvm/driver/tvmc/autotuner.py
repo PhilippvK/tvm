@@ -1053,13 +1053,15 @@ def autotvm_get_tuning_tasks(
     """
     target, target_host = Target.canon_target_and_host(target, target_host)
 
-    mod = apply_graph_transforms(mod, transform_args)
+    with ms.relay_integration._autotvm_silencer():
 
-    tasks = autotvm.task.extract_from_program(
-        mod["main"],
-        target=target,
-        params=params,
-    )
+        mod = apply_graph_transforms(mod, transform_args)
+
+        tasks = autotvm.task.extract_from_program(
+            mod["main"],
+            target=target,
+            params=params,
+        )
 
     return tasks
 
@@ -1271,29 +1273,30 @@ def schedule_tasks_ms(
 
     space = ms.space_generator.SpaceGenerator.create(space, sch_rules=rules, postprocs=postprocs, mutator_probs=probs)
 
-    tasks, task_weights = ms.relay_integration.extracted_tasks_to_tune_contexts(
-        tasks,
-        work_dir,
-        space=space,
-        strategy=strategy,
-        num_tuning_cores="logical",  # TODO: expose
-    )
+    with ms.relay_integration._autotvm_silencer():
+        tasks, task_weights = ms.relay_integration.extracted_tasks_to_tune_contexts(
+            tasks,
+            work_dir,
+            space=space,
+            strategy=strategy,
+            num_tuning_cores="logical",  # TODO: expose
+        )
 
-    database = ms.tune.tune_tasks(
-        tasks=tasks,
-        task_weights=task_weights,
-        work_dir=work_dir,
-        max_trials_global=trials,
-        max_trials_per_task=max_trials_per_task,
-        num_trials_per_iter=num_trials_per_iter,
-        builder=builder,
-        runner=runner,
-        database=database,
-        cost_model=cost_model,
-        measure_callbacks=callbacks,
-        task_scheduler=scheduler,
-        module_equality=module_equality,
-    )
+        database = ms.tune.tune_tasks(
+            tasks=tasks,
+            task_weights=task_weights,
+            work_dir=work_dir,
+            max_trials_global=trials,
+            max_trials_per_task=max_trials_per_task,
+            num_trials_per_iter=num_trials_per_iter,
+            builder=builder,
+            runner=runner,
+            database=database,
+            cost_model=cost_model,
+            measure_callbacks=callbacks,
+            task_scheduler=scheduler,
+            module_equality=module_equality,
+        )
     return database
 
 
