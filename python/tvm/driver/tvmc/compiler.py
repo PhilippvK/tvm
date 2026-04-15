@@ -169,6 +169,12 @@ def add_compile_parser(subparsers, _, json_params):
         default="structural",
         help="TODO",
     )
+    parser.add_argument(
+        "--metascheduler-dispatch",
+        type=int,
+        default=1,
+        help="TODO",
+    )
     generate_registry_args(parser, Executor, "graph")
     generate_registry_args(parser, Runtime, "cpp")
 
@@ -368,6 +374,7 @@ def drive_compile(args):
             print_ir_before=args.print_ir_before,
             print_ir_after=args.print_ir_after,
             module_equality=args.metascheduler_module_equality,
+            metascheduler_dispatch=args.metascheduler_dispatch,
             **transform_args,
         )
 
@@ -408,6 +415,7 @@ def compile_model(
     mixed_precision_calculation_type: Optional[str] = None,
     mixed_precision_acc_type: Optional[str] = None,
     module_equality: str = "structural",
+    metascheduler_dispatch: int = 1,
 ):
     """Compile a model from a supported framework into a TVM module.
 
@@ -492,6 +500,7 @@ def compile_model(
     mixed_precision_acc_type: str
         The accumulation data type to be used while mixed precision. Set to "float16" by default.
     module_equality: str
+    metascheduler_dispatch: int
         TODO
 
     Returns
@@ -549,8 +558,7 @@ def compile_model(
         if ms_db is None or len(ms_db) == 0:
             ms_db = ms.database.MemoryDatabase()
         else:
-            config["relay.backend.use_meta_schedule_dispatch"] = True
-            # config["relay.backend.use_meta_schedule_dispatch"] = 7
+            config["relay.backend.use_meta_schedule_dispatch"] = metascheduler_dispatch
             db_path = Path(ms_db)
             if db_path.is_dir():
                 path_workload = db_path / "database_workload.json"
