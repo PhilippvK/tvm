@@ -373,7 +373,7 @@ def drive_compile(args):
             print_pass_times=args.print_pass_times,
             print_ir_before=args.print_ir_before,
             print_ir_after=args.print_ir_after,
-            module_equality=args.metascheduler_module_equality,
+            metascheduler_module_equality=args.metascheduler_module_equality,
             metascheduler_dispatch=args.metascheduler_dispatch,
             **transform_args,
         )
@@ -414,7 +414,7 @@ def compile_model(
     mixed_precision_ops: Optional[List[str]] = None,
     mixed_precision_calculation_type: Optional[str] = None,
     mixed_precision_acc_type: Optional[str] = None,
-    module_equality: str = "structural",
+    metascheduler_module_equality: str = "structural",
     metascheduler_dispatch: int = 1,
 ):
     """Compile a model from a supported framework into a TVM module.
@@ -499,7 +499,8 @@ def compile_model(
         The calculation dtype to be used while mixed precision. Set to "float16" by default.
     mixed_precision_acc_type: str
         The accumulation data type to be used while mixed precision. Set to "float16" by default.
-    module_equality: str
+    metascheduler_module_equality: str
+        TODO
     metascheduler_dispatch: int
         TODO
 
@@ -592,7 +593,7 @@ def compile_model(
             ms_db = ms.database.JSONDatabase(
                 path_workload=str(path_workload),
                 path_tuning_record=str(path_tuning_record),
-                module_equality=module_equality,
+                module_equality=metascheduler_module_equality,
             )
         with tvm.transform.PassContext(
             opt_level=opt_level,
