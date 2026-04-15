@@ -18,7 +18,9 @@
 """Intrinsics for RISCV tensorization"""
 
 import logging
+
 # from tvm.ffi import register_func
+import tvm
 from tvm._ffi import register_func
 from tvm.runtime import DataType
 from tvm.script import tir as T
@@ -183,6 +185,9 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
         raise RuntimeError("Current target does not support `v` extension.")
 
     vlen = llvm_get_vector_width(target)
+    if vlen == 0:
+        # Can't infer vlen
+        return {}
     # get maximum reduction lanes (without grouping)
     n_lanes = get_max_elems(vlen, lmul=1, sew=32)
 
@@ -205,20 +210,17 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
         while n_elems >= 4:
 
             dt = DataType(d_dtype)
-            print("dt", dt, dir(dt), type(dt))
             wt = DataType(w_dtype)
             ot = DataType(o_dtype)
             kernel_name = "rvv_dot"
             kernel_name += f"_{n_elems}{d_dtype[0]}{dt.bits}"
             kernel_name += f"_{n_lanes}x{n_elems}{w_dtype[0]}{wt.bits}"
             kernel_name += f"_{n_lanes}{o_dtype[0]}{ot.bits}"
-            kernels_inventory[kernel_name] = n_elems
+            kernels_inventory[kernel_name] = tvm.tir.IntImm("int64", n_elems)
 
             if not inventory_only:
                 logger.debug(f"Registering kernel {kernel_name}")
-                desc, impl = rvv_vec_dot_product_kernels(
-                    n_elems, n_lanes, d_dtype, w_dtype, o_dtype, lmul
-                )
+                desc, impl = rvv_vec_dot_product_kernels(n_elems, n_lanes, d_dtype, w_dtype, o_dtype, lmul)
                 TensorIntrin.register(kernel_name, desc, impl, override=True)
 
             n_elems //= 2
