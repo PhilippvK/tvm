@@ -759,7 +759,7 @@ def tune_model(
         assert isinstance(extra_config, dict)
         config.update(extra_config)
 
-    with tvm.transform.PassContext(opt_level=opt_level, config=config, disabled_pass=disabled_pass):
+    with tvm.transform.PassContext(opt_level=opt_level, config=config, disabled_pass=disabled_pass), target:
         if tuning_records is None:
             tuning_records = tvmc_model.default_tuning_records_path()
 
