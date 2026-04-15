@@ -323,6 +323,12 @@ def add_tune_args(parser, micro=False):
         default="structural",
         help="",
     )
+    meta_scheduler_group.add_argument(
+        "--metascheduler-dispatch",
+        type=int,
+        default=1,
+        help="TODO",
+    )
     autotvm_group = parser.add_argument_group(
         "AutoTVM options",
         "AutoTVM options, used when the AutoScheduler or MetaScheduler is not enabled",
@@ -457,6 +463,7 @@ def drive_tune(args):
             metascheduler_strategy=args.metascheduler_strategy,
             metascheduler_scheduler=args.metascheduler_scheduler,
             metascheduler_module_equality=args.metascheduler_module_equality,
+            metascheduler_dispatch=args.metascheduler_dispatch,
             additional_target_options=reconstruct_target_args(args),
             tasks_filter=args.tasks,
             **transform_args,
@@ -591,6 +598,7 @@ def tune_model(
     metascheduler_strategy: str = "evolutionaly_search",
     metascheduler_scheduler: str = "gradient",
     metascheduler_module_equality: str = "structural",
+    metascheduler_dispatch: int = 1,
     additional_target_options: Optional[Dict[str, Dict[str, Any]]] = None,
     tasks_filter: str = "all",
     desired_layout: Optional[str] = None,
@@ -696,6 +704,8 @@ def tune_model(
         TODO
     metascheduler_module_equality: str
         TODO
+    metascheduler_dispatch: int
+        TODO
     additional_target_options: Optional[Dict[str, Dict[str, Any]]]
         Additional target options in a dictionary to combine with initial Target arguments
     tasks_filter : str, optional
@@ -742,6 +752,8 @@ def tune_model(
         raise TVMCException(
             "Autoscheduler and Metascheduler can not be enabled at the same time."
         )
+    if enable_metascheduler:
+        config["relay.backend.use_meta_schedule_dispatch"] = metascheduler_dispatch
 
     if extra_config:
         assert isinstance(extra_config, dict)
