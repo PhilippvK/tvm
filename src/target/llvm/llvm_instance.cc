@@ -301,6 +301,16 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const TargetJSON& target)
     code_model_ = llvm::CodeModel::Medium;
 #if TVM_LLVM_VERSION >= 140
     // VLEN inference
+    int min_vlen = 0;
+    for (const auto& attr : attrs_) {
+      if (attr.rfind("+zvl") == 0) {
+          size_t end_pos = attr.find("b");
+          auto min_vlen_str = attr.substr(4, end_pos - 4);
+          int min_vlen_ = std::stoi(min_vlen_str);
+          if (min_vlen_ > min_vlen) min_vlen = min_vlen_;
+      }
+    }
+    if (min_vlen > 0 && (vector_width_ == 0)) vector_width_ = min_vlen;
     const auto* mci = GetOrCreateTargetMachine(false)->getMCSubtargetInfo();
     const auto cpu_name = mci->getCPU();
     const auto m_arch = llvm::RISCV::getMArchFromMcpu(cpu_name);
@@ -308,7 +318,7 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const TargetJSON& target)
         llvm::RISCVISAInfo::parseArchString(m_arch, /*EnableExperimentalExtensions=*/true);
     // infer VLEN from LLVM or via options
     if (!llvm::errorToBool(ISAInfo.takeError()) && (vector_width_ == 0)) {
-      //vector_width_ = (*ISAInfo)->getMinVLen();
+      vector_width_ = (*ISAInfo)->getMinVLen();
     }
 #endif
     if (vector_width_ > 0) {
