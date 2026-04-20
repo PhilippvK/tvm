@@ -7,6 +7,7 @@ from pathlib import Path
 from tvm import meta_schedule as ms
 
 from .db_utils import load_ms_db_wrapper, db_to_json_db
+from tvm.meta_schedule.database.s3_json_database import S3JSONDatabase
 
 
 def merge_ms_dbs(in_dbs: List[ms.database.Database], ordered: bool = False):
@@ -86,30 +87,39 @@ def merge_ms_dbs_wrapper(in_args, out_arg, module_equality: str = "structural", 
     num_dbs = len(in_dbs)
     print(f"Merging {num_dbs} MS databases...")
     # print("in_dbs", in_dbs, len(in_dbs))
-    out_path = Path(out_arg)
-    if out_path.suffix == ".json":  # file
-        raise NotImplementedError("JSON output")
-    elif out_path.suffix in [".tar"]:  # archive
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            temp_out_path = Path(tmpdirname)
-            out_db = ms.database.JSONDatabase(
-                work_dir=str(temp_out_path),
-                module_equality=module_equality,
-            )
-            union_db = merge_ms_dbs(in_dbs)
-            num_recs = len(union_db)
-            db_to_json_db(union_db, out_db, append=append)
-            with tarfile.open(out_path, mode="w") as archive:
-                archive.add(temp_out_path, recursive=True, arcname=".")
-    else:  # directory
-        out_path.mkdir(exist_ok=True)
-        out_db = ms.database.JSONDatabase(
-            work_dir=str(out_path),
+    if out_arg.startswith("s3://"):
+        out_db = S3JSONDatabase(
+            out_arg,
             module_equality=module_equality,
         )
         union_db = merge_ms_dbs(in_dbs)
         num_recs = len(union_db)
         db_to_json_db(union_db, out_db, append=append)
+    else:
+        out_path = Path(out_arg)
+        if out_path.suffix == ".json":  # file
+            raise NotImplementedError("JSON output")
+        elif out_path.suffix in [".tar"]:  # archive
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                temp_out_path = Path(tmpdirname)
+                out_db = ms.database.JSONDatabase(
+                    work_dir=str(temp_out_path),
+                    module_equality=module_equality,
+                )
+                union_db = merge_ms_dbs(in_dbs)
+                num_recs = len(union_db)
+                db_to_json_db(union_db, out_db, append=append)
+                with tarfile.open(out_path, mode="w") as archive:
+                    archive.add(temp_out_path, recursive=True, arcname=".")
+        else:  # directory
+            out_path.mkdir(exist_ok=True)
+            out_db = ms.database.JSONDatabase(
+                work_dir=str(out_path),
+                module_equality=module_equality,
+            )
+            union_db = merge_ms_dbs(in_dbs)
+            num_recs = len(union_db)
+            db_to_json_db(union_db, out_db, append=append)
     print(f"Merge completed ({num_recs} records)")
 
 
