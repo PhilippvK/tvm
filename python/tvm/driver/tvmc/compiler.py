@@ -16,7 +16,8 @@
 # under the License.
 # pylint: disable=unused-argument
 import tempfile
-import tarfile
+
+# import tarfile
 import subprocess
 
 from anytree import Node
@@ -72,6 +73,7 @@ from tvm.relay.backend import Executor, Runtime
 from tvm.relay.analysis.operations_distribution import analyze_operations_distribution
 from tvm.relay.transform.suffixes import tag_suffixes
 from tvm import meta_schedule as ms
+from tvm.meta_schedule.database.db_utils import load_ms_db_wrapper
 
 from . import composite_target, frontends, TVMCException
 from .model import TVMCModel, TVMCPackage
@@ -555,46 +557,48 @@ def compile_model(
         )
         instruments = [print_ir_instr] if instruments is None else [print_ir_instr] + instruments
 
-    with tempfile.TemporaryDirectory() as tmpdirname:
+    # with tempfile.TemporaryDirectory() as tmpdirname:
+    if True:
         if ms_db is None or len(ms_db) == 0:
             ms_db = ms.database.MemoryDatabase()
         else:
             config["relay.backend.use_meta_schedule_dispatch"] = metascheduler_dispatch
-            db_path = Path(ms_db)
-            if db_path.is_dir():
-                path_workload = db_path / "database_workload.json"
-                path_tuning_record = db_path / "database_tuning_record.json"
-            elif db_path.is_file():
-                suffix = db_path.suffix
-                if suffix == ".json":
-                    if "workload" in db_path.stem:
-                        path_workload = db_path
-                        path_tuning_record = db_path.parent / db_path.name.replace("workload", "tuning_record")
-                    elif "tuning_record" in db_path.stem:
-                        path_tuning_record = db_path
-                        path_workload = db_path.parent / db_path.name.replace("tuning_record", "workload")
-                    else:
-                        raise ValueError("Invalid MS DB file name: {db_path.name}")
-                    raise NotImplementedError("ms_db json")
-                elif tarfile.is_tarfile(db_path):
-                    db_out_path = Path(tmpdirname)
-                    with tarfile.open(db_path) as f:
-                        f.extractall(path=db_out_path)
-                    db_out_path = db_out_path / "work_dir"  # TODO: fix
-                    path_workload = db_out_path / "database_workload.json"
-                    path_tuning_record = db_out_path / "database_tuning_record.json"
-                else:
-                    raise ValueError(f"Unsupported suffix: {suffix}")
-            else:
-                path_workload = Path(f"{db_path}_workload.json")
-                path_tuning_record = Path("{db_path}_tuning_record.json")
-            assert path_workload.is_file(), f"Not found: {path_workload}"
-            assert path_tuning_record.is_file(), f"Not found: {path_tuning_record}"
-            ms_db = ms.database.JSONDatabase(
-                path_workload=str(path_workload),
-                path_tuning_record=str(path_tuning_record),
-                module_equality=metascheduler_module_equality,
-            )
+            ms_db = load_ms_db_wrapper(ms_db)
+            # db_path = Path(ms_db)
+            # if db_path.is_dir():
+            #     path_workload = db_path / "database_workload.json"
+            #     path_tuning_record = db_path / "database_tuning_record.json"
+            # elif db_path.is_file():
+            #     suffix = db_path.suffix
+            #     if suffix == ".json":
+            #         if "workload" in db_path.stem:
+            #             path_workload = db_path
+            #             path_tuning_record = db_path.parent / db_path.name.replace("workload", "tuning_record")
+            #         elif "tuning_record" in db_path.stem:
+            #             path_tuning_record = db_path
+            #             path_workload = db_path.parent / db_path.name.replace("tuning_record", "workload")
+            #         else:
+            #             raise ValueError("Invalid MS DB file name: {db_path.name}")
+            #         raise NotImplementedError("ms_db json")
+            #     elif tarfile.is_tarfile(db_path):
+            #         db_out_path = Path(tmpdirname)
+            #         with tarfile.open(db_path) as f:
+            #             f.extractall(path=db_out_path)
+            #         db_out_path = db_out_path / "work_dir"  # TODO: fix
+            #         path_workload = db_out_path / "database_workload.json"
+            #         path_tuning_record = db_out_path / "database_tuning_record.json"
+            #     else:
+            #         raise ValueError(f"Unsupported suffix: {suffix}")
+            # else:
+            #     path_workload = Path(f"{db_path}_workload.json")
+            #     path_tuning_record = Path("{db_path}_tuning_record.json")
+            # assert path_workload.is_file(), f"Not found: {path_workload}"
+            # assert path_tuning_record.is_file(), f"Not found: {path_tuning_record}"
+            # ms_db = ms.database.JSONDatabase(
+            #     path_workload=str(path_workload),
+            #     path_tuning_record=str(path_tuning_record),
+            #     module_equality=metascheduler_module_equality,
+            # )
         with tvm.transform.PassContext(
             opt_level=opt_level,
             config=config,
