@@ -16,8 +16,12 @@ def filter_ms_db(
     filter_target_mcpu: Optional[str] = None,
     filter_target_model: Optional[str] = None,
     filter_target_tag: Optional[str] = None,
+    filter_target_device: Optional[str] = None,
+    filter_target_num_cores: Optional[str] = None,
     filter_target_keys: Optional[Union[str, List[str]]] = None,
     filter_target_mattr: Optional[Union[str, List[str]]] = None,
+    filter_timestamp_min: Optional[float] = None,
+    filter_timestamp_max: Optional[float] = None,
     module_equality: str = "structural",
 ) -> ms.database.MemoryDatabase:
     # print("filter_ms_db")
@@ -47,6 +51,12 @@ def filter_ms_db(
         if filter_target_tag:
             if rec.target.tag != filter_target_tag:
                 continue
+        if filter_target_device:
+            if rec.target.attrs.get("device") != filter_target_device:
+                continue
+        if filter_target_num_cores:
+            if rec.target.attrs.get("num-cores") != filter_target_num_cores:
+                continue
         if filter_target_keys:
             if isinstance(filter_target_keys, str):
                 filter_target_keys = filter_target_keys.split(",")
@@ -56,6 +66,16 @@ def filter_ms_db(
             if isinstance(filter_target_mattr, str):
                 filter_target_mattr = filter_target_mattr.split(",")
             if set(filter_target_mattr) != set(rec.target.mattr):
+                continue
+        if filter_timestamp_min is not None:
+            if rec.timestamp is None:
+                continue
+            if rec.timestamp < filter_timestamp_min:
+                continue
+        if filter_timestamp_max is not None:
+            if rec.timestamp is None:
+                continue
+            if rec.timestamp > filter_timestamp_max:
                 continue
         if not out_db.has_workload(rec.workload.mod):
             out_db.commit_workload(rec.workload.mod)
@@ -74,47 +94,56 @@ def filter_ms_db_wrapper(
     filter_target_mcpu: Optional[str] = None,
     filter_target_model: Optional[str] = None,
     filter_target_tag: Optional[str] = None,
+    filter_target_device: Optional[str] = None,
+    filter_target_num_cores: Optional[str] = None,
     filter_target_keys: Optional[Union[str, List[str]]] = None,
     filter_target_mattr: Optional[Union[str, List[str]]] = None,
+    filter_timestamp_min: Optional[float] = None,
+    filter_timestamp_max: Optional[float] = None,
 ):
     assert out_arg is not None
     in_db = load_ms_db_wrapper(in_arg)
     num_recs_before = len(in_db)
     if out_arg.startswith("s3://"):
         raise NotImplementedError("S3 output")
-    out_path = Path(out_arg)
-    if out_path.suffix == ".json":  # file
-        raise NotImplementedError("JSON output")
-    elif out_path.suffix in [".tar"]:  # archive
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            temp_out_path = Path(tmpdirname)
+    else:
+        out_path = Path(out_arg)
+        if out_path.suffix == ".json":  # file
+            raise NotImplementedError("JSON output")
+        elif out_path.suffix in [".tar"]:  # archive
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                temp_out_path = Path(tmpdirname)
+                out_db = ms.database.JSONDatabase(
+                    work_dir=str(temp_out_path),
+                    module_equality=module_equality,
+                )
+                filtered_db = filter_ms_db(
+                    in_db,
+                    filter_target_str=filter_target_str,
+                    filter_target_kind=filter_target_kind,
+                    filter_target_mcpu=filter_target_mcpu,
+                    filter_target_model=filter_target_model,
+                    filter_target_tag=filter_target_tag,
+                    filter_target_device=filter_target_device,
+                    filter_target_num_cores=filter_target_num_cores,
+                    filter_target_keys=filter_target_keys,
+                    filter_target_mattr=filter_target_mattr,
+                    filter_timestamp_min=filter_timestamp_min,
+                    filter_timestamp_max=filter_timestamp_max,
+                )
+                num_recs_after = len(filtered_db)
+                db_to_json_db(filtered_db, out_db, append=append)
+                with tarfile.open(out_path, mode="w") as archive:
+                    archive.add(temp_out_path, recursive=True, arcname=".")
+        else:  # directory
+            out_path.mkdir(exist_ok=True)
             out_db = ms.database.JSONDatabase(
-                work_dir=str(temp_out_path),
+                work_dir=str(out_path),
                 module_equality=module_equality,
             )
-            filtered_db = filter_ms_db(
-                in_db,
-                filter_target_str=filter_target_str,
-                filter_target_kind=filter_target_kind,
-                filter_target_mcpu=filter_target_mcpu,
-                filter_target_model=filter_target_model,
-                filter_target_tag=filter_target_tag,
-                filter_target_keys=filter_target_keys,
-                filter_target_mattr=filter_target_mattr,
-            )
+            filtered_db = filter_ms_db(in_db, filter_target_str=filter_target_str)
             num_recs_after = len(filtered_db)
             db_to_json_db(filtered_db, out_db, append=append)
-            with tarfile.open(out_path, mode="w") as archive:
-                archive.add(temp_out_path, recursive=True, arcname=".")
-    else:  # directory
-        out_path.mkdir(exist_ok=True)
-        out_db = ms.database.JSONDatabase(
-            work_dir=str(out_path),
-            module_equality=module_equality,
-        )
-        filtered_db = filter_ms_db(in_db, filter_target_str=filter_target_str)
-        num_recs_after = len(filtered_db)
-        db_to_json_db(filtered_db, out_db, append=append)
     print(f"Filtered DB ({num_recs_before} -> {num_recs_after} rercords)")
 
 
@@ -126,8 +155,12 @@ if __name__ == "__main__":
     parser.add_argument("--filter-target-mcpu", type=str, default=None, help="filter by target mcpu")
     parser.add_argument("--filter-target-model", type=str, default=None, help="filter by target model")
     parser.add_argument("--filter-target-tag", type=str, default=None, help="filter by target tag")
+    parser.add_argument("--filter-target-device", type=str, default=None, help="filter by target device")
+    parser.add_argument("--filter-target-num-cores", type=int, default=None, help="filter by target num-cores")
     parser.add_argument("--filter-target-keys", type=str, default=None, help="filter by target keys")
     parser.add_argument("--filter-target-mattr", type=str, default=None, help="filter by target mattr")
+    parser.add_argument("--filter-timestamp-min", type=float, default=None, help="filter by min timestamp")
+    parser.add_argument("--filter-timestamp-max", type=float, default=None, help="filter by max timestamp")
     parser.add_argument("--output", "-o", type=str, default=None, help="output file", required=True)
     parser.add_argument("--append", action="store_true", help="Append to existing non-empty out dbs")
     # parser.add_argument("--allow-empty", action="store_true", help="Allow empty out_db")  # TODO
@@ -147,6 +180,10 @@ if __name__ == "__main__":
         filter_target_tag=args.filter_target_tag,
         filter_target_keys=args.filter_target_keys,
         filter_target_mattr=args.filter_target_mattr,
+        filter_target_device=args.filter_target_device,
+        filter_target_num_cores=args.filter_target_num_cores,
+        filter_timestamp_min=args.filter_timestamp_min,
+        filter_timestamp_max=args.filter_timestamp_max,
         module_equality=args.module_equality,
         append=args.append,
     )
