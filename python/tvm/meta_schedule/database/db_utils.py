@@ -70,7 +70,7 @@ def load_ms_db_archive(in_db_archive, module_equality: str = "structural"):
 def load_ms_db_wrapper(in_arg, module_equality: str = "structural"):
     if isinstance(in_arg, ms.Database):
         return in_arg
-    print("in_arg", in_arg)
+    # print("in_arg", in_arg)
     if in_arg.startswith("s3://"):
         return load_ms_db_s3(in_arg, module_equality=module_equality)
     in_path = Path(in_arg)

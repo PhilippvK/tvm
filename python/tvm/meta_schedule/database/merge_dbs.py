@@ -88,13 +88,17 @@ def merge_ms_dbs_wrapper(in_args, out_arg, module_equality: str = "structural", 
     print(f"Merging {num_dbs} MS databases...")
     # print("in_dbs", in_dbs, len(in_dbs))
     if out_arg.startswith("s3://"):
+        import time
+
         out_db = S3JSONDatabase(
             out_arg,
             module_equality=module_equality,
+            auto_upload=False,
         )
         union_db = merge_ms_dbs(in_dbs)
         num_recs = len(union_db)
         db_to_json_db(union_db, out_db, append=append)
+        out_db.sync()
     else:
         out_path = Path(out_arg)
         if out_path.suffix == ".json":  # file
