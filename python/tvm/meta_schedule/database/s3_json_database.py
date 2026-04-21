@@ -18,12 +18,13 @@ from tvm.tir import Schedule
 
 @ms.utils.derived_object
 class S3JSONDatabase(ms.database.PyDatabase):
-    def __init__(self, url: str, readonly: bool = False, module_equality: str = "structural"):
+    def __init__(self, url: str, readonly: bool = False, module_equality: str = "structural", auto_upload: bool = True):
         super().__init__()
 
         self.url = url
         # print("self.url", self.url)
         self.readonly = readonly
+        self.auto_upload = auto_upload
 
         parsed = urlparse(url)
         # print("parsed", parsed)
@@ -94,17 +95,22 @@ class S3JSONDatabase(ms.database.PyDatabase):
         self.s3.upload_file(self.path_workload, self.bucket, self._key("database_workload.json"))
         self.s3.upload_file(self.path_records, self.bucket, self._key("database_tuning_record.json"))
 
+    def sync(self):
+        self._upload()
+
     def has_workload(self, mod: IRModule) -> bool:
         return self._db.has_workload(mod)
 
     def commit_workload(self, mod: IRModule):
         wl = self._db.commit_workload(mod)
-        self._upload()
+        if self.auto_upload:
+            self._upload()
         return wl
 
     def commit_tuning_record(self, record):
         self._db.commit_tuning_record(record)
-        self._upload()
+        if self.auto_upload:
+            self._upload()
 
     def get_top_k(self, workload, top_k):
         return self._db.get_top_k(workload, top_k)
