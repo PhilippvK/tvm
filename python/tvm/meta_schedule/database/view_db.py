@@ -2,9 +2,11 @@ import logging
 import argparse
 import tempfile
 import tarfile
+from datetime import datetime
 from collections import defaultdict
 from pathlib import Path
 from tvm import meta_schedule as ms
+from tvm.tir.analysis import estimate_tir_flops
 
 from .db_utils import load_ms_db_wrapper
 
@@ -15,6 +17,7 @@ def view_ms_db(in_db):
     # print("recs", recs, len(recs))
     workloads = []
     workload2args = {}
+    workload2flops = {}
     workload2recs = defaultdict(list)
     workload2targets = defaultdict(set)
     workload2secs = defaultdict(list)
@@ -38,6 +41,8 @@ def view_ms_db(in_db):
         if workload not in workloads:
             workloads.append(workload)
             workload2args[workload] = args_info
+            flops = estimate_tir_flops(workload.mod)
+            workload2flops[workload] = flops
         workload2recs[workload].append(rec)
         if target_str not in targets:
             targets.append(target_str)
@@ -47,6 +52,20 @@ def view_ms_db(in_db):
         workload2secs[workload].extend(rec.run_secs)
     # print("workloads", workloads, len(workloads))
     print("--- MS Database ---")
+    print("## Timestamps ##")
+    timestamps = [float(rec.timestamp) for rec in recs if rec.timestamp is not None]
+    # print("timestamps", timestamps, len(timestamps))
+    t_oldest = min(timestamps)
+    t_latest = max(timestamps)
+
+    # TODO: Timestamps per Workload/Target
+
+    t_oldest_str = datetime.utcfromtimestamp(t_oldest).strftime("%Y-%m-%d %H:%M:%S")
+    t_latest_str = datetime.utcfromtimestamp(t_latest).strftime("%Y-%m-%d %H:%M:%S")
+    print(f"Count: {len(timestamps)}")
+    # print(f"Oldest: {t_oldest}, Latest: {t_latest}")
+    print(f"Oldest: {t_oldest_str}, Latest: {t_latest_str}")
+    print()
     print("## Workloads ##")
     num_workloads = len(workloads)
     print(f"Count: {num_workloads}")
@@ -60,7 +79,8 @@ def view_ms_db(in_db):
         workload_args = str(workload_args).replace("TensorInfo", "")
         workload_args = workload_args.replace('"', "")
         workload_args = workload_args.replace(" ", "")
-        print(f"- {workload_str} ({workload_hash}) {workload_args}")
+        workload_flops = workload2flops[workload]
+        print(f"- {workload_str} ({workload_hash}) {workload_args}: {int(workload_flops)} FLOP")
         # input("!")
     print()
     print("## Targets ##")
@@ -72,8 +92,6 @@ def view_ms_db(in_db):
     print("## Records ##")
     num_recs = len(recs)
     print(f"Count: {num_recs}")
-
-    # TODO: flops,...
 
     print()
     print("## Records by Workload ##")
@@ -92,13 +110,18 @@ def view_ms_db(in_db):
         workload_str = workload_str.replace("meta_schedule.", "")
         invalid_secs = [secs for secs in workload_secs if secs > 1000.0]
         num_invalid = len(invalid_secs)
-        valid_secs = [secs for secs in workload_secs if secs <= 1000.0]
-        min_secs = float(min(valid_secs))
-        max_secs = float(max(valid_secs))
-        mean_secs = float(sum(valid_secs) / len(valid_secs))
+        valid_secs = [float(secs) for secs in workload_secs if secs <= 1000.0]
+        workload_flops = workload2flops[workload]
+        valid_flops_per_sec = [workload_flops / secs for secs in valid_secs]
+        min_secs = min(valid_secs)
+        max_secs = max(valid_secs)
+        mean_secs = sum(valid_secs) / len(valid_secs)
+        min_flops = min(valid_flops_per_sec)
+        max_flops = max(valid_flops_per_sec)
+        mean_flops = sum(valid_flops_per_sec) / len(valid_flops_per_sec)
         num_workload_secs = len(workload_secs)
         print(
-            f"- {workload_str}: #measures={num_workload_secs} #invalid={num_invalid} min={min_secs:.5f}s max={max_secs:.5f}s mean={mean_secs:.5f}s"
+            f"- {workload_str}: #measures={num_workload_secs} #invalid={num_invalid} min={min_secs:.5f}s [{min_flops/1e9:.5f} GFLOP/s] max={max_secs:.5f}s [{max_flops/1e9:.5f} GFLOP/s] mean={mean_secs:.5f}s [{mean_flops/1e9:.5f} GFLOP/s]"
         )
         # TODO: GFLOP/s
         # TODO: make secs,... optional via cli
