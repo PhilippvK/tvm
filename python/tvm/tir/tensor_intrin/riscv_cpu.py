@@ -17,6 +17,7 @@
 # pylint: disable=invalid-name,line-too-long
 """Intrinsics for RISCV tensorization"""
 
+import time
 import logging
 
 # from tvm.ffi import register_func
@@ -170,6 +171,8 @@ def rvv_vec_dot_product_kernels(
 
 @register_func("tir.tensor_intrin.register_rvv_isa_intrinsics")
 def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
+    # print("register_rvv_isa_intrinsics")
+    t0 = time.time()
     """Register RISCV V (vector) intrinsics
     [x] Implementation follows version 1.0 vector specifications:
         https://github.com/riscvarchive/riscv-v-spec/releases/tag/v1.0
@@ -197,7 +200,9 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
     weight_dtype = ["int8", "int8", "float16", "float32"]
     output_dtype = ["int32", "int32", "float16", "float32"]
 
+    iters = 0
     for d_dtype, w_dtype, o_dtype in zip(data_dtype, weight_dtype, output_dtype):
+        # print("for", d_dtype, w_dtype, o_dtype, time.time())
         # max elements to grouped registers
         max_elems = get_max_elems(vlen, lmul=8, sew=DataType(d_dtype).bits)
         # data widening halves available vector registers
@@ -208,6 +213,8 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
 
         n_elems = max_elems
         while n_elems >= 4:
+            # print("while", n_elems, time.time())
+            iters += 1
 
             dt = DataType(d_dtype)
             wt = DataType(w_dtype)
@@ -221,10 +228,24 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
             if not inventory_only:
                 logger.debug(f"Registering kernel {kernel_name}")
                 desc, impl = rvv_vec_dot_product_kernels(n_elems, n_lanes, d_dtype, w_dtype, o_dtype, lmul)
-                TensorIntrin.register(kernel_name, desc, impl, override=True)
+                lookup = TensorIntrin.get(kernel_name, allow_missing=True)
+                # print("lookup", lookup)
+                has_intrin = lookup is not None
+                # print("has_intrin", has_intrin)
+                override = False  # TODO: default True?
+                # print("override", override)
+                if override or not has_intrin:
+                    # print("register")
+                    TensorIntrin.register(kernel_name, desc, impl, override=True)
+                # else:
+                #     # print("skip")
 
             n_elems //= 2
 
+    t1 = time.time()
+    td = t1 - t0
+    # print("iters", iters)
+    # print("td", td)
     return kernels_inventory
 
 
