@@ -177,7 +177,7 @@ class TuningRecord : public runtime::ObjectRef {
    * \param workload The workload.
    * \return The tuning record created.
    */
-  TVM_DLL static TuningRecord FromJSON(const ObjectRef& json_obj, const Workload& workload);
+  TVM_DLL static TuningRecord FromJSON(const ObjectRef& json_obj, const Workload& workload, bool reg_rvv_intrins = false);
   TVM_DEFINE_NOTNULLABLE_OBJECT_REF_METHODS(TuningRecord, runtime::ObjectRef, TuningRecordNode);
 };
 

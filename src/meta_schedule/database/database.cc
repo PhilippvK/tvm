@@ -130,7 +130,7 @@ bool TuningRecordNode::IsValid() const {
   return false;
 }
 
-TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& workload) {
+TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& workload, bool reg_rvv_intrins) {
   tir::Trace trace{nullptr};
   Optional<Array<FloatImm>> run_secs{nullptr};
   Optional<Target> target{nullptr};
@@ -146,6 +146,14 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
     // Load json[2] => target
     if (json_array->at(2).defined()) {
       target = Target(Downcast<Map<String, ObjectRef>>(json_array->at(2)));
+      if (reg_rvv_intrins) {
+          const auto* reg_rvv_intrinsics = tvm::runtime::Registry::Get("tir.tensor_intrin.register_rvv_isa_intrinsics");
+          ICHECK(reg_rvv_intrinsics != nullptr) << "Cannot find register_rvv_isa_intrinsics func.";
+          Optional<Map<String, ObjectRef>> rvv_kernels_inventory = (*reg_rvv_intrinsics)(target, /* inventory_only */ false);
+          if (!rvv_kernels_inventory.defined()) {
+            throw Error("rvv_kernels_inventory undefined");
+          }
+      }
     }
     // Load json[3] => args_info
     if (json_array->at(3).defined()) {
@@ -175,6 +183,9 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
       trace = sch->trace().value();
     }
   } catch (const std::runtime_error& e) {  // includes tvm::Error and dmlc::Error
+    if (!reg_rvv_intrins) {
+      return FromJSON(json_obj, workload, true);
+    }
     LOG(FATAL) << "ValueError: Unable to parse the JSON object: " << json_obj
                << "\nThe error is: " << e.what();
   }
