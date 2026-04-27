@@ -8,6 +8,7 @@ from tvm import meta_schedule as ms
 
 from .db_utils import load_ms_db_wrapper, db_to_json_db
 from tvm.meta_schedule.database.s3_json_database import S3JSONDatabase
+from tvm.tir.tensor_intrin.riscv_cpu import *
 
 
 def merge_ms_dbs(in_dbs: List[ms.database.Database], ordered: bool = False):

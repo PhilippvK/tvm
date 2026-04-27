@@ -7,6 +7,7 @@ from pathlib import Path
 from tvm import meta_schedule as ms
 
 from .db_utils import load_ms_db_wrapper, db_to_json_db
+from tvm.tir.tensor_intrin.riscv_cpu import *
 
 
 def filter_ms_db(
