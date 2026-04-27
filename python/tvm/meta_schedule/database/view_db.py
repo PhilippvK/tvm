@@ -24,6 +24,8 @@ def view_ms_db(in_db):
     targets = []
     target2recs = defaultdict(list)
     target2workloads = defaultdict(set)
+    tensorize_hist = defaultdict(int)
+    workload_target2tensorize = defaultdict(lambda: defaultdict(int))
 
     for rec in recs:
         # print("rec", rec, dir(rec))
@@ -50,7 +52,28 @@ def view_ms_db(in_db):
         target2workloads[target_str].add(workload)
         workload2targets[workload].add(target_str)
         workload2secs[workload].extend(rec.run_secs)
+        has_tensorize = "sch.tensorize" in str(rec.trace)
+        # print("has_tensorize", has_tensorize)
+        if has_tensorize:
+            # insts = rec.trace.insts
+            trace = rec.trace
+            inst = trace.pop()
+            # assuming that only one tensorize may exist
+            intrin_name = None
+            while inst is not None:
+                # print("inst", inst, type(inst), dir(inst))
+                if "sch.tensorize" in str(inst):
+                    intrin_name = str(inst).split("tensor_intrin=", 1)[1].split(",", 1)[0]
+                    break
+                inst = trace.pop()
+            # print("intrin_name", intrin_name)
+            assert intrin_name is not None
+            workload_target = (workload, target_str)
+            tensorize_hist[intrin_name] += 1
+            workload_target2tensorize[workload_target][intrin_name] += 1
+            # input()
     # print("workloads", workloads, len(workloads))
+    # print("workload_target2tensorize", workload_target2tensorize)
     print("--- MS Database ---")
     print("## Timestamps ##")
     timestamps = [float(rec.timestamp) for rec in recs if rec.timestamp is not None]
@@ -132,6 +155,19 @@ def view_ms_db(in_db):
         num_target_recs = len(target_recs)
         num_target_workloads = len(target2workloads[target])
         print(f"- {target}: #recs={num_target_recs} #workloads={num_target_workloads}")
+    print()
+    print("## Tensorization ##")
+    print(f"Unique Count: {len(tensorize_hist)}")
+    print(f"Total Count: {sum(tensorize_hist.values())}")
+    for intrin, freq in tensorize_hist.items():
+        print(f"- {intrin}: #recs={freq}")
+    # workload_target2tensorize
+    print()
+    print("## Tensorization by Workload & Target ##")
+    for (workload, target_str), tensorize_hist_ in workload_target2tensorize.items():
+        print(f"({workload}, {target_str}):")
+        for intrin, freq in tensorize_hist_.items():
+            print(f"  - {intrin}: #recs={freq}")
 
 
 # def view_ms_db_dir(in_db_dir):
@@ -185,7 +221,7 @@ def view_ms_db(in_db):
 
 def view_ms_db_wrapper(db_arg):
     db = load_ms_db_wrapper(db_arg)
-    print("db", db)
+    # print("db", db)
     assert isinstance(db, ms.Database)
     _ = view_ms_db(db)
     # if isinstance(db_arg, ms.Database):
