@@ -285,6 +285,7 @@ class EvolutionarySearchNode : public SearchStrategyNode {
           ed(num_trials_per_iter),
           num_empty_iters(0),
           measured_workloads_(database->GetModuleEquality()) {
+      // LOG(INFO) << "design_space_schedules.size()=" << design_space_schedules.size();
       design_spaces.reserve(design_space_schedules.size());
       for (const Schedule& space : design_space_schedules) {
         design_spaces.push_back(space->trace().value()->Simplified(true));
@@ -578,6 +579,7 @@ std::vector<Schedule> EvolutionarySearchNode::State::EvolveWithCostModel(
     ICHECK_GT(num, 0);
     // The heap to record best schedule, we do not consider schedules that are already measured
     exists = this->measured_workloads_;
+    // LOG(INFO) << "exists.Size()=" << exists.Size();
   }
   SizedHeap heap(num);
   for (int iter = 0;; ++iter) {
@@ -588,16 +590,26 @@ std::vector<Schedule> EvolutionarySearchNode::State::EvolveWithCostModel(
     {
       auto _ = Profiler::TimedScope("EvoSearch/Evolve/Misc");
       ICHECK_EQ(scores.size(), population.size());
+      // LOG(INFO) << "population.size()=" << population.size();
+      size_t num_added = 0, num_skipped = 0;
       for (int i = 0, n = population.size(); i < n; ++i) {
         Schedule sch = population.at(i);
         IRModule mod = sch->mod();
         size_t shash = ModuleHash(mod);
         double score = scores.at(i);
         if (!exists.Has(mod, shash)) {
+          // LOG(INFO) << "not exists!";
           exists.Add(mod, shash);
           heap.Push(sch, score);
+          num_added++;
+        } else {
+          // LOG(INFO) << "skip existing shash=" << shash;
+          num_skipped++;
         }
       }
+      // LOG(INFO) << "heap.heap.size=" << heap.Size();
+      // LOG(INFO) << "num_added=" << num_added;
+      // LOG(INFO) << "num_skipped=" << num_skipped;
       // Discontinue once it reaches end of search
       if (iter == self->genetic_num_iters) {
         break;
@@ -689,44 +701,59 @@ std::vector<Schedule> EvolutionarySearchNode::State::EvolveWithCostModel(
 std::vector<Schedule> EvolutionarySearchNode::State::PickWithEpsGreedy(
     const std::vector<Schedule>& unmeasured, const std::vector<Schedule>& bests, int num) {
   auto _ = Profiler::TimedScope("EvoSearch/PickWithEpsGreedy");
+  // LOG(INFO) << "PickWithEpsGreedy";
+  // LOG(INFO) << "num=" << num;
   int num_rands = num * self->eps_greedy;
+  // LOG(INFO) << "num_rands=" << num_rands;
   int num_bests = num - num_rands;
+  // LOG(INFO) << "num_bests=" << num_bests;
   std::vector<int> rands =
       tir::SampleWithoutReplacement(&self->rand_state_, unmeasured.size(), unmeasured.size());
   std::vector<Schedule> results;
   results.reserve(num);
   IRModuleSet& measured_workloads = this->measured_workloads_;
   for (int i = 0, i_bests = 0, i_rands = 0; i < num; ++i) {
+    // LOG(INFO) << "i=" << i;
+    // LOG(INFO) << "i_bests=" << i_bests;
+    // LOG(INFO) << "i_rands=" << i_rands;
     bool has_best = i_bests < static_cast<int>(bests.size());
     bool has_rand = i_rands < static_cast<int>(rands.size());
     // Pick a schedule
     Schedule sch{nullptr};
     // If needs `bests`, then prefer `bests`
     if (i < num_bests) {
+      // LOG(INFO) << "i < num_bests";
       if (has_best) {
         sch = bests[i_bests++];
       } else if (has_rand) {
         sch = unmeasured[rands[i_rands++]];
       } else {
+        // LOG(INFO) << "break1";
         break;
       }
     } else {
+      // LOG(INFO) << "!(i < num_bests)";
       // Else prefer `rands`
       if (has_rand) {
+        // LOG(INFO) << "pick rand";
         sch = unmeasured[rands[i_rands++]];
       } else if (has_best) {
+        // LOG(INFO) << "pick best";
         sch = bests[i_bests++];
       } else {
+        // LOG(INFO) << "break2";
         break;
       }
     }
     IRModule mod = sch->mod();
     size_t shash = ModuleHash(mod);
     if (!measured_workloads.Has(mod, shash)) {
+      // LOG(INFO) << "add workload shash=" << shash;
       measured_workloads.Add(mod, shash);
       results.push_back(sch);
     }
   }
+  // LOG(INFO) << "results.size()=" << results.size();
   return results;
 }
 
@@ -748,6 +775,7 @@ Optional<Array<MeasureCandidate>> EvolutionarySearchNode::State::GenerateMeasure
   std::vector<Schedule> measured = PickBestFromDatabase(pop * self->init_measured_ratio);
   TVM_PY_LOG(INFO, self->ctx_->logger)
       << "Picked top " << measured.size() << " candidate(s) from database";
+  // LOG(INFO) << "pop=" << pop;
   std::vector<Schedule> unmeasured = SampleInitPopulation(pop - measured.size());
   if (static_cast<int>(unmeasured.size()) < self->init_min_unmeasured) {
     TVM_PY_LOG(WARNING, self->ctx_->logger)
@@ -755,16 +783,23 @@ Optional<Array<MeasureCandidate>> EvolutionarySearchNode::State::GenerateMeasure
     return NullOpt;
   }
   TVM_PY_LOG(INFO, self->ctx_->logger) << "Sampled " << unmeasured.size() << " candidate(s)";
+  // LOG(INFO) << "measured.size()=" << measured.size();
+  // LOG(INFO) << "unmeasured.size()=" << unmeasured.size();
   inits.insert(inits.end(), measured.begin(), measured.end());
   inits.insert(inits.end(), unmeasured.begin(), unmeasured.end());
+  // LOG(INFO) << "inits.size()=" << inits.size();
   std::vector<Schedule> bests = EvolveWithCostModel(inits, sample_num);
+  // LOG(INFO) << "bests.size()=" << bests.size();
   TVM_PY_LOG(INFO, self->ctx_->logger)
       << "Got " << bests.size() << " candidate(s) with evolutionary search";
   std::vector<Schedule> picks = PickWithEpsGreedy(unmeasured, bests, sample_num);
+  // LOG(INFO) << "picks.size()=" << picks.size();
   TVM_PY_LOG(INFO, self->ctx_->logger)
       << "Sending " << picks.size() << " candidates(s) for measurement";
+  // LOG(INFO) << "empty=" << picks.empty();
   if (picks.empty()) {
     ++this->num_empty_iters;
+    // LOG(INFO) << "this->num_empty_iters=" << this->num_empty_iters;
     if (this->num_empty_iters >= self->num_empty_iters_before_early_stop) {
       return NullOpt;
     }
