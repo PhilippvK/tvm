@@ -187,6 +187,36 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
     TaskRecordNode* task = tasks_[task_id].get();
     ICHECK(!task->is_terminated);
     ICHECK(!task->runner_futures.defined());
+    if (task->latency_ms.size() == 0) {  // first trial
+      // LOG(INFO) << "if a";
+      if (database.defined()) {  // has db
+        // // LOG(INFO) << "if b";
+        if (task->ctx->mod.defined()) {  // ctx has mod
+          // LOG(INFO) << "if c";
+          if (database.value()->HasWorkload(task->ctx->mod.value())) { // db has mod
+            // LOG(INFO) << "if d";
+            // Optional<TuningRecord> rec = database.value()->QueryTuningRecord(task->ctx.mod.value(), target, workload_name)
+            Workload workload = database.value()->CommitWorkload(task->ctx->mod.value());
+            Array<TuningRecord> recs = database.value()->GetTopK(workload, 1);
+            if (recs.size() == 1) {
+              // LOG(INFO) << "if e";
+              TuningRecord rec = recs[0];
+              MeasureCandidate measure = rec->AsMeasureCandidate();
+              Array<MeasureCandidate> measure_inputs;
+              measure_inputs.reserve(1);
+              measure_inputs.push_back(measure);
+              task->measure_candidates = measure_inputs;
+              num_trials_already += 1;
+              TVM_PY_LOG(INFO, this->logger) << "Sending best sample from db to builder";
+              SendToBuilder(task, builder);
+              TVM_PY_LOG(INFO, this->logger) << "Sending best sample from db to runner";
+              SendToRunner(task, runner);
+              continue;
+            }
+          }
+        }
+      }
+    }
     if (static_cast<int>(task->latency_ms.size()) >= max_trials_per_task) {
       TerminateTask(task_id);
       continue;
