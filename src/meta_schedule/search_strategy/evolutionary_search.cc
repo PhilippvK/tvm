@@ -41,6 +41,7 @@ class IRModuleSet {
   void Add(const IRModule& mod, size_t shash) { tab_.insert(Item{mod, shash}); }
   /*! \brief Check if the IRModule is in the set */
   bool Has(const IRModule& mod, size_t shash) const { return tab_.count(Item{mod, shash}); }
+  size_t Size() const { return tab_.size(); }
 
  private:
   struct Item {
@@ -88,6 +89,7 @@ class SizedHeap {
    * \brief Push the specific item to the heap if its key did not appears in the heap
    * \param item The item to be pushed
    */
+  size_t Size() { return heap.size(); }
   void Push(Schedule sch, double score) {
     int size = heap.size();
     if (size < size_limit) {
