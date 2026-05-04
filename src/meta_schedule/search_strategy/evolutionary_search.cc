@@ -297,6 +297,38 @@ class EvolutionarySearchNode : public SearchStrategyNode {
         data.rand_state = ForkSeed(&self->rand_state_);
       }
       this->database_ = database;
+      // collect all already measured trials from db (TODO: filter by target!)
+      // auto recs = database->GetAllTuningRecords();
+      // for (auto rec : recs) {
+      //   // LOG(INFO) << "rec=" << rec;
+      //   if (!rec->IsValid()) continue;
+      //   // LOG(INFO) << "valid";
+      //   // LOG(INFO) << "rec->workload->mod=" << rec->workload->mod;
+      //   // ThreadedTraceApply pp(self->postprocs_);
+      //   // ThreadedTraceApply pp({});
+      //   // const IRModule& mod = rec->workload->mod;
+      //   // tir::Trace trace = rec->trace
+      //   // if (Optional<Schedule> sch = pp.Apply(mod, rec->trace, rand_state)) {
+      //   //   result = sch.value();
+      //   // } else {
+      //   //   LOG(FATAL) << "ValueError: Cannot postprocess the trace:\n" << rec->trace;
+      //   //   throw;
+      //   // }
+      //   tir::Schedule sch =
+      //       tir::Schedule::Traced(rec->workload->mod, -1, 0, tir::ScheduleErrorRenderLevel::kDetail);
+      //   // LOG(INFO) << "sch=" << sch;
+      //   rec->trace->ApplyToSchedule(sch, false, nullptr);
+      //   // LOG(INFO) << "sch2=" << sch;
+      //   IRModule mod = sch->mod();
+      //   // LOG(INFO) << "mod=" << mod;
+      //   size_t shash = ModuleHash(mod);
+      //   // LOG(INFO) << "shash=" << shash;
+      //   if (!measured_workloads_.Has(mod, shash)) {
+      //     // LOG(INFO) << "not exists! adding...";
+      //     measured_workloads_.Add(mod, shash);
+      //   }
+      // }
+      // LOG(INFO) << "measured_workloads_.Size()=" << measured_workloads_.Size();
       this->cost_model_ = cost_model;
       this->token_ = database->CommitWorkload(mod);
     }
