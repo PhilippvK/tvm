@@ -193,7 +193,19 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
     }
     if (Optional<Array<MeasureCandidate>> candidates = task->measure_candidates =
             task->ctx->search_strategy.value()->GenerateMeasureCandidates()) {
+      int task_trials = static_cast<int>(task->latency_ms.size());
       int num_candidates = candidates.value().size();
+      task->candidate_history.push_back(num_candidates);
+      if (task_trials > 0) {
+        float num_candidates_new_rel = (float)num_candidates / task_trials;
+			  LOG(INFO) << "num_candidates_new_rel=" << num_candidates_new_rel;
+			  float rel_thr = 0.05;
+        if (num_candidates_new_rel <= rel_thr) {
+			  	LOG(INFO) << "terminate task (rel_thr)";
+          TerminateTask(task_id);
+          continue;
+        }
+      }
       num_trials_already += num_candidates;
       TVM_PY_LOG(INFO, this->logger) << "Sending " << num_candidates << " sample(s) to builder";
       SendToBuilder(task, builder);
