@@ -331,7 +331,8 @@ def get_global_func_on_rpc_session(
 @register_func("meta_schedule.remove_build_dir")
 def remove_build_dir(artifact_path: str) -> None:
     """Clean up the build directory"""
-    shutil.rmtree(os.path.dirname(artifact_path))
+    if os.path.exists(artifact_path):
+        shutil.rmtree(os.path.dirname(artifact_path))
 
 
 def _json_de_tvm(obj: Any) -> Any:
