@@ -59,6 +59,7 @@ class TaskRecordNode : public runtime::Object {
   Optional<Array<BuilderResult>> builder_results = NullOpt;
   /*! \brief Packed functions to fetch the runner results asynchronously. */
   Optional<Array<RunnerFuture>> runner_futures = NullOpt;
+  Array<Integer> candidate_history = {};
 
   void VisitAttrs(tvm::AttrVisitor* v) {
     v->Visit("ctx", &ctx);
@@ -71,6 +72,7 @@ class TaskRecordNode : public runtime::Object {
     v->Visit("measure_candidates", &measure_candidates);
     v->Visit("builder_results", &builder_results);
     v->Visit("runner_futures", &runner_futures);
+    v->Visit("candidate_history", &candidate_history);
   }
 
   static constexpr const char* _type_key = "meta_schedule.TaskRecord";

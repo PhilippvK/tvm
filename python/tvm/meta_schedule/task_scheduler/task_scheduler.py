@@ -51,6 +51,7 @@ class TaskRecord(Object):
     measure_candidates: List[MeasureCandidate]
     builder_results: List[BuilderResult]
     runner_results: List[RunnerResult]
+    candidate_history: List[int]
 
 
 @register_object("meta_schedule.TaskScheduler")
