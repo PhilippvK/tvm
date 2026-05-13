@@ -16,6 +16,7 @@
 # under the License.
 """Local Runner"""
 import logging
+import time
 from contextlib import contextmanager
 from typing import Callable, List, Optional, Union
 import subprocess
@@ -112,7 +113,9 @@ class LocalRunnerFuture(PyRunnerFuture):
         return True
 
     def result(self) -> RunnerResult:
-        return RunnerResult(self.res, self.error_message)
+        timestamp = time.time()
+        timestamp = tvm.tir.FloatImm("float64", timestamp)
+        return RunnerResult(self.res, self.error_message, timestamp)
 
 
 def _worker_func(
