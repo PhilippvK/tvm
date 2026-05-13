@@ -117,6 +117,19 @@ class LocalRunnerFuture(PyRunnerFuture):
         timestamp = tvm.tir.FloatImm("float64", timestamp)
         return RunnerResult(self.res, self.error_message, timestamp)
 
+def _worker_func_dummy(
+    _f_alloc_argument: Optional[str],
+    _f_run_evaluator: Optional[str],
+    _f_cleanup: Optional[str],
+    evaluator_config: EvaluatorConfig,
+    alloc_repeat: int,
+    artifact_path: str,
+    device_type: str,
+    args_info: T_ARG_INFO_JSON_OBJ_LIST,
+) -> List[float]:
+    cnt = evaluator_config.number
+    return [1.0] * cnt
+
 
 def _worker_func(
     _f_alloc_argument: Optional[str],
@@ -292,9 +305,14 @@ class LocalRunner(PyRunner):
 
     def run(self, runner_inputs: List[RunnerInput]) -> List[RunnerFuture]:
         results: List[RunnerFuture] = []
+        DUMMY = True
         for runner_input in runner_inputs:
+            if DUMMY:
+                func = _worker_func_dummy
+            else:
+                func = _worker_func
             future = self.pool.submit(
-                _worker_func,
+                func,
                 self.f_alloc_argument,
                 self.f_run_evaluator,
                 self.f_cleanup,
