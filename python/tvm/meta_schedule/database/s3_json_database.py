@@ -3,9 +3,6 @@ import tempfile
 from urllib.parse import urlparse, parse_qs
 from typing import Callable, List, Optional
 
-import boto3
-from botocore.client import Config
-
 import tvm
 from tvm import meta_schedule as ms
 from tvm import relay, tir
@@ -39,6 +36,10 @@ class S3JSONDatabase(ms.database.PyDatabase):
         # print("endpoint", endpoint)
         region = query.get("region", ["us-east-1"])[0]
         # print("region", region)
+
+        import boto3
+        from botocore.client import Config
+
 
         session = boto3.Session()
         creds = session.get_credentials()
