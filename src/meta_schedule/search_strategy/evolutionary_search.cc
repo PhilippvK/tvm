@@ -560,12 +560,23 @@ std::vector<Schedule> EvolutionarySearchNode::State::EvolveWithCostModel(
         size_t shash = ModuleHash(mod);
         double score = scores.at(i);
         if (!exists.Has(mod, shash)) {
+          added += 1;
           exists.Add(mod, shash);
           heap.Push(sch, score);
+        } else {
+          skipped += 1;
         }
       }
+      float stop_thr = 0.01;
+      // float stop_thr = 0.05;
+      float added_ratio = (float)added/n;
       // Discontinue once it reaches end of search
       if (iter == self->genetic_num_iters) {
+        LOG(INFO) << "break (iters reached)";
+        break;
+      }
+      if (added_ratio <= stop_thr) {
+        LOG(INFO) << "break (stop_thr)";
         break;
       }
       // Set threaded samplers, with probability from predicated normalized throughput
