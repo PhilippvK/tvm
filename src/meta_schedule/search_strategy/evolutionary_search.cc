@@ -284,6 +284,7 @@ class EvolutionarySearchNode : public SearchStrategyNode {
           num_empty_iters(0),
           measured_workloads_(database->GetModuleEquality()) {
       design_spaces.reserve(design_space_schedules.size());
+      LOG(INFO) << "design_space_schedules.size()=" << design_space_schedules.size();
       for (const Schedule& space : design_space_schedules) {
         design_spaces.push_back(space->trace().value()->Simplified(true));
       }
@@ -530,8 +531,8 @@ std::vector<Schedule> EvolutionarySearchNode::State::SampleInitPopulation(int nu
       }
     }
     fail_count += !found_new;
-    TVM_PY_LOG(INFO, self->ctx_->logger) << "Sample-Init-Population summary:\n"
-                                         << pp.SummarizeFailures();
+    // LOG(INFO) << "Sample-Init-Population summary:\n"
+    //                                      << pp.SummarizeFailures();
   }
   return out_schs;
 }
@@ -546,15 +547,20 @@ std::vector<Schedule> EvolutionarySearchNode::State::EvolveWithCostModel(
     exists = this->measured_workloads_;
   }
   SizedHeap heap(num);
-  for (int iter = 0;; ++iter) {
+  int iter;
+  for (iter = 0;; ++iter) {
     // Predict normalized score with the cost model,
     std::vector<double> scores =
         PredictNormalizedScore(population, GetRef<TuneContext>(self->ctx_), this->cost_model_);
 
     {
+      LOG(INFO) << "iter=" << iter;
       auto _ = Profiler::TimedScope("EvoSearch/Evolve/Misc");
+      LOG(INFO) << "EvoSearch/Evolve/Misc";
       ICHECK_EQ(scores.size(), population.size());
-      for (int i = 0, n = population.size(); i < n; ++i) {
+      int added = 0, skipped = 0;
+      int i, n;
+      for (i = 0, n = population.size(); i < n; ++i) {
         Schedule sch = population.at(i);
         IRModule mod = sch->mod();
         size_t shash = ModuleHash(mod);
@@ -567,6 +573,11 @@ std::vector<Schedule> EvolutionarySearchNode::State::EvolveWithCostModel(
           skipped += 1;
         }
       }
+      LOG(INFO) << "n=" << n;
+      LOG(INFO) << "added=" << added;
+      LOG(INFO) << "skipped=" << skipped;
+      LOG(INFO) << "added/n=" << (float)added/n;
+      LOG(INFO) << "skipped/n=" << (float)skipped/n;
       float stop_thr = 0.01;
       // float stop_thr = 0.05;
       float added_ratio = (float)added/n;
@@ -585,6 +596,7 @@ std::vector<Schedule> EvolutionarySearchNode::State::EvolveWithCostModel(
       }
     }
     {
+      LOG(INFO) << "EvoSearch/Evolve/Mutation";
       auto _ = Profiler::TimedScope("EvoSearch/Evolve/Mutation");
       ThreadedTraceApply pp(self->postprocs_);
       ConcurrentBitmask cbmask(self->population_size);
@@ -629,13 +641,14 @@ std::vector<Schedule> EvolutionarySearchNode::State::EvolveWithCostModel(
                                     f_find_candidate);
 
       population.swap(next_population);
-      TVM_PY_LOG(INFO, self->ctx_->logger) << "Evolve iter #" << iter << " done. Summary:\n"
+      LOG(INFO) << "Evolve iter #" << iter << " done. Summary:\n"
                                            << pp.SummarizeFailures();
     }
   }
   // Return the best states from the heap, sorting from higher score to lower ones
   {
     auto _ = Profiler::TimedScope("EvoSearch/Evolve/Misc");
+    LOG(INFO) << "EvoSearch/Evolve/Misc2";
     std::sort(heap.heap.begin(), heap.heap.end());
     std::vector<Schedule> results;
     results.reserve(num);
@@ -657,8 +670,8 @@ std::vector<Schedule> EvolutionarySearchNode::State::EvolveWithCostModel(
         os << std::fixed << std::setprecision(4) << heap.heap.at(i).score;
       }
     }
-    TVM_PY_LOG(INFO, self->ctx_->logger)
-        << "Scores of the best " << n << " candidates:" << os.str();
+    // LOG(INFO)
+    //     << "Scores of the best " << n << " candidates:" << os.str();
     return results;
   }
 }
@@ -666,6 +679,7 @@ std::vector<Schedule> EvolutionarySearchNode::State::EvolveWithCostModel(
 std::vector<Schedule> EvolutionarySearchNode::State::PickWithEpsGreedy(
     const std::vector<Schedule>& unmeasured, const std::vector<Schedule>& bests, int num) {
   auto _ = Profiler::TimedScope("EvoSearch/PickWithEpsGreedy");
+  LOG(INFO) << "EvoSearch/PickWithEpsGreedy";
   int num_rands = num * self->eps_greedy;
   int num_bests = num - num_rands;
   std::vector<int> rands =
@@ -721,24 +735,24 @@ Optional<Array<MeasureCandidate>> EvolutionarySearchNode::State::GenerateMeasure
   std::vector<Schedule> inits;
   inits.reserve(pop);
 
-  TVM_PY_LOG(INFO, self->ctx_->logger) << "Generating candidates......";
+  LOG(INFO) << "Generating candidates......";
   std::vector<Schedule> measured = PickBestFromDatabase(pop * self->init_measured_ratio);
-  TVM_PY_LOG(INFO, self->ctx_->logger)
+  LOG(INFO)
       << "Picked top " << measured.size() << " candidate(s) from database";
   std::vector<Schedule> unmeasured = SampleInitPopulation(pop - measured.size());
   if (static_cast<int>(unmeasured.size()) < self->init_min_unmeasured) {
-    TVM_PY_LOG(WARNING, self->ctx_->logger)
+    LOG(INFO)
         << "Cannot sample enough initial population, evolutionary search failed.";
     return NullOpt;
   }
-  TVM_PY_LOG(INFO, self->ctx_->logger) << "Sampled " << unmeasured.size() << " candidate(s)";
+  LOG(INFO) << "Sampled " << unmeasured.size() << " candidate(s)";
   inits.insert(inits.end(), measured.begin(), measured.end());
   inits.insert(inits.end(), unmeasured.begin(), unmeasured.end());
   std::vector<Schedule> bests = EvolveWithCostModel(inits, sample_num);
-  TVM_PY_LOG(INFO, self->ctx_->logger)
+  LOG(INFO)
       << "Got " << bests.size() << " candidate(s) with evolutionary search";
   std::vector<Schedule> picks = PickWithEpsGreedy(unmeasured, bests, sample_num);
-  TVM_PY_LOG(INFO, self->ctx_->logger)
+  LOG(INFO)
       << "Sending " << picks.size() << " candidates(s) for measurement";
   if (picks.empty()) {
     ++this->num_empty_iters;
