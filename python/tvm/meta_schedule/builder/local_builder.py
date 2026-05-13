@@ -161,8 +161,13 @@ class LocalBuilder(PyBuilder):
         )
 
         # Dispatch the build inputs to the worker processes.
+        DUMMY = True
+        if DUMMY:
+            func = _worker_func_dummy
+        else:
+            func = _worker_func
         for map_result in pool.map_with_error_catching(
-            lambda x: _worker_func(*x),
+            lambda x: func(*x),
             [
                 (
                     self.f_build,
@@ -209,6 +214,18 @@ class LocalBuilder(PyBuilder):
         value = pool.submit(_check, self.f_build, self.f_export)
         value.result()
         del pool
+
+
+def _worker_func_dummy(
+    _f_build: Union[None, str, T_BUILD],
+    _f_export: Union[None, str, T_EXPORT],
+    mod: IRModule,
+    target: Target,
+    params: Optional[bytearray],
+) -> str:
+    # artifact_path = "dummy"
+    artifact_path = os.path.join(tempfile.mkdtemp(), "tvm_tmp_mod.so")
+    return artifact_path
 
 
 def _worker_func(
