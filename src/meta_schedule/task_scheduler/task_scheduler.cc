@@ -196,6 +196,9 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
       int task_trials = static_cast<int>(task->latency_ms.size());
       int num_candidates = candidates.value().size();
       task->candidate_history.push_back(num_candidates);
+      for (auto c : candidates.value()) {
+        task->all_measure_candidates.push_back(c);
+      }
       if (task_trials > 0) {
         float num_candidates_new_rel = (float)num_candidates / task_trials;
 			  LOG(INFO) << "num_candidates_new_rel=" << num_candidates_new_rel;
