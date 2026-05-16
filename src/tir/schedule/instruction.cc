@@ -81,6 +81,13 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
           inputs.push_back(String(os.str()));
         } else if (obj.as<IndexMapNode>()) {
           inputs.push_back(obj);
+        } else if (const auto* arr = obj.as<ArrayNode>()) {
+          Array<ObjectRef> temp;
+          int n = arr->size();
+          for (int i = 0; i < n; ++i) {
+            temp.push_back(String("ArrayElem?"));
+          }
+          inputs.push_back(temp);
         } else {
           LOG(FATAL) << "TypeError: Stringifying is not supported for type: " << obj->GetTypeKey();
           throw;
