@@ -16,14 +16,25 @@
 # under the License.
 
 """ Test rpc based launcher for hexagon """
+import time
+import pickle
+import datetime
+import argparse
+from pathlib import Path
 import tempfile
+import hashlib
+from collections import defaultdict
 
+import yaml
 import numpy as np
+import pandas as pd
+import networkx as nx
 # import pytest
 import tvm.testing
 import tvm.topi.testing
 from tvm import meta_schedule as ms
 from tvm import relay, te
+from tvm.ir import structural_equal, structural_hash
 # from tvm.contrib.hexagon.meta_schedule import (
 #     get_hexagon_local_builder,
 #     get_hexagon_rpc_runner,
@@ -35,409 +46,8 @@ from tvm.meta_schedule.runner import RunnerInput
 from tvm.script import tir as T
 from tvm.tir import FloatImm
 from tvm.tir.tensor_intrin.hexagon import VRMPY_u8u8i32_INTRIN
+from tvm.meta_schedule.arg_info import ArgInfo
 
-# from .infrastructure import get_hexagon_target
-
-MATMUL_N = 16
-MATMUL_M = 32
-
-
-@tvm.script.ir_module
-class MatmulModule:
-    """Matmultest class"""
-
-    # pylint: disable=no-self-argument
-    @T.prim_func
-    def main(a: T.handle, b: T.handle, c: T.handle) -> None:  # type: ignore
-        # pylint: disable=missing-function-docstring
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
-        a_buffer = T.match_buffer(a, (16, 16), "float32")
-        b_buffer = T.match_buffer(b, (16, 16), "float32")
-        c_buffer = T.match_buffer(c, (16, 16), "float32")
-        for i, j, k in T.grid(16, 16, 16):
-            with T.block("matmul"):
-                vi_axis, vj_axis, vk_axis = T.axis.remap("SSR", [i, j, k])
-                with T.init():
-                    c_buffer[vi_axis, vj_axis] = 0.0  # type: ignore
-                c_buffer[vi_axis, vj_axis] = (
-                    c_buffer[vi_axis, vj_axis]
-                    + a_buffer[vi_axis, vk_axis] * b_buffer[vk_axis, vj_axis]
-                )
-
-
-@tvm.testing.requires_hexagon
-def test_builder_runner(hexagon_launcher):
-    """Test builder and runner."""
-    if hexagon_launcher.is_simulator():
-        pytest.skip("Tuning on simulator not supported.")
-
-    mod = MatmulModule
-
-    max_workers = 4
-    builder = get_hexagon_local_builder(max_workers=max_workers)
-    runner = get_hexagon_rpc_runner(
-        hexagon_launcher, number=1, repeat=1, min_repeat_ms=0, max_workers=max_workers
-    )
-
-    (builder_result,) = builder.build([BuilderInput(mod, get_hexagon_target("v68"))])
-    assert builder_result.artifact_path is not None
-    assert builder_result.error_msg is None
-
-    runner_input = RunnerInput(
-        builder_result.artifact_path,
-        "llvm",
-        [
-            TensorInfo("float32", (MATMUL_N, MATMUL_N)),
-            TensorInfo("float32", (MATMUL_N, MATMUL_N)),
-            TensorInfo("float32", (MATMUL_N, MATMUL_N)),
-        ],
-    )
-
-    # Run the module
-    (runner_future,) = runner.run([runner_input])
-    runner_result = runner_future.result()
-
-    assert runner_result.error_msg is None
-    for result in runner_result.run_secs:
-        if isinstance(result, FloatImm):
-            result = result.value
-        assert isinstance(result, float)
-        assert result >= 0.0
-
-
-def dense_compute(m, n, k):
-    """dense compute"""
-    X = te.placeholder((m, k), name="X", dtype="uint8")
-    packed_width = te.placeholder((n // 32, k // 4, 32, 4), name="packed_width", dtype="uint8")
-
-    axis_k = te.reduce_axis((0, k), name="k")
-    out = te.compute(
-        (m, n),
-        lambda i, j: te.sum(
-            X[i, axis_k].astype("int32")
-            * packed_width[
-                tvm.tir.indexdiv(j, 32), tvm.tir.indexdiv(axis_k, 4), j % 32, axis_k % 4
-            ].astype("int32"),
-            axis=axis_k,
-        ),
-        name="compute",
-    )
-    return [X, packed_width, out]
-
-
-def schedule_dense(sch, block, m_size, do_tune):
-    """dense schedule"""
-    a_y, a_x, _ = sch.get_loops(block)[-3:]
-
-    if do_tune:
-        y_factors = sch.sample_perfect_tile(a_y, n=2, max_innermost_factor=128)
-        a_yo, a_yi = sch.split(a_y, factors=y_factors)
-    else:
-        a_yo, a_yi = sch.split(a_y, factors=[None, min(m_size, 32)])
-
-    a_xo, a_xi = sch.split(a_x, factors=[None, 32])
-    sch.reorder(a_yo, a_xo, a_yi, a_xi)
-
-    a_xi, a_k = sch.get_loops(block)[-2:]
-    a_ko, a_ki = sch.split(a_k, factors=[None, 4])
-    sch.reorder(a_ko, a_xi, a_ki)
-
-    fused = sch.fuse(a_yo, a_xo)
-
-    sch.parallel(fused)
-
-    dec = sch.decompose_reduction(block, a_ko)
-
-    init_loop = sch.get_loops(dec)[-1]
-    sch.vectorize(init_loop)
-
-    sch.tensorize(a_xi, VRMPY_u8u8i32_INTRIN)
-
-
-def verify_dense(sch, target, m_size, n_size, k_size, hexagon_session):
-    """Verify dense operator."""
-    f = tvm.build(sch.mod["main"], target=target, name="dense")
-    mod = hexagon_session.load_module(f)
-    dev = hexagon_session.device
-
-    a_np = np.random.uniform(1, 10, size=(m_size, k_size)).astype("uint8")
-    b_np = np.random.uniform(1, 10, size=(n_size, k_size)).astype("uint8")
-    c_np = np.dot(a_np.astype("int32"), b_np.transpose().astype("int32"))
-
-    pack_width = np.random.uniform(1, 10, size=(n_size // 32, (k_size // 4), 32, 4)).astype("uint8")
-
-    for r_idx in range(n_size // 32):
-        for k_output in range(k_size // 4):
-            for s_idx in range(32):
-                for t_idx in range(4):
-                    pack_width[r_idx][k_output][s_idx][t_idx] = b_np[r_idx * 32 + s_idx][
-                        k_output * 4 + t_idx
-                    ]
-
-    a = tvm.nd.array(a_np, dev)
-    b = tvm.nd.array(pack_width, dev)
-    c = tvm.nd.array(np.zeros((m_size, n_size), dtype="int32"), dev)
-
-    mod(a, b, c)
-    np.testing.assert_equal(c.numpy(), c_np)
-
-    evaluator = mod.time_evaluator(mod.entry_name, dev, number=10)
-    gflops = (n_size * m_size * k_size) * 2 / 1e9
-    time_ms = evaluator(a, b, c).mean * 1e3
-    print("%f ms, %f GOPS" % (time_ms, gflops / (time_ms / 1e3)))
-
-
-# @tvm.testing.requires_hexagon
-# def test_vrmpy_dense(hexagon_launcher):
-#     """Test vector reduce muliply dense."""
-#     if hexagon_launcher.is_simulator():
-#         pytest.skip("Tuning on simulator not supported.")
-# 
-#     do_tune = True
-# 
-#     m_size, n_size, k_size = 128, 768, 768
-#     workload = te.create_prim_func(dense_compute(m_size, n_size, k_size))
-# 
-#     if not do_tune:
-#         ir_module = tvm.IRModule({"main": workload})
-#         sch = tvm.tir.Schedule(ir_module)
-#         block = sch.get_block("compute")
-#         schedule_dense(sch, block, m_size, do_tune)
-#     else:
-#         with tempfile.TemporaryDirectory() as work_dir:
-# 
-#             def schedule_dense_for_tune(sch):
-#                 block = sch.get_block("compute")
-#                 return schedule_dense(sch, block, None, True)
-# 
-#             target = get_hexagon_target("v69")
-#             database = ms.tir_integration.tune_tir(
-#                 mod=workload,
-#                 target=target,
-#                 work_dir=work_dir,
-#                 max_trials_global=8,
-#                 space=ms.space_generator.ScheduleFn(
-#                     schedule_dense_for_tune,
-#                     sch_rules=[],
-#                     postprocs=[],
-#                     mutator_probs={},
-#                 ),
-#                 strategy="replay-trace",
-#                 builder=get_hexagon_local_builder(),
-#                 runner=get_hexagon_rpc_runner(hexagon_launcher, number=10),
-#             )
-#             sch = ms.tir_integration.compile_tir(database, workload, target)
-# 
-#     with hexagon_launcher.create_session() as session:
-#         verify_dense(sch, get_hexagon_target("v68"), m_size, n_size, k_size, session)
-
-
-# This is an example of a schedule found by vrmpy auto tensorization.
-# It gets 440 GFLOPS on SD888.
-@tvm.script.ir_module
-class ModuleVRMPYAutoTensorize:
-    """Vector Reduce Multimply auto tensorize test class."""
-
-    # pylint: disable=no-self-argument
-    @T.prim_func
-    def main(  # type: ignore
-        X: T.Buffer((128, 768), "uint8"),  # type: ignore
-        packed_width: T.Buffer((24, 192, 32, 4), "uint8"),  # type: ignore
-        compute: T.Buffer((128, 768), "int32"),  # type: ignore
-    ) -> None:
-        # pylint: disable=missing-function-docstring
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
-        for i0_0_i1_0_0_fused in T.parallel(
-            512, annotations={"pragma_auto_unroll_max_step": 64, "pragma_unroll_explicit": 1}
-        ):
-            for i0_1_init, i1_0_1_init, i0_2_init, i1_0_2_init in T.grid(2, 3, 1, 1):
-                with T.block("compute_o_init"):
-                    i = T.axis.spatial(128, i0_0_i1_0_0_fused // 8 * 2 + i0_1_init + i0_2_init)
-                    j_o = T.axis.spatial(24, i1_0_2_init + i0_0_i1_0_0_fused % 8 * 3 + i1_0_1_init)
-                    T.reads()
-                    T.writes(compute[i, j_o * 32 : j_o * 32 + 32])  # type: ignore
-                    for i1_1 in T.vectorized(32):
-                        with T.block("compute_init"):
-                            j_i_init = T.axis.spatial(32, i1_1)
-                            T.reads()
-                            T.writes(compute[i, j_o * 32 + j_i_init])
-                            compute[i, j_o * 32 + j_i_init] = 0  # type: ignore
-            for i2_0_0, i0_1, i1_0_1, i2_0_1, i0_2, i1_0_2 in T.grid(32, 2, 3, 6, 1, 1):
-                with T.block("compute_o_update"):
-                    i = T.axis.spatial(128, i0_0_i1_0_0_fused // 8 * 2 + i0_1 + i0_2)
-                    j_o = T.axis.spatial(24, i1_0_2 + i0_0_i1_0_0_fused % 8 * 3 + i1_0_1)
-                    k_o = T.axis.reduce(192, i2_0_0 * 6 + i2_0_1)
-                    T.reads(
-                        compute[i, j_o * 32 : j_o * 32 + 32],  # type: ignore
-                        X[i, k_o * 4 : k_o * 4 + 4],  # type: ignore
-                        packed_width[j_o, k_o, 0:32, 0:4],  # type: ignore
-                    )
-                    T.writes(compute[i, j_o * 32 : j_o * 32 + 32])  # type: ignore
-                    a_buffer = T.match_buffer(
-                        X[i, k_o * 4 : k_o * 4 + 4],
-                        [4],
-                        dtype="uint8",
-                        offset_factor=1,  # type: ignore
-                    )
-                    b_buffer = T.match_buffer(
-                        packed_width[j_o, k_o, 0:32, 0:4], [32, 4], dtype="uint8", offset_factor=1
-                    )
-                    c_buffer = T.match_buffer(
-                        compute[i, j_o * 32 : j_o * 32 + 32],
-                        [32],
-                        dtype="int32",
-                        offset_factor=1,  # type: ignore
-                    )
-                    a_u8x4: T.uint8x4 = a_buffer[0:4]  # type: ignore
-                    a_i32: T.int32 = T.reinterpret(a_u8x4, dtype="int32")  # type: ignore
-                    b_i32x32: T.int32x32 = T.reinterpret(
-                        b_buffer[0, 0:128], dtype="int32x32"
-                    )  # type: ignore
-                    c_buffer[0:32] = T.call_llvm_pure_intrin(  # type: ignore
-                        4390, T.uint32(3), c_buffer[0:32], b_i32x32, a_i32, dtype="int32x32"
-                    )
-
-
-# @tvm.testing.requires_hexagon
-# def test_vrmpy_dense_auto_tensorize(hexagon_launcher):
-#     """Test VRMPY dense operator."""
-#     if hexagon_launcher.is_simulator():
-#         pytest.skip("Tuning on simulator not supported.")
-# 
-#     m_size, n_size, k_size = 128, 768, 768
-#     workload = te.create_prim_func(dense_compute(m_size, n_size, k_size))
-# 
-#     sch_rules = [
-#         schedule_rule.MultiLevelTilingWithIntrin(
-#             VRMPY_u8u8i32_INTRIN,
-#             structure="SRSRS",
-#             tile_binds=None,
-#             max_innermost_factor=64,
-#             vector_load_lens=None,
-#             reuse_read=None,
-#             reuse_write=schedule_rule.ReuseType(
-#                 req="may",
-#                 levels=[1, 2],
-#                 scope="global",
-#             ),
-#         ),
-#         schedule_rule.ParallelizeVectorizeUnroll(
-#             max_jobs_per_core=16,
-#             max_vectorize_extent=128,
-#             unroll_max_steps=[0, 16, 64, 512],
-#             unroll_explicit=True,
-#         ),
-#     ]
-# 
-#     postprocs = [
-#         postproc.RewriteParallelVectorizeUnroll(),
-#         postproc.RewriteReductionBlock(),
-#         postproc.RewriteTensorize(vectorize_init_loop=True),
-#     ]
-# 
-#     # Make this to False to compile and run the best tuned schedule
-#     run_tuning = True
-#     if run_tuning:
-#         with tempfile.TemporaryDirectory() as work_dir:
-#             target = get_hexagon_target("v68")
-#             database = ms.tir_integration.tune_tir(
-#                 mod=workload,
-#                 target=target,
-#                 max_trials_global=8,
-#                 num_trials_per_iter=8,
-#                 work_dir=work_dir,
-#                 space=ms.space_generator.PostOrderApply(
-#                     f_block_filter=None,
-#                     sch_rules=sch_rules,
-#                     postprocs=postprocs,
-#                     mutator_probs={},
-#                 ),
-#                 builder=get_hexagon_local_builder(),
-#                 runner=get_hexagon_rpc_runner(hexagon_launcher, number=10),
-#             )
-#             sch = ms.tir_integration.compile_tir(database, workload, target)
-#     else:
-#         sch = tvm.tir.Schedule(ModuleVRMPYAutoTensorize, debug_mask="all")
-# 
-#     with hexagon_launcher.create_session() as session:
-#         verify_dense(sch, get_hexagon_target("v68"), m_size, n_size, k_size, session)
-# 
-# 
-# @tvm.testing.requires_hexagon
-# def test_conv2d_relay_auto_schedule(hexagon_launcher):
-#     """Test conv2d using auto schedule."""
-#     if hexagon_launcher.is_simulator():
-#         pytest.skip("Tuning on simulator not supported.")
-# 
-#     i_size, o_size, h_size, w_size = 64, 64, 56, 56
-#     k_height_size = k_width_size = 3
-# 
-#     strides = (1, 1)
-#     padding = (1, 1)
-# 
-#     d_shape = (1, h_size, w_size, i_size)
-#     w_shape = (k_height_size, k_width_size, i_size, o_size)
-#     bias_shape = (1, 1, 1, w_shape[3])
-#     out_channel = w_shape[3]
-# 
-#     data = relay.var("data", shape=d_shape, dtype="float16")
-#     weight = relay.var("weight", shape=w_shape, dtype="float16")
-#     bias = relay.var("bias", shape=bias_shape, dtype="float16")
-#     conv2d = relay.nn.conv2d(
-#         data=data,
-#         weight=weight,
-#         kernel_size=(k_height_size, k_width_size),
-#         channels=out_channel,
-#         padding=padding,
-#         strides=strides,
-#         out_dtype="float16",
-#         data_layout="NHWC",
-#         kernel_layout="HWIO",
-#     )
-#     mod = tvm.IRModule.from_expr(conv2d + bias)
-#     mod = mod.with_attr("executor", relay.backend.Executor("graph", {"link-params": True}))
-# 
-#     data_np = np.random.randn(*d_shape).astype("float16")
-#     weight_np = np.random.randn(*w_shape).astype("float16")
-#     bias_np = np.random.randn(*bias_shape).astype("float16")
-#     params = {"weight": weight_np, "bias": bias_np}
-# 
-#     ref = (
-#         relay.create_executor("graph", mod=mod, device=tvm.cpu(0), target="llvm")
-#         .evaluate()(*[data_np, weight_np, bias_np])
-#         .numpy()
-#     )
-# 
-#     with tempfile.TemporaryDirectory() as work_dir:
-#         target = get_hexagon_target("v69")
-#         database = ms.relay_integration.tune_relay(
-#             mod=mod,
-#             params=params,
-#             target=target,
-#             max_trials_global=8,
-#             strategy="replay-trace",
-#             work_dir=work_dir,
-#             builder=get_hexagon_local_builder(),
-#             runner=get_hexagon_rpc_runner(hexagon_launcher, number=20),
-#         )
-#         lib = ms.relay_integration.compile_relay(
-#             database=database,
-#             mod=mod,
-#             params=params,
-#             target=target,
-#         )
-# 
-#     with hexagon_launcher.create_session() as session:
-#         rt_mod = session.get_executor_from_factory(lib)
-# 
-#         rt_mod.set_input("data", data_np)
-# 
-#         rt_mod.run()
-# 
-#         out = rt_mod.get_output(0).numpy()
-#         # Fairly loose check since fp16 results between x86 and Hexagon have
-#         # non-trivial difference.
-#         assert np.mean(np.abs(ref - out)) < 0.5
 
 def generate_rules(rules=[], rfactor_max_innermost_factor=64, mlt_structure="SSRSRS", mlt_max_innermost_factor=64, unroll_max_steps=[0, 2, 4, 8, 16, 32, 64], unroll_explicit=True):
     # TODO: change rule order?
@@ -485,14 +95,14 @@ def estimate_size(history):
     assert len(history) > 0
     task_trials = int(sum(history))
     last_num = history[-1]
-    print("last_num", last_num)
+    # print("last_num", last_num)
     if last_num == 0:
-        return task_trials
+        return task_trials, False
     else:
         num_batches = len(history)
         batch_idxs = list(range(num_batches))
         if num_batches < 3:
-            return int(task_trials * 1.1)
+            return int(task_trials * 1.1), True
         else:
             ratios = []
             for prev, curr in zip(history[:-1], history[1:]):
@@ -500,9 +110,9 @@ def estimate_size(history):
                     ratios.append(curr / prev)
             recent_ratios = ratios[-3:]
             ratio = sum(recent_ratios) / len(recent_ratios)
-            print("ratios", ratios)
-            print("recent_ratios", recent_ratios)
-            print("avg_ratio", ratio)
+            # print("ratios", ratios)
+            # print("recent_ratios", recent_ratios)
+            # print("avg_ratio", ratio)
             ratio = max(0.0, min(ratio, 0.999))
             if ratio >= 0.95:
                 # Conservative fallback
@@ -513,61 +123,116 @@ def estimate_size(history):
                 # last*r + last*r^2 + ...
                 #
                 estimated_remaining = last_num * ratio / (1.0 - ratio)
-            print("estimated_remaining", estimated_remaining)
+            # print("estimated_remaining", estimated_remaining)
             estimated_total = task_trials + estimated_remaining
 
-            return int(estimated_total)
+            return int(estimated_total), True
 
 
-def test_dense_relay_auto_schedule():
-    # history = [83076, 59816, 22247, 8724, 3502]
-    # search_space_size = estimate_size(history)
-    # print("search_space_size", search_space_size)
-    # return
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--max-spaces", type=int, default=100000000)
+    parser.add_argument("--base-out", default=None)
+    parser.add_argument("--out", "-o", default=None)
+    parser.add_argument("--strategy", default="evolutionary")
+    # TODO: expose out dir
+    args = parser.parse_args()
+    if args.out is not None:
+        out_dir = Path(args.out)
+    else:
+        out_dir_base = Path(args.base_out) if args.base_out is not None else Path("exp_out")
+        dt = datetime.datetime.now()
+        ts = dt.strftime("%Y%m%dT%H%M%S")
+        print("ts", ts)
+        out_dir = out_dir_base / ts
+    print("out_dir", out_dir)
+    out_dir.mkdir(parents=True)
+    rules_dir = out_dir / "rules"
+    rules_dir.mkdir()
+
+    strategy_kind = args.strategy
+    strategy_kwargs = dict(
+        # population_size=512,
+        # population_size=128,
+        # population_size=1024,
+        # population_size=1024 * 16 * 16,
+        # population_size=1024 * 16,
+        population_size=1024 * 16 * 2,
+        # population_size=16,
+        init_measured_ratio=0.2,
+        # init_measured_ratio=0.9,
+        init_min_unmeasured=50,
+        # init_min_unmeasured=10,
+        # max_fail_count=5,
+        max_fail_count=1,
+        # genetic_num_iters=4,
+        genetic_num_iters=6,
+        genetic_mutate_prob=0.85,
+        # genetic_max_fail_count=10,
+        genetic_max_fail_count=5,
+        # eps_greedy=0.05,
+        eps_greedy=0.25,
+    )
+
+    strategy_file = out_dir / "strategy.yaml"
+    with open(strategy_file, "w") as f:
+        yaml.dump({"kind": strategy_kind, **strategy_kwargs}, f)
+
     target = tvm.target.Target("llvm -num-cores=1")
 
-    data_shape = (128, 128)
-    weight_shape = (128, 128)
-    # data_shape = (32, 32)
-    # weight_shape = (32, 32)
+    mods = []
 
-    data = relay.var("data", shape=data_shape, dtype="float16")
-    weight = relay.var("weight", shape=weight_shape, dtype="float16")
-    dense = relay.nn.dense(data, weight)
-    mod = tvm.IRModule.from_expr(dense)
-    mod = mod.with_attr("executor", relay.backend.Executor("graph", {"link-params": True}))
+    # DTYPES = ["float32", "int32"]
+    DTYPES = ["int32"]
+    # DIMS = [8, 16, 32, 64, 128]
+    DIMS = [8, 32, 128]
 
-    weight_np = np.random.randn(*weight_shape).astype("float32")
+    for dim in DIMS:
+        for dtype in DTYPES:
 
-    data_np = np.random.randn(*data_shape).astype("float32")
-    params = {"weight": weight_np}
-    ref = np.dot(data_np, weight_np.transpose())
+            data_shape = (dim, dim)
+            weight_shape = (dim, dim)
+
+            data = relay.var("data", shape=data_shape, dtype=dtype)
+            weight = relay.var("weight", shape=weight_shape, dtype=dtype)
+            dense = relay.nn.dense(data, weight)
+            mod = tvm.IRModule.from_expr(dense)
+            mod = mod.with_attr("executor", relay.backend.Executor("graph", {"link-params": True}))
+            weight_np = np.random.randn(*weight_shape).astype("float32")
+            data_np = np.random.randn(*data_shape).astype("float32")
+            params = {"weight": weight_np}
+            mods.append((mod, params))
+
+    num_mods = len(mods)
+    print("num_mods", num_mods)
 
     # sch_rules = "from-target"
     # structure = "SSRSRS"
     # structure = "RS"
     # structure = "RSRS"
-    structure = "SRSRS"
+    # structure = "SRSRS"
     all_rules = ["ApplyCustomRule", "InlineConstantScalars", "AutoInline", "AddRFactor", "MultiLevelTiling", "ParallelizeVectorizeUnroll", "RandomComputeLocation"]
 
     structures = []
     sch_rules_space = []
-    # MLT = [False, True]
-    MLT = [True]
-    # UNROLL = [False, True]
-    UNROLL = [True]
+    MLT = [False, True]
+    # MLT = [True]
+    UNROLL = [False, True]
+    # UNROLL = [True]
     RFACTOR = [False, True]
-    # MLT_STRUCTURE = ["S", "R", "RS", "SR", "RSRS"]
-    MLT_STRUCTURE = ["RSRS"]
-    # MLT_STRUCTURE = ["S"]
-    MLT_MAX_INNERMOST_FACTOR = [64]
+    MLT_STRUCTURE = ["S", "R", "RS", "SR", "RSRS"]
+    # MLT_STRUCTURE = ["RSRS"]
+    # MLT_STRUCTURE = ["S", "RSRS"]
+    # MLT_MAX_INNERMOST_FACTOR = [64]
+    MLT_MAX_INNERMOST_FACTOR = [32, 64]
     RFACTOR_MAX_INNERMOST_FACTOR = [64]
-    # RFACTOR_MAX_INNERMOST_FACTOR = [2, 16, 64]
+    # RFACTOR_MAX_INNERMOST_FACTOR = [2, 4, 8, 16, 32, 64]
     # RFACTOR_MAX_INNERMOST_FACTOR = [2]
     # UNROLL_MAX_STEPS = [[0, 2, 4, 8, 16, 32, 64]]
-    UNROLL_MAX_STEPS = [[0, 2, 4, 8, 16, 32]]
-    # UNROLL_EXPLICIT = [False, True]
-    UNROLL_EXPLICIT = [True]
+    # UNROLL_MAX_STEPS = [[0, 2, 4, 8, 16, 32]]
+    UNROLL_MAX_STEPS = [[0, 2], [0, 2, 4], [0, 2, 4, 8], [0, 2, 4, 8, 16, 32], [0, 2, 4, 8, 16, 32, 64]]
+    UNROLL_EXPLICIT = [False, True]
+    # UNROLL_EXPLICIT = [True]
     for enable_mlt in MLT:
         for enable_unroll in UNROLL:
             for enable_rfactor in RFACTOR:
@@ -595,89 +260,439 @@ def test_dense_relay_auto_schedule():
                                     temp = (rule_kwargs, sch_rules)
                                 sch_rules_space.append(temp)
     print("len(sch_rules_space)", len(sch_rules_space))
-    # input("!")
-    space_sizes = {}
+    max_spaces = args.max_spaces
+    if max_spaces:
+        sch_rules_space = sch_rules_space[:max_spaces]
+    print("len(sch_rules_space)", len(sch_rules_space))
     for space_id, temp in enumerate(sch_rules_space):
         rule_kwargs, sch_rules = temp
-        print("space_id", space_id)
-        print("rule_kwargs", rule_kwargs)
-
-        # TODO: move to helpers
-
-        postprocs = "from-target"
-        mutator_probs = "from-target"
-        space = ms.space_generator.PostOrderApply(
-            sch_rules=sch_rules,
-            postprocs=postprocs,
-            mutator_probs=mutator_probs,
-        )
-        # strategy = "evolutionary"
-        strategy = ms.search_strategy.EvolutionarySearch(
-            # population_size=512,
-            # population_size=128,
-            # population_size=1024,
-            # population_size=1024 * 16 * 16,
-            # population_size=1024 * 16,
-            population_size=1024 * 16 * 2,
-            # population_size=16,
-            init_measured_ratio=0.2,
-            # init_measured_ratio=0.9,
-            init_min_unmeasured=50,
-            # init_min_unmeasured=10,
-            # max_fail_count=5,
-            max_fail_count=1,
-            # genetic_num_iters=4,
-            genetic_num_iters=6,
-            genetic_mutate_prob=0.85,
-            # genetic_max_fail_count=10,
-            genetic_max_fail_count=5,
-            # eps_greedy=0.05,
-            eps_greedy=0.25,
-        )
-        # task_scheduler = ms.task_scheduler.RoundRobin()
-        task_scheduler = ms.task_scheduler.GradientBased()
-        with tempfile.TemporaryDirectory() as work_dir:
-            database = ms.relay_integration.tune_relay(
-                mod=mod,
-                params=params,
-                target=target,
-                max_trials_global=1000000,
-                num_trials_per_iter=100000,
-                # strategy="replay-trace",
-                strategy=strategy,
-                work_dir=work_dir,
-                space=space,
-                # builder=get_hexagon_local_builder(),
-                # runner=get_hexagon_rpc_runner(hexagon_launcher, number=20),
-                task_scheduler=task_scheduler,
+        # print("space_id", space_id)
+        # print("rule_kwargs", rule_kwargs)
+        rules_file = rules_dir / f"{space_id}.yaml"
+        with open(rules_file, "w") as f:
+            yaml.dump(rule_kwargs, f)
+    # input("!")
+    mods_dir = out_dir / "mods"
+    mods_dir.mkdir(exist_ok=True)
+    for mod_id, (mod, params) in enumerate(mods):
+        # summary_data = [{"space_id": None, "task_id": None, "task_name": None}]
+        mod_dir = mods_dir / str(mod_id)
+        mod_dir.mkdir(exist_ok=True)
+        summary_file = mod_dir / "summary.csv"
+        summary_df = pd.DataFrame([])
+        summary_df.to_csv(summary_file, index=False)
+        metrics_file = mod_dir / "metrics.csv"
+        metrics_df = pd.DataFrame([])
+        metrics_df.to_csv(metrics_file, index=False)
+    for mod_id, (mod, params) in enumerate(mods):
+        summary_data = []
+        mod_dir = mods_dir / str(mod_id)
+        summary_file = mod_dir / "summary.csv"
+        summary_df = pd.DataFrame(summary_data)
+        summary_df.to_csv(summary_file, index=False)
+        metrics_data = []
+        metrics_file = mod_dir / "metrics.csv"
+        metrics_df = pd.DataFrame(metrics_data)
+        metrics_df.to_csv(metrics_file, index=False)
+        space_sizes = {}
+        task_recs = defaultdict(list)
+        # task_schs = defaultdict(list)
+        # task_mods = defaultdict(list)
+        task_shashs = defaultdict(list)
+        task_space_shashs = defaultdict(dict)
+        for space_id, temp in enumerate(sch_rules_space):
+            rule_kwargs, sch_rules = temp
+            # TODO: move to helpers
+            postprocs = "from-target"
+            mutator_probs = "from-target"
+            space = ms.space_generator.PostOrderApply(
+                sch_rules=sch_rules,
+                postprocs=postprocs,
+                mutator_probs=mutator_probs,
             )
-            # print("tasks[0]", tasks[0], dir(tasks[0]))
-            # print("task_scheduler", task_scheduler, dir(task_scheduler))
-            # print("task_scheduler.tasks_[0]", task_scheduler.tasks_[0], dir(task_scheduler.tasks_[0]))
-            print("task_scheduler.tasks_[0].candidate_history", task_scheduler.tasks_[0].candidate_history, dir(task_scheduler.tasks_[0].candidate_history))
-            num_tasks = len(task_scheduler.tasks_)
-            for i in range(num_tasks):
-                print(f"Task: {i}")
-                history = task_scheduler.tasks_[i].candidate_history
-                print("history", history)
-                if len(history) == 0:
-                    print("empty")
-                    continue
-                task_trials = int(sum(history))
-                print("task_trials", task_trials)
-
-                search_space_size = estimate_size(history)
-                print("search_space_size", search_space_size)
-                space_sizes[space_id] = search_space_size
-            # input("!")
-            lib = ms.relay_integration.compile_relay(
-                database=database,
-                mod=mod,
-                params=params,
-                target=target,
+            assert strategy_kind == "evolutionary"
+            strategy = ms.search_strategy.EvolutionarySearch(
+                **strategy_kwargs,
             )
-    print("space_sizes", space_sizes)
+            # task_scheduler = ms.task_scheduler.RoundRobin()
+            task_scheduler = ms.task_scheduler.GradientBased()
+            with tempfile.TemporaryDirectory() as work_dir:
+                t0 = time.time()
+                try:
+                    database = ms.relay_integration.tune_relay(
+                        mod=mod,
+                        params=params,
+                        target=target,
+                        max_trials_global=1000000,
+                        num_trials_per_iter=100000,
+                        # strategy="replay-trace",
+                        strategy=strategy,
+                        work_dir=work_dir,
+                        space=space,
+                        # builder=get_hexagon_local_builder(),
+                        # runner=get_hexagon_rpc_runner(hexagon_launcher, number=20),
+                        task_scheduler=task_scheduler,
+                    )
+                    recs = database.get_all_tuning_records()
+                    # print("recs", len(recs))
+                    status = "ok"
+                    reason = None
+                except Exception as e:
+                    recs = []
+                    status = "failed"
+                    reason = repr(e)
+                    # raise e
+                # for rec in recs:
+                #     rec_hash
+                t1 = time.time()
+                sampling_sec = t1 - t0
+                # print("tasks[0]", tasks[0], dir(tasks[0]))
+                # print("task_scheduler", task_scheduler, dir(task_scheduler))
+                # print("task_scheduler.tasks_[0]", task_scheduler.tasks_[0], dir(task_scheduler.tasks_[0]))
+                # print("task_scheduler.tasks_[0].candidate_history", task_scheduler.tasks_[0].candidate_history, dir(task_scheduler.tasks_[0].candidate_history))
+                num_tasks = len(task_scheduler.tasks_)
+                # print("num_tasks", num_tasks)
+                assert num_tasks > 0
+                for task_id in range(num_tasks):
+
+                    tasks_dir = mod_dir / "tasks"
+                    tasks_dir.mkdir(exist_ok=True)
+                    task_dir = tasks_dir / str(task_id)
+                    task_dir.mkdir(exist_ok=True)
+                    if task_id >= len(metrics_data):
+                        metrics_data.append({"task_id": task_id})
+                        assert len(metrics_data) == (task_id + 1)
+                    metrics_data[task_id]["num_spaces"] = len(sch_rules_space)
+                    task_rec = task_scheduler.tasks_[task_id]
+                    task_measure_candidates = task_rec.all_measure_candidates
+                    # print("len(task_measure_candidates)", len(task_measure_candidates))
+                    shashs = []
+                    for c in task_measure_candidates:
+                        # print("c", c, dir(c))
+                        sch = c.sch
+                        # print("sch", sch, dir(sch))
+                        sch_mod = sch.mod
+                        # print("sch_mod", sch_mod, dir(sch_mod))
+                        shash = structural_hash(sch_mod)
+                        # print("shash", shash, dir(shash))
+                        # exists = sch in task_schs[task_id]
+                        # mod_exists = sch_mod in task_mods[task_id]
+                        shash_exists = shash in task_shashs[task_id]
+                        # print("exists", exists)
+                        # print("mod_exists", mod_exists)
+                        # print("shash_exists", shash_exists)
+                        # if not exists:
+                        #     task_schs[task_id].append(sch)
+                        # if not mod_exists:
+                        #     task_mods[task_id].append(sch_mod)
+                        if not shash_exists:
+                            task_shashs[task_id].append(shash)
+                        # input("o")
+                        shashs.append(shash)
+                    spaces_dir = task_dir / "space"
+                    spaces_dir.mkdir(exist_ok=True)
+                    space_dir = spaces_dir / str(space_id)
+                    space_dir.mkdir(exist_ok=True)
+                    space_shashs_file = space_dir / "shashs.txt"
+                    with open(space_shashs_file, "w") as f:
+                        shashs_content = "\n".join(map(str, shashs))
+                        f.write(shashs_content)
+                    task_space_shashs[task_id][space_id] = shashs
+                    # num_unique_schs = len(task_schs[task_id])
+                    # print("num_unique_schs", num_unique_schs)
+                    # num_unique_mods = len(task_mods[task_id])
+                    # print("num_unique_mods", num_unique_mods)
+                    num_unique_shashs = len(task_shashs[task_id])
+                    # print("num_unique_shash", num_unique_shashs)
+                    # input("ooo")
+                    task_context = task_rec.ctx
+                    task_mod = task_context.mod
+                    # task_workload = ms.database.Workload(task_mod)
+                    # top_recs = database.get_top_k(task_workload, int(1e6))
+                    # print("len(top_recs)", len(top_recs))
+                    # assert len(top_recs) < 1e6
+                    # for rec in top_recs:
+                    #     trace = rec.trace
+                    #     print("trace", trace, dir(trace))
+                    #     workload = rec.workload
+                    #     print("workload", workload, dir(workload))
+                    #     mod = workload.mod
+                    #     print("mode", mod, dir(mod))
+                    #     # rec_hash = 
+                    # print(f"Task: {task_id}")
+                    history = task_scheduler.tasks_[task_id].candidate_history
+                    # assert len(history) > len(top_recs)
+                    # TODO: early stopping may lead to missing records for last batch...
+                    # print("history", history)
+                    if len(history) == 0:
+                        # print("empty")
+                        search_space_size = None
+                        is_estimate = False
+                    else:
+                        task_trials = int(sum(history))
+                        # print("task_trials", task_trials)
+
+                        search_space_size, is_estimate = estimate_size(history)
+                        # print("search_space_size", search_space_size)
+                        space_sizes[(space_id, task_id)] = search_space_size
+                    # print("?", task_scheduler.tasks_[task_id], dir(task_scheduler.tasks_[task_id]))
+                    task_func = task_mod["main"]
+                    task_args = ArgInfo.from_prim_func(task_func)
+                    # print("task_args", task_args)
+                    task_args_str = str(task_args)
+                    task_args_str = task_args_str.replace("\"", "").replace(" ", "").replace("TensorInfo", "")
+                    task_args_hash = hashlib.sha256(task_args_str.encode('utf-8')).hexdigest()
+                    # print("task_args_hash", task_args_hash)
+                    task_name = task_context.task_name
+                    task_flop = task_rec.flop
+                    task_weight = task_rec.task_weight
+                    new_data = {"space_id": space_id, "task_id": task_id, "task_name": task_name, "task_args": task_args_str, "task_args_hash": task_args_hash, "search_space_size": search_space_size, "sampling_sec": sampling_sec, "is_estimate": is_estimate, "status": status, "reason": reason}
+                    summary_data.append(new_data)
+                    summary_df = pd.DataFrame(summary_data)
+                    print(summary_df)
+                    summary_df.to_csv(summary_file, index=False)
+                    metrics_data[task_id]["num_evaluated_spaces"] = space_id + 1
+                    # metrics_data[task_id]["num_tasks"] = len(list(task_shashs.keys()))
+                    if search_space_size is not None:
+                        if "num_total_candidates" not in metrics_data[task_id]:
+                            metrics_data[task_id]["num_total_candidates"] = 0
+                        metrics_data[task_id]["num_total_candidates"] += search_space_size
+                    metrics_data[task_id]["num_unique_candidates"] = len(task_shashs[task_id])
+                metrics_df = pd.DataFrame(metrics_data)
+                metrics_df.to_csv(metrics_file, index=False)
+                # input("!")
+                # lib = ms.relay_integration.compile_relay(
+                #     database=database,
+                #     mod=mod,
+                #     params=params,
+                #     target=target,
+                # )
+        print(summary_df)
+        print("space_sizes", space_sizes)
+        sorted_by_size = sorted(space_sizes.items(), key=lambda x: x[1])
+        metrics_data[0]["max_total_candidates"] = max(space_sizes.values())
+        metrics_data[0]["finished"] = True
+        metrics_df = pd.DataFrame(metrics_data)
+        metrics_df.to_csv(metrics_file, index=False)
+        # TODO: fetch recs from DB
+        # TODO: histogram of applied rules in sched trace?
+        print("task_space_shashs", task_space_shashs)
+
+        # Stores redundant spaces:
+        #   redundant_spaces[task_id] = {redundant_space_id: representative_space_id}
+        redundant_spaces = {}
+        
+        # Stores superset relations:
+        #   supersets[task_id] = {
+        #       larger_space_id: [smaller_space_ids...]
+        #   }
+        supersets = {}
+        canonical_space = {}
+
+        equivalent_spaces = {}
+        
+        for task_id in task_space_shashs.keys():
+            print(f"\n=== Task {task_id} ===")
+        
+            task_space_sizes = {
+                k[0]: v
+                for k, v in space_sizes.items()
+                if k[1] == task_id
+            }
+        
+            print("task_space_sizes", task_space_sizes)
+        
+            # Sort by estimated size
+            space_id_by_size = sorted(task_space_sizes.items(), key=lambda x: x[1])
+        
+            print("space_id_by_size", space_id_by_size)
+        
+            redundant_spaces[task_id] = {}
+            supersets[task_id] = {}
+            equivalent_spaces[task_id] = {}
+        
+            # Convert to sets once
+            shash_sets = {
+                sid: set(task_space_shashs[task_id][sid])
+                for sid, _ in space_id_by_size
+            }
+        
+            # Keep only non-redundant spaces
+            filtered_spaces = []
+        
+            for i, (space_id, space_size) in enumerate(space_id_by_size):
+                shashs = shash_sets[space_id]
+        
+                is_redundant = False
+        
+                # Compare against smaller spaces only
+                for prev_space_id, prev_space_size in filtered_spaces:
+                    prev_shashs = shash_sets[prev_space_id]
+        
+                    common_shashs = shashs & prev_shashs
+        
+                    print("\n--------------------------------")
+                    print("space_id", space_id)
+                    print("prev_space_id", prev_space_id)
+                    print("space_size", space_size)
+                    print("prev_space_size", prev_space_size)
+                    print("len(shashs)", len(shashs))
+                    print("len(prev_shashs)", len(prev_shashs))
+                    print("common", len(common_shashs))
+        
+                    # -------------------------------------------------
+                    # TODO #1:
+                    # Detect redundant spaces
+                    #
+                    # Same candidate set as previous space
+                    # -------------------------------------------------
+                    if shashs == prev_shashs:
+                        print(
+                            f"[REDUNDANT] {space_id} identical to {prev_space_id}"
+                        )
+
+                        redundant_spaces[task_id][space_id] = prev_space_id
+                        equivalent_spaces[task_id].setdefault(prev_space_id, [prev_space_id]).append(space_id)
+        
+                        is_redundant = True
+                        break
+        
+                    # -------------------------------------------------
+                    # TODO #2:
+                    # Detect supersets
+                    #
+                    # Larger space fully contains smaller one
+                    # -------------------------------------------------
+                    if prev_shashs.issubset(shashs):
+                        print(
+                            f"[SUPERSET] {space_id} is superset of {prev_space_id}"
+                        )
+        
+                        supersets[task_id].setdefault(space_id, []).append(
+                            prev_space_id
+                        )
+        
+                if not is_redundant:
+                    filtered_spaces.append((space_id, space_size))
+            filtered_space_ids = [space_id for space_id, _ in filtered_spaces]
+            metrics_data[task_id]["num_unique_spaces"] = len(filtered_spaces)
+            metrics_data[task_id]["num_redundant_spaces"] = len(sch_rules_space) - len(filtered_spaces)
+            G = nx.DiGraph()
+            for space_id, space_size in task_space_sizes.items():
+                # print("===")
+                # print("space_id", space_id)
+                # print("space_size", space_size)
+                num_candidates = len(shash_sets[space_id])
+                # print("num_candidates", num_candidates)
+                redundant = space_id not in filtered_space_ids
+                # print("redundant", redundant)
+                G.add_node(
+                    space_id,
+                    size=space_size,
+                    num_candidates=num_candidates,
+                    redundant=redundant,
+                    label=f"{space_id}\nsize={space_size}\nnum_candidates={num_candidates}\nredundant={redundant}",
+                )
+            # input("!!!")
+            for larger_space, smaller_spaces in supersets[task_id].items():
+                shash_large = shash_sets[larger_space]
+                for smaller_space in smaller_spaces:
+                    shash_small = shash_sets[smaller_space]
+                    intersection = len(shash_large & shash_small)
+
+                    containment_ratio = (
+                        # intersection / len(shash_small)
+                        intersection / len(shash_large)
+                    )
+
+                    G.add_edge(
+                        larger_space,
+                        smaller_space,
+                        containment_ratio=containment_ratio,
+                        label=f"containment_ratio={containment_ratio}",
+                    )
+            G_reduced2 = nx.transitive_reduction(G)
+            # print("G_reduced2.edges", G_reduced2.edges)
+            G_reduced = G.copy()
+            to_drop = []
+            for edge in G_reduced.edges:
+                # print("edge", edge)
+                u, v = edge
+                # print("u,v", u, v)
+                if edge not in G_reduced2.edges:
+                    to_drop.append(edge)
+                    # print("drop")
+            for edge in to_drop:
+                u, v = edge
+                G_reduced.remove_edge(u, v)
+            redundant_nodes = [
+                n
+                for n, attrs in G_reduced.nodes(data=True)
+                if attrs["redundant"]
+            ]
+            for n in redundant_nodes:
+                G_reduced.remove_node(n)
+            # print("G_reduced.edges", G_reduced.edges)
+            # print("G", G)
+            # print("G_reduced", G_reduced)
+            # print("G_reduced2", G_reduced2)
+            shashs_file = task_dir / "shashs.txt"
+            with open(shashs_file, "w") as f:
+                shashs_content = "\n".join(map(str, shashs))
+                f.write(shashs_content)
+            dot_file = task_dir / "graph.dot"
+            reduced_dot_file = task_dir / "graph_reduced.dot"
+            pkl_file = task_dir / "graph.pkl"
+            reduced_pkl_file = task_dir / "graph_reduced.pkl"
+            nx.drawing.nx_pydot.write_dot(
+                G,
+                dot_file,
+            )
+            nx.drawing.nx_pydot.write_dot(
+                G_reduced,
+                reduced_dot_file,
+            )
+            with open(pkl_file, "wb") as f:
+                pickle.dump(G, f)
+            with open(reduced_pkl_file, "wb") as f:
+                pickle.dump(G_reduced, f)
+            metrics_df = pd.DataFrame(metrics_data)
+            metrics_df.to_csv(metrics_file, index=False)
+
+            print("\n==============================")
+            print("redundant_spaces")
+            print(redundant_spaces)
+
+            print("\n==============================")
+            print("equivalent_spaces")
+            print(equivalent_spaces)
+
+            print("\n==============================")
+            print("supersets")
+            print(supersets)
+            # print("task_space_shashs", task_space_shashs)
+            # for task_id in task_space_shashs.keys():
+            #     task_space_sizes = {k[0]: v for k, v in space_sizes.items() if k[1] == task_id}
+            #     print("task_space_sizes", task_space_sizes)
+            #     space_id_by_size = sorted(task_space_sizes.items(), key=lambda x: x[1])
+            #     print("space_id_by_size", space_id_by_size)
+
+            #     for i, (space_id, space_size) in enumerate(space_id_by_size):
+            #         for j, (space_id_, space_size_) in enumerate(space_id_by_size):
+            #             if j >= i:
+            #                 continue
+            #             print("i,j", i, j)
+            #             print("space_id,space_id_", space_id, space_id_)
+            #             print("space_size,space_size_", space_size, space_size_)
+            #             shashs = task_space_shashs[task_id][space_id]
+            #             shashs_ = task_space_shashs[task_id][space_id_]
+            #             common_shashs = set(shashs) & set(shashs_)
+            #             print("len(shashs)", len(shashs))
+            #             print("len(shashs_)", len(shashs_))
+            #             print("common_shashs", common_shashs, len(common_shashs))
+            #             # TODO: detect and filter all space_ids which are redundant (the have the same candidates as a previous one)
+            #             # TODO: keep track of which spaces are a superset of a previous one
 
 
 if __name__ == "__main__":
-    test_dense_relay_auto_schedule()
+    main()
