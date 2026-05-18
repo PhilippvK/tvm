@@ -424,6 +424,9 @@ def main():
 
     mods = []
 
+    # OPS = ["dense", "conv2d_3x3"]
+    OPS = ["dense"]
+    # OPS = ["conv2d_3x3"]
     # DTYPES = ["float32", "int32"]
     # DTYPES = ["int32"]
     DTYPES = ["int8"]
@@ -605,7 +608,7 @@ def main():
             )
             # task_scheduler = ms.task_scheduler.RoundRobin()
             task_scheduler = ms.task_scheduler.GradientBased()
-            with tempfile.TemporaryDirectory() as work_dir:
+            with tempfile.TemporaryDirectory() as work_dir, ms.Profiler() as profiler:
                 opt_level = 3
                 module_equality = "structural"
                 pass_config = MappingProxyType({})
@@ -822,6 +825,7 @@ def main():
                 #     params=params,
                 #     target=target,
                 # )
+            print(profiler.table())
         print(summary_df)
         print("space_sizes", space_sizes)
         sorted_by_size = sorted(space_sizes.items(), key=lambda x: x[1])
