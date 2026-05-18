@@ -23,8 +23,6 @@ def analyze_ms_db(in_db):
     # TODO: handle postproc
 
     for rec in recs:
-        print("rec", rec, dir(rec))
-        input("1")
         # print("rec.args_info", rec.args_info)
         args_info = rec.args_info
         # print("rec.as_json()", rec.as_json())
@@ -46,7 +44,6 @@ def analyze_ms_db(in_db):
             targets.append(target_str)
         # target2recs[target_str].append(rec)
         print("rec.trace", rec.trace, dir(rec.trace))
-        input()
         # print("rec.trace.insts", rec.trace.insts, dir(rec.trace.insts))
         for i, inst in enumerate(rec.trace.insts):
             print("i", i)
@@ -70,12 +67,12 @@ def analyze_ms_db(in_db):
                 annotation_val_hist[key][val] += 1
 
         # target2workloads[target_str].add(workload)
-        input()
     print("len(workloads)", len(workloads))
     print("len(targets)", len(targets))
     print("annotation_hist", annotation_hist)
     print("annotation_val_hist", annotation_val_hist)
     print("inst_hist", inst_hist)
+    return annotation_hist, annotation_val_hist, inst_hist
 
 
 def analyze_ms_db_wrapper(db_arg):
