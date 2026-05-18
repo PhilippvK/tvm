@@ -125,6 +125,7 @@ def local_run(  # pylint: disable=too-many-arguments,too-many-locals
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         artifact_path = osp.join(tmp_dir, "tvm_tmp_mod." + output_format)
+        # TODO: cleanup???
         export_func(mod, artifact_path)
         device: Device = device(device_type, 0)
 
