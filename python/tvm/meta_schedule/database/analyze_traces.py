@@ -1,14 +1,10 @@
 import logging
 import argparse
-import tempfile
-import tarfile
-from datetime import datetime
 from collections import defaultdict
-from pathlib import Path
-import tvm  # avoid?
 from tvm import meta_schedule as ms
 from tvm import tir
-from tvm.tir.analysis import estimate_tir_flops
+
+# from tvm.tir.analysis import estimate_tir_flops
 
 from .db_utils import load_ms_db_wrapper
 
@@ -26,7 +22,7 @@ def analyze_ms_db(in_db):
 
     for rec in recs:
         # print("rec.args_info", rec.args_info)
-        args_info = rec.args_info
+        # args_info = rec.args_info
         # print("rec.as_json()", rec.as_json())
         # print("rec.run_secs", rec.run_secs)
         # print("rec.timestamp", rec.timestamp)
