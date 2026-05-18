@@ -123,7 +123,8 @@ def main():
     print("len(merged_dfs)", merged_dfs)
     merged_df = pd.concat(merged_dfs)
     merged_df.reset_index(inplace=True)
-    FILTER = False
+    # FILTER = False
+    FILTER = True
     if FILTER:
         merged_df = merged_df[merged_df.apply(lambda x: x["intrin"] == "none" or "MultiLevelTiling" not in x["rules"], axis=1)]
     print("merged_df", merged_df)
@@ -268,7 +269,7 @@ def plot_helper(merged_df, out):
     # ------------------------------------------------------------------
 
     fig.update_layout(
-        title="Search Space Size Distribution",
+        title="MS Search Spaces",
         xaxis_title="Workload",
         yaxis_title="Search Space Size",
         boxmode="group",
