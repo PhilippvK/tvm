@@ -48,6 +48,7 @@ from tvm.script import tir as T
 from tvm.tir import FloatImm
 from tvm.meta_schedule.arg_info import ArgInfo
 from tvm.tir import TensorIntrin
+from tvm.topi.nn.utils import get_pad_tuple
 
 
 def get_dotp_intrin(dtype_a, dtype_b, dtype_c, count, rhs_lanes=1):
@@ -162,10 +163,10 @@ def get_gemm_intrin(dtype_a, dtype_b, dtype_c, M, K, N):
 def gen_intrins(intrin):
     ret = []
     # TODO: handle dtypes!
-    print("intrin", intrin)
+    # print("intrin", intrin)
     if intrin.startswith("dotp_"):
         dims = intrin.split("_", 1)[1]
-        print("dims", dims)
+        # print("dims", dims)
         assert dims.count("x") == 1
         k, n = dims.split("x", 1)
         assert k == "K"
@@ -184,7 +185,7 @@ def gen_intrins(intrin):
             ret.append(dotp_intrin_name)
     elif intrin.startswith("gemm_"):
         dims = intrin.split("_", 1)[1]
-        print("dims", dims)
+        # print("dims", dims)
         assert dims.count("x") == 2
         m, k, n = dims.split("x", 2)
         m = int(m)
@@ -310,6 +311,65 @@ def estimate_size(history):
 
             return int(estimated_total), True
 
+def get_dense_relay_module(dim: int, dtype: str):
+    print("get_dense_relay_module", dim, dtype)
+    data_shape = (dim, dim)
+    weight_shape = (dim, dim)
+    data = relay.var("data", shape=data_shape, dtype=dtype)
+    weight = relay.var("weight", shape=weight_shape, dtype=dtype)
+    out_dtype = "int32" if dtype in ["int8"] else dtype
+    out = relay.nn.dense(data, weight, out_dtype=out_dtype)
+    mod = tvm.IRModule.from_expr(out)
+    mod = mod.with_attr("executor", relay.backend.Executor("graph", {"link-params": True}))
+    weight_np = np.random.randn(*weight_shape).astype(dtype)
+    data_np = np.random.randn(*data_shape).astype(dtype)
+    params = {"weight": weight_np}
+    return mod, params
+
+
+def make_shape(layout: str, sizes: dict[str, int]) -> tuple[int, ...]:
+    return tuple(sizes[c] for c in layout)
+
+def get_conv2d_relay_module(h: int, w: int, kw: int, kh: int, cin: int, cout: int, dtype: str, data_layout: str, kernel_layout: str):
+    print("get_conv2d_relay_module", h, w, kw, kh, cin, cout, dtype, data_layout, kernel_layout)
+    sizes_data = {
+        "N": 1,
+        "C": cin,
+        "H": h,
+        "W": w,
+    }
+    sizes_weight = {
+        "O": cout,
+        "I": cin,
+        "H": kh,
+        "W": kw,
+    }
+    # data_shape = (1, cin, h, w)
+    # weight_shape = (cout, cin, kh, kw)
+    data_shape = make_shape(data_layout, sizes_data)
+    weight_shape = make_shape(kernel_layout, sizes_weight)
+    data = relay.var("data", shape=data_shape, dtype=dtype)
+    weight = relay.var("weight", shape=weight_shape, dtype=dtype)
+    out_dtype = "int32" if dtype in ["int8"] else dtype
+    pad_top, pad_left, pad_down, pad_right = get_pad_tuple("SAME", (kh, kw))
+    y = relay.nn.conv2d(
+        data,
+        weight,
+        padding=(pad_top, pad_left, pad_down, pad_right),
+        channels=cout,
+        kernel_size=(kw, kw),
+        data_layout=data_layout,
+        kernel_layout=kernel_layout,
+        out_dtype=out_dtype,
+    )
+    f = relay.Function([data, weight], y)
+    mod = tvm.IRModule.from_expr(f)
+    mod = relay.transform.InferType()(mod)
+    weight_np = np.random.randn(*weight_shape).astype(dtype)
+    data_np = np.random.randn(*data_shape).astype(dtype)
+    params = {"weight": weight_np}
+    return mod, params
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -371,23 +431,28 @@ def main():
     # DIMS = [8, 32, 128]
     # DIMS = [8]
     DIMS = [16]
+    LAYOUTS = [
+        # ("NCHW", "OIHW"),
+        ("NHWC", "HWOI"),
+        ("NHWC", "OHWI"),
+    ]
 
-    for dim in DIMS:
+    for op in OPS:
         for dtype in DTYPES:
-
-            data_shape = (dim, dim)
-            weight_shape = (dim, dim)
-
-            data = relay.var("data", shape=data_shape, dtype=dtype)
-            weight = relay.var("weight", shape=weight_shape, dtype=dtype)
-            out_dtype = "int32" if dtype in ["int8"] else dtype
-            dense = relay.nn.dense(data, weight, out_dtype=out_dtype)
-            mod = tvm.IRModule.from_expr(dense)
-            mod = mod.with_attr("executor", relay.backend.Executor("graph", {"link-params": True}))
-            weight_np = np.random.randn(*weight_shape).astype(dtype)
-            data_np = np.random.randn(*data_shape).astype(dtype)
-            params = {"weight": weight_np}
-            mods.append((mod, params))
+            if op == "dense":
+                for dim in DIMS:
+                    mod, params = get_dense_relay_module(dim, dtype)
+                    mods.append((mod, params))
+            elif op == "conv2d_3x3":
+                for (data_layout, kernel_layout) in LAYOUTS:
+                    print("data_layout", data_layout)
+                    print("kernel_layout", kernel_layout)
+                    for c in DIMS:
+                        print("c", c)
+                        mod, params = get_conv2d_relay_module(h=32, w=32, kw=3, kh=3, cin=c, cout=c, dtype=dtype, data_layout=data_layout, kernel_layout=kernel_layout)
+                        mods.append((mod, params))
+            else:
+                raise NotImplementedError(f"Op: {op}")
 
     num_mods = len(mods)
     print("num_mods", num_mods)
