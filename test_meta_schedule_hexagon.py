@@ -376,21 +376,30 @@ def main():
     parser.add_argument("--max-spaces", type=int, default=100000000)
     parser.add_argument("--base-out", default=None)
     parser.add_argument("--out", "-o", default=None)
+    parser.add_argument("--cont", default=None)
+    parser.add_argument("--start-space-id", type=int, default=0)
+    parser.add_argument("--start-mod-id", type=int, default=0)
     parser.add_argument("--strategy", default="evolutionary")
+
     # TODO: expose out dir
     args = parser.parse_args()
-    if args.out is not None:
+    if args.cont:
+        assert args.out is None
+        out_dir = Path(args.cont)
+        assert out_dir.is_dir()
+    elif args.out is not None:
         out_dir = Path(args.out)
+        out_dir.mkdir(parents=True)
     else:
         out_dir_base = Path(args.base_out) if args.base_out is not None else Path("exp_out")
         dt = datetime.datetime.now()
         ts = dt.strftime("%Y%m%dT%H%M%S")
         print("ts", ts)
         out_dir = out_dir_base / ts
+        out_dir.mkdir(parents=True)
     print("out_dir", out_dir)
-    out_dir.mkdir(parents=True)
     rules_dir = out_dir / "rules"
-    rules_dir.mkdir()
+    rules_dir.mkdir(exist_ok=True)
 
     strategy_kind = args.strategy
     strategy_kwargs = dict(
@@ -432,12 +441,13 @@ def main():
     DTYPES = ["int8"]
     # DIMS = [8, 16, 32, 64, 128]
     # DIMS = [8, 32, 128]
-    # DIMS = [8]
-    DIMS = [16]
+    DIMS = [8]
+    # DIMS = [16]
     LAYOUTS = [
         # ("NCHW", "OIHW"),
-        ("NHWC", "HWOI"),
         ("NHWC", "OHWI"),
+        ("NHWC", "HWOI"),
+        # ("NHWC", "HWIO"),
     ]
 
     for op in OPS:
@@ -483,11 +493,12 @@ def main():
     # INTRINS = ["gemm_2xKx4"]
     # INTRINS = ["gemm_4xKx1"]
     # INTRINS = ["gemm_4xKx2"]
-    INTRINS = ["gemm_4xKx4"]
+    # INTRINS = ["gemm_4xKx4"]
     # SWAP_MLT_RULES = [False, True]
     # SWAP_MLT_RULES = [False]
     # mixed
     INTRINS = ["none", "dotp_Kx1", "dotp_Kx2", "dotp_Kx4", "gemm_2xKx2", "gemm_4xKx4"]
+    # INTRINS = ["gemm_4xKx4"]
     SWAP_MLT_RULES = [True]
 
     structures = []
@@ -548,7 +559,7 @@ def main():
                                             temp = (rule_kwargs, sch_rules)
                                         sch_rules_space.append(temp)
     print("len(sch_rules_space)", len(sch_rules_space))
-    # input("!!!")
+    input("!!!")
     max_spaces = args.max_spaces
     if max_spaces:
         sch_rules_space = sch_rules_space[:max_spaces]
@@ -564,32 +575,94 @@ def main():
     mods_dir = out_dir / "mods"
     mods_dir.mkdir(exist_ok=True)
     for mod_id, (mod, params) in enumerate(mods):
+        if mod_id < args.start_mod_id:
+            continue
         # summary_data = [{"space_id": None, "task_id": None, "task_name": None}]
         mod_dir = mods_dir / str(mod_id)
         mod_dir.mkdir(exist_ok=True)
+        tasks_dir = mod_dir / "tasks"
+        tasks_dir.mkdir(exist_ok=True)
         summary_file = mod_dir / "summary.csv"
-        summary_df = pd.DataFrame([])
-        summary_df.to_csv(summary_file, index=False)
         metrics_file = mod_dir / "metrics.csv"
-        metrics_df = pd.DataFrame([])
-        metrics_df.to_csv(metrics_file, index=False)
+        if args.cont:
+            # TODO: restore rules from disk?
+            summary_df = pd.read_csv(summary_file)
+            summary_data = summary_df.to_dict(orient="records")
+            print("summary_data", summary_data, len(summary_data))
+            metrics_df = pd.read_csv(metrics_file)
+            metrics_data = metrics_df.to_dict(orient="records")
+            print("metrics_data", metrics_data, len(metrics_data))
+        else:
+            summary_df = pd.DataFrame([])
+            summary_df.to_csv(summary_file, index=False)
+            metrics_df = pd.DataFrame([])
+            metrics_df.to_csv(metrics_file, index=False)
     for mod_id, (mod, params) in enumerate(mods):
-        summary_data = []
-        mod_dir = mods_dir / str(mod_id)
-        summary_file = mod_dir / "summary.csv"
-        summary_df = pd.DataFrame(summary_data)
-        summary_df.to_csv(summary_file, index=False)
-        metrics_data = []
-        metrics_file = mod_dir / "metrics.csv"
-        metrics_df = pd.DataFrame(metrics_data)
-        metrics_df.to_csv(metrics_file, index=False)
-        space_sizes = {}
-        task_recs = defaultdict(list)
-        # task_schs = defaultdict(list)
-        # task_mods = defaultdict(list)
-        task_shashs = defaultdict(list)
-        task_space_shashs = defaultdict(dict)
+        if mod_id < args.start_mod_id:
+            # TODO: auto
+            continue
+        if args.cont:
+            # TODO: restore rules from disk?
+            summary_df = pd.read_csv(summary_file)
+            summary_data = summary_df.to_dict(orient="records")
+            print("summary_data", summary_data, len(summary_data))
+            metrics_df = pd.read_csv(metrics_file)
+            metrics_data = metrics_df.to_dict(orient="records")
+            print("metrics_data", metrics_data, len(metrics_data))
+            space_sizes = {}
+            task_shashs = defaultdict(list)
+            task_space_shashs = defaultdict(dict)
+            task_ids = sorted(map(lambda p: int(p.name), tasks_dir.glob("*")))
+            print("task_ids", task_ids)
+            for task_id in task_ids:
+                task_dir = tasks_dir / str(task_id)
+                assert task_dir.is_dir()
+                spaces_dir = task_dir / "space"
+                assert spaces_dir.is_dir()
+                space_ids = sorted(map(lambda p: int(p.name), spaces_dir.glob("*")))
+                # assert len(sch_rules_space) == len(space_ids), f"{len(sch_rules_space)} vs. {len(space_ids)}"
+                for space_id in space_ids:
+                    rows = summary_df[(summary_df["task_id"] == task_id) & (summary_df["space_id"] == space_id)]
+                    # print("rows", rows)
+                    if len(rows) == 0:
+                        continue
+                    assert len(rows) == 1
+                    row = rows.iloc[0]
+                    space_size = row["search_space_size"]
+                    space_sizes[(space_id, task_id)] = space_size
+                    space_dir = spaces_dir / str(space_id)
+                    if not space_dir.is_dir():
+                        continue
+                    assert space_dir.is_dir()
+                    # assert shashs_txt.is_file()
+                    shashs_txt = space_dir / "shashs.txt"
+                    if shashs_txt.is_file():
+                        with open(shashs_txt, "r") as f:
+                            shashs = set(list(map(lambda x: int(x.strip()), f.readlines())))
+                        # print("shashs", shashs, len(shashs))
+                        task_space_shashs[task_id][space_id] = list(shashs)
+                        # print("shashs[0]", list(shashs)[0], type(list(shashs)[0]))
+                        task_shashs[task_id] = list(set(task_shashs[task_id]) | set(shashs))
+            # print("space_sizes", space_sizes, len(space_sizes))
+            # print("task_shashs", task_shashs, len(task_shashs))
+            # print("task_space_shashs", task_space_shashs, len(task_space_shashs))
+            # input("!!!")
+        else:
+            summary_data = []
+            summary_df = pd.DataFrame(summary_data)
+            summary_df.to_csv(summary_file, index=False)
+            metrics_data = []
+            metrics_df = pd.DataFrame(metrics_data)
+            metrics_df.to_csv(metrics_file, index=False)
+            space_sizes = {}
+            task_shashs = defaultdict(list)
+            task_space_shashs = defaultdict(dict)
         for space_id, temp in enumerate(sch_rules_space):
+            if space_id < args.start_space_id:
+                continue
+            print("space_id", space_id)
+            # print("summary_data[-1]['space_id']", summary_data[-1]["space_id"])
+            # input("!!!")
             rule_kwargs, sch_rules = temp
             print("rule_kwargs", rule_kwargs)
             print("sch_rules", sch_rules)
@@ -642,10 +715,11 @@ def main():
                 assert num_tasks > 0
                 pass_config = dict(pass_config)
                 for task_id in range(num_tasks):
+                    if task_id >= len(metrics_data):
+                        metrics_data.append({"task_id": task_id})
+                        assert len(metrics_data) == (task_id + 1)
                     tasks_ = [tasks[task_id]]
                     task_weights_ = [task_weights[task_id]]
-                    tasks_dir = mod_dir / "tasks"
-                    tasks_dir.mkdir(exist_ok=True)
                     task_dir = tasks_dir / str(task_id)
                     task_dir.mkdir(exist_ok=True)
                     spaces_dir = task_dir / "space"
@@ -722,9 +796,6 @@ def main():
                         # print("task_scheduler.tasks_[0]", task_scheduler.tasks_[0], dir(task_scheduler.tasks_[0]))
                         # print("task_scheduler.tasks_[0].candidate_history", task_scheduler.tasks_[0].candidate_history, dir(task_scheduler.tasks_[0].candidate_history))
                         # print("num_tasks", num_tasks)
-                        if task_id >= len(metrics_data):
-                            metrics_data.append({"task_id": task_id})
-                            assert len(metrics_data) == (task_id + 1)
                         metrics_data[task_id]["num_spaces"] = len(sch_rules_space)
                         task_rec = task_scheduler.tasks_[task_id]
                         task_measure_candidates = task_rec.all_measure_candidates
@@ -737,6 +808,8 @@ def main():
                             sch_mod = sch.mod
                             # print("sch_mod", sch_mod, dir(sch_mod))
                             shash = structural_hash(sch_mod)
+                            # print("shash", shash, type(shash))
+                            # input("!!!")
                             # print("shash", shash, dir(shash))
                             # exists = sch in task_schs[task_id]
                             # mod_exists = sch_mod in task_mods[task_id]
