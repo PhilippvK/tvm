@@ -4,6 +4,7 @@ import random
 from collections import defaultdict
 
 import networkx as nx
+import plotly.graph_objects as go
 
 assert len(sys.argv) == 2
 
@@ -286,3 +287,65 @@ for n in order:
     history.append(set(active))
 
 print("sets =", history)
+
+def plot_sequence(order, sizes, sets, out):
+    # Compute incremental growth
+    incremental = [sizes[0]]
+    for i in range(1, len(sizes)):
+        incremental.append(sizes[i] - sizes[i - 1])
+
+    # Build hover labels
+    hover_text = []
+    for i in range(len(order)):
+        txt = (
+            f"step={i}<br>"
+            f"space_id={order[i]}<br>"
+            f"total_size={sizes[i]}<br>"
+            f"increment={incremental[i]}<br>"
+            f"active_sets={sorted(list(sets[i]))}"
+        )
+        hover_text.append(txt)
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Total explored space
+    fig.add_trace(
+        go.Scatter(
+            x=list(range(len(order))),
+            y=sizes,
+            mode="lines+markers",
+            name="Total explored space",
+            hovertext=hover_text,
+            hoverinfo="text",
+        )
+    )
+    
+    # Incremental additions
+    fig.add_trace(
+        go.Bar(
+            x=list(range(len(order))),
+            y=incremental,
+            name="Incremental growth",
+            opacity=0.4,
+            hovertext=hover_text,
+            hoverinfo="text",
+        )
+    )
+    
+    # Layout
+    fig.update_layout(
+        title="Explored Search Space Over Time",
+        xaxis_title="Generation Step",
+        yaxis_title="Search Space Size",
+        hovermode="closest",
+        template="plotly_white",
+    )
+    
+    # Write HTML
+    fig.write_html(out)
+
+    print(f"Wrote {out}")
+
+plot_out_file = "plot.html"
+plot_sequence(order, sizes, history, plot_out_file)

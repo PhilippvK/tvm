@@ -13,3 +13,4 @@ xgboost-cpu
 pyyaml
 networkx
 pydot
+plotly
