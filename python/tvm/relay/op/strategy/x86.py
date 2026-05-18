@@ -139,58 +139,72 @@ def conv2d_strategy_cpu(attrs, inputs, out_type, target):
             assert _OIHWio_matcher.match(kernel_layout)  # check if kernel is OIHWio
             return conv2d_NCHWc_strategy_cpu(attrs, inputs, out_type, target)
         elif layout == "NHWC":
-            assert kernel_layout == "HWIO"
-            if (not need_auto_scheduler_layout) and (not need_meta_schedule_layout):
-                logger.warning("conv2d NHWC layout is not optimized for x86 with autotvm.")
-            if "dnnl" in target.libs:
+            # TODO: switch to generic strategy?
+            if kernel_layout == "HWOI":
                 strategy.add_implementation(
-                    wrap_compute_conv2d(topi.x86.conv2d_nhwc_dnnl),
-                    wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc_dnnl),
-                    name="conv2d_nhwc_dnnl.x86",
+                    wrap_compute_conv2d(topi.x86.conv2d_nhwc_hwoi),
+                    wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc_hwoi),
+                    name="conv2d_nhwc_hwoi.x86",
+                )
+            elif kernel_layout == "OHWI":
+                strategy.add_implementation(
+                    wrap_compute_conv2d(topi.x86.conv2d_nhwc_ohwi, need_out_layout=True),
+                    wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc_ohwi),
+                    name="conv2d_nhwc_ohwi.x86",
                 )
             else:
-                strategy.add_implementation(
-                    wrap_compute_conv2d(
-                        topi.nn.conv2d_nhwc,
-                        need_auto_scheduler_layout=need_auto_scheduler_layout,
-                        need_meta_schedule_layout=need_meta_schedule_layout,
-                    ),
-                    wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc),
-                    name="conv2d_nhwc.x86",
-                )
+                assert kernel_layout == "HWIO"
+                if (not need_auto_scheduler_layout) and (not need_meta_schedule_layout):
+                    logger.warning("conv2d NHWC layout is not optimized for x86 with autotvm.")
+                if "dnnl" in target.libs:
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(topi.x86.conv2d_nhwc_dnnl),
+                        wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc_dnnl),
+                        name="conv2d_nhwc_dnnl.x86",
+                    )
+                else:
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(
+                            topi.nn.conv2d_nhwc,
+                            need_auto_scheduler_layout=need_auto_scheduler_layout,
+                            need_meta_schedule_layout=need_meta_schedule_layout,
+                        ),
+                        wrap_topi_schedule(topi.x86.schedule_conv2d_nhwc),
+                        name="conv2d_nhwc.x86",
+                    )
 
-            judge_winograd_auto_scheduler = False
-            if len(kernel.shape) == 4:
-                kernel_h, kernel_w, _, co = get_const_tuple(kernel.shape)
-                judge_winograd_auto_scheduler = (
-                    "float" in data.dtype
-                    and "float" in kernel.dtype
-                    and kernel_h == 3
-                    and kernel_w == 3
-                    and stride_h == 1
-                    and stride_w == 1
-                    and dilation_h == 1
-                    and dilation_w == 1
-                    and 64 < co < 512
-                    # The last condition of co is based on our profiling of resnet workloads
-                    # on skylake avx512 machines. We found winograd is faster than direct
-                    # only when co is within this range
-                )
+                judge_winograd_auto_scheduler = False
+                if len(kernel.shape) == 4:
+                    kernel_h, kernel_w, _, co = get_const_tuple(kernel.shape)
+                    judge_winograd_auto_scheduler = (
+                        "float" in data.dtype
+                        and "float" in kernel.dtype
+                        and kernel_h == 3
+                        and kernel_w == 3
+                        and stride_h == 1
+                        and stride_w == 1
+                        and dilation_h == 1
+                        and dilation_w == 1
+                        and 64 < co < 512
+                        # The last condition of co is based on our profiling of resnet workloads
+                        # on skylake avx512 machines. We found winograd is faster than direct
+                        # only when co is within this range
+                    )
 
-            # register auto-scheduler implementations
-            if (
-                need_auto_scheduler_layout or need_meta_schedule_layout
-            ) and judge_winograd_auto_scheduler:
-                strategy.add_implementation(
-                    wrap_compute_conv2d(
-                        topi.nn.conv2d_winograd_nhwc,
-                        need_auto_scheduler_layout=need_auto_scheduler_layout,
-                        need_meta_schedule_layout=need_meta_schedule_layout,
-                    ),
-                    naive_schedule,  # this implementation should never be picked by autotvm
-                    name="conv2d_nhwc.winograd",
-                    plevel=15,
-                )
+                # register auto-scheduler implementations
+                if (
+                    need_auto_scheduler_layout or need_meta_schedule_layout
+                ) and judge_winograd_auto_scheduler:
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(
+                            topi.nn.conv2d_winograd_nhwc,
+                            need_auto_scheduler_layout=need_auto_scheduler_layout,
+                            need_meta_schedule_layout=need_meta_schedule_layout,
+                        ),
+                        naive_schedule,  # this implementation should never be picked by autotvm
+                        name="conv2d_nhwc.winograd",
+                        plevel=15,
+                    )
         elif layout == "HWCN":
             assert kernel_layout == "HWIO"
             if (not need_auto_scheduler_layout) or (not need_meta_schedule_layout):

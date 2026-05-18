@@ -291,6 +291,300 @@ def schedule_conv2d_nhwc_dnnl(_, outs):
     """Create schedule for conv2d_nhwc_dnnl"""
     return schedule_extern(outs)
 
+# NEW
+from tvm import autotvm
+from tvm.autotvm.task import deserialize_args
+from tvm import te
+from tvm.topi.utils import simplify, traverse_inline
+from tvm.topi.nn.pad import pad
+from tvm.topi.nn.utils import get_pad_tuple
+from tvm.tir.expr import Mul
+
+import random
+import string
+from typing import Callable, Tuple, Union
+
+import tvm
+from tvm import te
+from tvm.tir import indexdiv, indexmod
+from tvm.topi.utils import traverse_inline
+from tvm.topi.nn.pad import pad
+
+def conv2d_nhwc_hwoi_compute(cfg, data, kernel, strides, padding, dilation, out_dtype):
+    """TODO"""
+    assert isinstance(strides, int) or len(strides) == 2
+    assert isinstance(dilation, int) or len(dilation) == 2
+
+    if isinstance(strides, int):
+        stride_h = stride_w = strides
+    else:
+        stride_h, stride_w = strides
+
+    if isinstance(dilation, int):
+        dilation_h = dilation_w = dilation
+    else:
+        dilation_h, dilation_w = dilation
+
+    batch_size, in_height, in_width, in_channels = data.shape
+    kernel_h, kernel_w, out_channels, _ = kernel.shape
+
+    # compute the output shape
+    dilated_kernel_h = (kernel_h - 1) * dilation_h + 1
+    dilated_kernel_w = (kernel_w - 1) * dilation_w + 1
+    pad_top, pad_left, pad_down, pad_right = get_pad_tuple(
+        padding, (dilated_kernel_h, dilated_kernel_w)
+    )
+    out_height = simplify((in_height - dilated_kernel_h + pad_top + pad_down) // stride_h + 1)
+    out_width = simplify((in_width - dilated_kernel_w + pad_left + pad_right) // stride_w + 1)
+
+    pad_before = [0, pad_top, pad_left, 0]
+    pad_after = [0, pad_down, pad_right, 0]
+    padded_data = pad(data, pad_before, pad_after, name="padded_data")
+
+    rc = te.reduce_axis((0, in_channels), name="rc")
+    ry = te.reduce_axis((0, kernel_h), name="ry")
+    rx = te.reduce_axis((0, kernel_w), name="rx")
+
+    conv = te.compute(
+        (batch_size, out_height, out_width, out_channels),
+        lambda nn, yy, xx, ff: te.sum(
+            padded_data[
+                nn, yy * stride_h + ry * dilation_h, xx * stride_w + rx * dilation_w, rc
+            ].astype(out_dtype)
+            * kernel[ry, rx, ff, rc].astype(out_dtype),
+            axis=[ry, rx, rc],
+        ),
+        name="conv2d",
+        tag="conv2d_nhwc",
+    )
+
+    ###########################
+    # Config Space Definition #
+    ###########################
+    # n, oh, ow, co = (
+    #     cfg.axis(batch_size.value),
+    #     cfg.axis(out_height.value),
+    #     cfg.axis(out_width.value),
+    #     cfg.axis(out_channels.value),
+    # )
+    # kh, kw, ci = (
+    #     cfg.reduce_axis(kernel_h.value),
+    #     cfg.reduce_axis(kernel_w.value),
+    #     cfg.reduce_axis(in_channels.value),
+    # )
+
+    # owo, owi = cfg.define_split("tile_ow", ow, policy="factors", num_outputs=2)
+    # cio, cii = cfg.define_split(
+    #     "tile_ci",
+    #     ci,
+    #     policy="factors",
+    #     num_outputs=2,
+    #     # TODO: check case with in_channels.value % 4 != 0 with AutoTVM
+    #     filter=None if cfg.is_fallback else lambda x: x.size[-1] % 4 == 0,
+    # )
+    # coo, coi = cfg.define_split("tile_co", co, policy="factors", num_outputs=2)
+
+    # cfg.define_reorder(
+    #     "reorder_0_simd",
+    #     [n, oh, owo, owi, coo, coi, kh, kw, cio, cii],
+    #     policy="candidate",
+    #     candidate=[
+    #         [n, oh, kh, kw, owo, coo, cio, owi, coi, cii],
+    #         [n, oh, kh, kw, coo, owo, cio, owi, coi, cii],
+    #         [n, kh, kw, oh, owo, coo, cio, owi, coi, cii],
+    #         [n, kh, kw, oh, coo, owo, cio, owi, coi, cii],
+    #     ],
+    # )
+
+    # cfg.define_knob("auto_unroll_max_step", [0, 2, 4, 8, 16, 32])
+    # cfg.define_knob("unroll_explicit", [0, 1])
+
+    # if cfg.is_fallback:
+    #     cfg.fallback_split("tile_ow", [-1, out_width.value])
+    #     cfg.fallback_split("tile_ci", [-1, in_channels.value])
+    #     cfg.fallback_split("tile_co", [-1, out_channels.value])
+
+    return conv
+
+
+def conv2d_nhwc_hwoi_schedule(cfg, outs):
+    """TODO"""
+    sched = te.create_schedule([x.op for x in outs])
+
+    def _callback(op):
+        if "conv2d_nhwc" not in op.tag:
+            return
+
+    traverse_inline(sched, outs[-1].op, _callback)
+    return sched
+
+def conv2d_nhwc_hwoi(*args, **kwargs):
+    """TODO"""
+    assert not kwargs, "Do not support kwargs in template function call"
+    args = deserialize_args(args)
+    data, kernel = args[:2]
+    layout = args[-2]
+    cfg = autotvm.get_config()
+    args = [cfg] + args
+    assert layout == "NHWC"
+    conv = conv2d_nhwc_hwoi_compute(*args)
+    sched = conv2d_nhwc_hwoi_schedule(cfg, [data, kernel, conv])
+    return sched, [data, kernel, conv]
+
+
+conv2d_nhwc_hwoi.template_key = "dsp"
+conv2d_nhwc_hwoi.default_data_layout = "NHWC"
+conv2d_nhwc_hwoi.default_kernel_layout = "HWOI"
+
+@autotvm.register_topi_compute("conv2d_nhwc_hwoi.x86")
+def conv2d_nhwc_hwoi(cfg, data, kernel, strides, padding, dilation, out_dtype):
+    """TODO"""
+    return conv2d_nhwc_hwoi_compute(cfg, data, kernel, strides, padding, dilation, out_dtype)
+
+
+@autotvm.register_topi_schedule("conv2d_nhwc_hwoi.x86")
+def schedule_conv2d_nhwc_hwoi(cfg, outs):
+    """TODO"""
+    return conv2d_nhwc_hwoi_schedule(cfg, outs)
+
+
+def conv2d_nhwc_ohwi_schedule(cfg, outs):
+    """TODO"""
+    sched = te.create_schedule([x.op for x in outs])
+
+    def _callback(op):
+        if "conv2d_nhwc" not in op.tag:
+            return
+
+    traverse_inline(sched, outs[-1].op, _callback)
+    return sched
+
+def _unpack_2d_argument(argument: Union[int, Tuple]) -> Tuple:
+    if isinstance(argument, int):
+        return (argument, argument)
+    assert len(argument) == 2
+    return argument
+
+
+def _check_no_dilation(dilation: Union[int, Tuple]) -> None:
+    """Takes a dilation argument as an integer or tuple, and makes sure both dimensions are 1.
+    Dilation prevents us from using DSP instructions, so this schedule can't work (aside from the
+    niche case where dilation_h == stride_h and dilation_w == stride_w, which is rare enough we
+    probably don't need to support it)."""
+
+    dilation_h, dilation_w = _unpack_2d_argument(dilation)
+    assert dilation_h == dilation_w == 1
+
+
+def _unpack_padding(padding: Tuple) -> Tuple:
+    assert isinstance(padding, tuple)
+    if len(padding) == 2:
+        (pad_up, pad_down), (pad_left, pad_right) = padding
+    else:
+        pad_up, pad_left, pad_down, pad_right = padding
+    return pad_up, pad_left, pad_down, pad_right
+
+
+def _pad_if_needed(data: te.tensor.Tensor, layout: str, padding: Tuple) -> te.tensor.Tensor:
+    """Performs padding on a te.tensor.Tensor object if necessary. If padding = (0, 0, 0, 0), the
+    input tensor is returned unmodified. We only care about tuples here - "VALID" and "SAME" padding
+    will be converted by the importer TFLite importer if present."""
+
+    pad_up, pad_left, pad_down, pad_right = padding
+    if not any(padding):
+        return data
+
+    # We want to pad the "H" and "W" columns, and their position depends on the layout
+    pad_before, pad_after = [0, 0, 0, 0], [0, 0, 0, 0]
+    pad_before[layout.index("H")] = pad_up
+    pad_before[layout.index("W")] = pad_left
+    pad_after[layout.index("H")] = pad_down
+    pad_after[layout.index("W")] = pad_right
+    return pad(data, pad_before, pad_after, name="padded_data")
+
+
+def _compute_output_dim(
+    data_dim: int, kernel_dim: int, pad_before: int, pad_after: int, stride: int
+) -> int:
+    """Computes an output dimension of a convolution, given the data dimension, kernel dimension,
+    padding, and stride along that axis. Note that when stride > 1, this division will often not
+    be perfectly even."""
+    return (data_dim + pad_before + pad_after - kernel_dim) // stride + 1
+
+
+def _wrap_te_compute(
+    shape: Tuple,
+    fcompute: Callable[[int, int, int, int], tvm.ir.PrimExpr],
+    desired_out_layout: str,
+    current_out_layout: str = "NHWC",
+    **kwargs,
+) -> te.tensor.Tensor:
+    """Wrapper over te.compute that allows the output layout to be easily changed."""
+    assert current_out_layout.isalpha() and desired_out_layout.isalpha()
+    assert sorted(current_out_layout) == sorted(desired_out_layout)
+    forward_order = (current_out_layout.index(c) for c in desired_out_layout)
+    reverse_order = (desired_out_layout.index(c) for c in current_out_layout)
+
+    return te.compute(
+        tuple(shape[i] for i in forward_order),
+        lambda *args: fcompute(*(args[i] for i in reverse_order)),
+        **kwargs,
+    )
+
+
+def _get_suffix() -> str:
+    """Returns a random eight-character string to append to C function names. Prevents accidental
+    re-definition of functions if the same operator appears twice in a Relay graph."""
+    return "".join(random.choices(string.ascii_uppercase, k=8))
+
+
+def conv2d_nhwc_ohwi_compute(
+    _cfg, data, kernel, strides, padding, dilation, out_layout, out_dtype
+):
+    """TODO"""
+
+    stride_h, stride_w = _unpack_2d_argument(strides)
+    pad_up, pad_left, pad_down, pad_right = _unpack_padding(padding)
+    _check_no_dilation(dilation)
+
+    batch_size, data_h, data_w, in_channels = data.shape
+    output_channels, kernel_h, kernel_w, _ = kernel.shape
+    assert kernel.shape[3] == in_channels
+
+    output_h = _compute_output_dim(data_h, kernel_h, pad_up, pad_down, stride_h)
+    output_w = _compute_output_dim(data_w, kernel_w, pad_left, pad_right, stride_w)
+
+    kh_i = te.reduce_axis((0, kernel_h), name="kh_i")
+    kw_i = te.reduce_axis((0, kernel_w), name="kw_i")
+    kc_i = te.reduce_axis((0, in_channels), name="rc")
+
+    padded_data = _pad_if_needed(data, "NHWC", (pad_up, pad_left, pad_down, pad_right))
+    return _wrap_te_compute(
+        (batch_size, output_h, output_w, output_channels),
+        lambda n, y, x, c: te.sum(
+            padded_data[n, y * stride_h + kh_i, x * stride_w + kw_i, kc_i].astype(out_dtype)
+            * kernel[c, kh_i, kw_i, kc_i].astype(out_dtype),
+            axis=(kh_i, kw_i, kc_i),
+        ),
+        out_layout,
+        name="conv2d",
+        tag="conv2d_nhwc_ohwi_dsp",
+    )
+
+
+@autotvm.register_topi_compute("conv2d_nhwc_ohwi.x86")
+def conv2d_nhwc_ohwi(cfg, data, kernel, strides, padding, dilation, out_layout, out_dtype):
+    """TODO"""
+    return conv2d_nhwc_ohwi_compute(
+        cfg, data, kernel, strides, padding, dilation, out_layout, out_dtype
+    )
+
+
+@autotvm.register_topi_schedule("conv2d_nhwc_ohwi.x86")
+def schedule_conv2d_nhwc_ohwi(cfg, outs):
+    """TODO"""
+    return conv2d_nhwc_ohwi_schedule(cfg, outs)
+
 
 # FIXME - https://github.com/apache/tvm/issues/4122
 # _declaration_conv_nhwc_pack expects kernel layout to be HWOI. However, the tests use HWIO
