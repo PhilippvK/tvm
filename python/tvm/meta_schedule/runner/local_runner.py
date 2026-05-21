@@ -127,7 +127,18 @@ def _worker_func_dummy(
     device_type: str,
     args_info: T_ARG_INFO_JSON_OBJ_LIST,
 ) -> List[float]:
-    cnt = evaluator_config.number
+    f_cleanup: T_CLEANUP = get_global_func_with_default_on_worker(_f_cleanup, default_cleanup)
+
+    @contextmanager
+    def resource_handler():
+        try:
+            yield
+        finally:
+            # Final step. Always clean up
+            with Profiler.timeit("LocalRunner/cleanup"):
+                f_cleanup()
+    with resource_handler():
+        cnt = evaluator_config.number
     return [1.0] * cnt
 
 
@@ -309,28 +320,44 @@ class LocalRunner(PyRunner):
         for runner_input in runner_inputs:
             if DUMMY:
                 func = _worker_func_dummy
+                try:
+                    result = func(
+                        self.f_alloc_argument,
+                        self.f_run_evaluator,
+                        self.f_cleanup,
+                        self.evaluator_config,
+                        self.alloc_repeat,
+                        str(runner_input.artifact_path),
+                        str(runner_input.device_type),
+                        tuple(arg_info.as_json() for arg_info in runner_input.args_info),
+                    )
+                    error_message = None
+                except Exception as exception:  # pylint: disable=broad-except
+                    result = None
+                    error_message = "LocalRunner: An exception occurred\n" + str(exception)
+                    # raise exception
             else:
                 func = _worker_func
-            future = self.pool.submit(
-                func,
-                self.f_alloc_argument,
-                self.f_run_evaluator,
-                self.f_cleanup,
-                self.evaluator_config,
-                self.alloc_repeat,
-                str(runner_input.artifact_path),
-                str(runner_input.device_type),
-                tuple(arg_info.as_json() for arg_info in runner_input.args_info),
-            )
-            try:
-                result: List[float] = future.result()
-                error_message: str = None
-            except TimeoutError:
-                result = None
-                error_message = f"LocalRunner: Timeout, killed after {self.timeout_sec} seconds\n"
-            except Exception as exception:  # pylint: disable=broad-except
-                result = None
-                error_message = "LocalRunner: An exception occurred\n" + str(exception)
+                future = self.pool.submit(
+                    func,
+                    self.f_alloc_argument,
+                    self.f_run_evaluator,
+                    self.f_cleanup,
+                    self.evaluator_config,
+                    self.alloc_repeat,
+                    str(runner_input.artifact_path),
+                    str(runner_input.device_type),
+                    tuple(arg_info.as_json() for arg_info in runner_input.args_info),
+                )
+                try:
+                    result: List[float] = future.result()
+                    error_message: str = None
+                except TimeoutError:
+                    result = None
+                    error_message = f"LocalRunner: Timeout, killed after {self.timeout_sec} seconds\n"
+                except Exception as exception:  # pylint: disable=broad-except
+                    result = None
+                    error_message = "LocalRunner: An exception occurred\n" + str(exception)
             local_future = LocalRunnerFuture(res=result, error_message=error_message)
             results.append(local_future)  # type: ignore
         return results
