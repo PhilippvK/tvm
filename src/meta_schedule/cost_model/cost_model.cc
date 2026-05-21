@@ -34,14 +34,16 @@ void PyCostModelNode::Save(const String& path) {
 void PyCostModelNode::Update(const TuneContext& context, const Array<MeasureCandidate>& candidates,
                              const Array<RunnerResult>& results) {
   ICHECK(f_update != nullptr) << "PyCostModel's Update method not implemented!";
-  f_update(context, candidates, results);
+  // TODO: add fake cost model!
+  // f_update(context, candidates, results);
 }
 
 std::vector<double> PyCostModelNode::Predict(const TuneContext& context,
                                              const Array<MeasureCandidate>& candidates) {
   ICHECK(f_predict != nullptr) << "PyCostModel's Predict method not implemented!";
   std::vector<double> result(candidates.size(), 0.0);
-  f_predict(context, candidates, result.data());
+  // TODO: add fake cost model!
+  // f_predict(context, candidates, result.data());
   return result;
 }
 
