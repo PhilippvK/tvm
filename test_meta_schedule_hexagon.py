@@ -48,7 +48,9 @@ from tvm.script import tir as T
 from tvm.tir import FloatImm
 from tvm.meta_schedule.arg_info import ArgInfo
 from tvm.tir import TensorIntrin
-from tvm.topi.nn.utils import get_pad_tuple
+
+from rule_utils import generate_rules
+from mod_utils import get_dense_relay_module, get_conv2d_relay_module
 
 
 def get_dotp_intrin(dtype_a, dtype_b, dtype_c, count, rhs_lanes=1):
@@ -207,70 +209,6 @@ def gen_intrins(intrin):
     return ret
 
 
-def generate_rules(rules=[], rfactor_max_innermost_factor=64, mlt_structure="SSRSRS", mlt_max_innermost_factor=64, unroll_max_steps=[0, 2, 4, 8, 16, 32, 64], unroll_explicit=True, intrin=None, swap_mlt_rules=None):
-    # TODO: change rule order?
-    mlt_rule = ms.schedule_rule.MultiLevelTiling(
-            structure=mlt_structure,
-            tile_binds=None,
-            max_innermost_factor=mlt_max_innermost_factor,
-            # max_innermost_factor=4,
-            vector_load_lens=None,
-            reuse_read=None,
-            reuse_write=ms.schedule_rule.ReuseType(
-                req="may",
-                levels=[1, 2],
-                scope="global",
-            )
-    ) if "MultiLevelTiling" in rules else None
-    if intrin is not None and intrin != "none":
-        intrins = gen_intrins(intrin)
-        # TODO: different structure?
-        mlti_structure = mlt_structure if mlt_structure is not None else "SR"
-        mlti_rules = [
-            ms.schedule_rule.MultiLevelTilingWithIntrin(
-                intrin,
-                structure=mlti_structure,
-                tile_binds=None,
-                max_innermost_factor=64,
-                vector_load_lens=None,
-                reuse_read=None,
-                reuse_write=ms.schedule_rule.ReuseType(
-                    req="may",
-                    levels=[1, 2],
-                    scope="global",
-                ),
-            )
-            for intrin in intrins
-        ]
-    else:
-        mlti_rules = []
-    sch_rules = [
-        *([ms.schedule_rule.ApplyCustomRule()] if "ApplyCustomRule" in rules else []),
-        *([ms.schedule_rule.InlineConstantScalars()] if "InlineConstantScalars" in rules else []),
-        *([ms.schedule_rule.AutoInline(
-            into_producer=False,
-            into_consumer=True,
-            inline_const_tensor=True,
-            disallow_if_then_else=True,
-            require_injective=True,
-            require_ordered=True,
-            disallow_op=["tir.exp"],
-        )] if "AutoInline" in rules else []),
-        *([ms.schedule_rule.AddRFactor(max_jobs_per_core=1, max_innermost_factor=rfactor_max_innermost_factor)] if "AddRFactor" in rules else []),
-        *([mlt_rule] if mlt_rule is not None and swap_mlt_rules else []),
-        *mlti_rules,
-        *([mlt_rule] if mlt_rule is not None and not swap_mlt_rules else []),
-        *([ms.schedule_rule.ParallelizeVectorizeUnroll(
-            max_jobs_per_core=-1,  # disable parallelize
-            max_vectorize_extent=-1,  # disable vectorize
-            unroll_max_steps=unroll_max_steps,
-            # unroll_max_steps=[0, 2],
-            unroll_explicit=unroll_explicit,
-            # unroll_explicit=False,
-        )] if "ParallelizeVectorizeUnroll" in rules else []),
-        *([ms.schedule_rule.RandomComputeLocation()] if "RandomComputeLocation" in rules else []),
-    ]
-    return sch_rules
 
 
 def estimate_size(history):
@@ -311,64 +249,6 @@ def estimate_size(history):
 
             return int(estimated_total), True
 
-def get_dense_relay_module(dim: int, dtype: str):
-    print("get_dense_relay_module", dim, dtype)
-    data_shape = (dim, dim)
-    weight_shape = (dim, dim)
-    data = relay.var("data", shape=data_shape, dtype=dtype)
-    weight = relay.var("weight", shape=weight_shape, dtype=dtype)
-    out_dtype = "int32" if dtype in ["int8"] else dtype
-    out = relay.nn.dense(data, weight, out_dtype=out_dtype)
-    mod = tvm.IRModule.from_expr(out)
-    mod = mod.with_attr("executor", relay.backend.Executor("graph", {"link-params": True}))
-    weight_np = np.random.randn(*weight_shape).astype(dtype)
-    data_np = np.random.randn(*data_shape).astype(dtype)
-    params = {"weight": weight_np}
-    return mod, params
-
-
-def make_shape(layout: str, sizes: dict[str, int]) -> tuple[int, ...]:
-    return tuple(sizes[c] for c in layout)
-
-def get_conv2d_relay_module(h: int, w: int, kw: int, kh: int, cin: int, cout: int, dtype: str, data_layout: str, kernel_layout: str):
-    print("get_conv2d_relay_module", h, w, kw, kh, cin, cout, dtype, data_layout, kernel_layout)
-    sizes_data = {
-        "N": 1,
-        "C": cin,
-        "H": h,
-        "W": w,
-    }
-    sizes_weight = {
-        "O": cout,
-        "I": cin,
-        "H": kh,
-        "W": kw,
-    }
-    # data_shape = (1, cin, h, w)
-    # weight_shape = (cout, cin, kh, kw)
-    data_shape = make_shape(data_layout, sizes_data)
-    weight_shape = make_shape(kernel_layout, sizes_weight)
-    data = relay.var("data", shape=data_shape, dtype=dtype)
-    weight = relay.var("weight", shape=weight_shape, dtype=dtype)
-    out_dtype = "int32" if dtype in ["int8"] else dtype
-    pad_top, pad_left, pad_down, pad_right = get_pad_tuple("SAME", (kh, kw))
-    y = relay.nn.conv2d(
-        data,
-        weight,
-        padding=(pad_top, pad_left, pad_down, pad_right),
-        channels=cout,
-        kernel_size=(kw, kw),
-        data_layout=data_layout,
-        kernel_layout=kernel_layout,
-        out_dtype=out_dtype,
-    )
-    f = relay.Function([data, weight], y)
-    mod = tvm.IRModule.from_expr(f)
-    mod = relay.transform.InferType()(mod)
-    weight_np = np.random.randn(*weight_shape).astype(dtype)
-    data_np = np.random.randn(*data_shape).astype(dtype)
-    params = {"weight": weight_np}
-    return mod, params
 
 
 def main():
@@ -408,7 +288,8 @@ def main():
         # population_size=1024,
         # population_size=1024 * 16 * 16,
         # population_size=1024 * 16,
-        population_size=1024 * 16 * 2,
+        # population_size=1024 * 16 * 2,
+        population_size=1024 * 16 // 2,
         # population_size=16,
         init_measured_ratio=0.2,
         # init_measured_ratio=0.9,
@@ -434,18 +315,20 @@ def main():
     mods = []
 
     # OPS = ["dense", "conv2d_3x3"]
-    OPS = ["dense"]
+    # OPS = ["dense"]
     # OPS = ["conv2d_3x3"]
+    OPS = ["conv2d_1x1"]
     # DTYPES = ["float32", "int32"]
     # DTYPES = ["int32"]
     DTYPES = ["int8"]
     # DIMS = [8, 16, 32, 64, 128]
     # DIMS = [8, 32, 128]
-    DIMS = [8]
-    # DIMS = [16]
+    # DIMS = [8]
+    DIMS = [16]
+    # DIMS = [32]
     LAYOUTS = [
         # ("NCHW", "OIHW"),
-        ("NHWC", "OHWI"),
+        # ("NHWC", "OHWI"),
         ("NHWC", "HWOI"),
         # ("NHWC", "HWIO"),
     ]
@@ -455,7 +338,8 @@ def main():
             if op == "dense":
                 for dim in DIMS:
                     mod, params = get_dense_relay_module(dim, dtype)
-                    mods.append((mod, params))
+                    mod_name = op
+                    mods.append((mod, params, mod_name, None, None))
             elif op == "conv2d_3x3":
                 for (data_layout, kernel_layout) in LAYOUTS:
                     print("data_layout", data_layout)
@@ -463,7 +347,17 @@ def main():
                     for c in DIMS:
                         print("c", c)
                         mod, params = get_conv2d_relay_module(h=32, w=32, kw=3, kh=3, cin=c, cout=c, dtype=dtype, data_layout=data_layout, kernel_layout=kernel_layout)
-                        mods.append((mod, params))
+                        mod_name = op
+                        mods.append((mod, params, mod_name, data_layout, kernel_layout))
+            elif op == "conv2d_1x1":
+                for (data_layout, kernel_layout) in LAYOUTS:
+                    print("data_layout", data_layout)
+                    print("kernel_layout", kernel_layout)
+                    for c in DIMS:
+                        print("c", c)
+                        mod, params = get_conv2d_relay_module(h=32, w=32, kw=1, kh=1, cin=c, cout=c, dtype=dtype, data_layout=data_layout, kernel_layout=kernel_layout)
+                        mod_name = op
+                        mods.append((mod, params, mod_name, data_layout, kernel_layout))
             else:
                 raise NotImplementedError(f"Op: {op}")
 
@@ -497,19 +391,22 @@ def main():
     # SWAP_MLT_RULES = [False, True]
     # SWAP_MLT_RULES = [False]
     # mixed
-    INTRINS = ["none", "dotp_Kx1", "dotp_Kx2", "dotp_Kx4", "gemm_2xKx2", "gemm_4xKx4"]
+    # INTRINS = ["none", "dotp_Kx1", "dotp_Kx2", "dotp_Kx4", "gemm_2xKx2", "gemm_4xKx4"]
+    INTRINS = ["none"]
     # INTRINS = ["gemm_4xKx4"]
     SWAP_MLT_RULES = [True]
 
     structures = []
     sch_rules_space = []
+    SKIP_INTRIN_MLT = True
     MLT = [False, True]
+    # MLT = [True]
     # MLT = [False]
     # MLT = [True]
     UNROLL = [False, True]
     # UNROLL = [True]
-    RFACTOR = [False, True]
-    # RFACTOR = [True]
+    # RFACTOR = [False, True]
+    RFACTOR = [True]
     # MLT_STRUCTURE = ["S", "R", "RS", "SR", "RSRS"]
     # MLT_STRUCTURE = ["RS", "SR"]
     MLT_STRUCTURE = ["SSR", "SRS", "RSS"]
@@ -524,40 +421,64 @@ def main():
     # RFACTOR_MAX_INNERMOST_FACTOR = [2]
     # UNROLL_MAX_STEPS = [[0, 2, 4, 8, 16, 32, 64]]
     # UNROLL_MAX_STEPS = [[0, 2, 4, 8, 16, 32]]
-    UNROLL_MAX_STEPS = [[0, 2], [0, 2, 4], [0, 2, 4, 8], [0, 2, 4, 8, 16, 32], [0, 2, 4, 8, 16, 32, 64]]
+    # UNROLL_MAX_STEPS = [[0, 2], [0, 2, 4], [0, 2, 4, 8], [0, 2, 4, 8, 16, 32], [0, 2, 4, 8, 16, 32, 64]]
+    # UNROLL_MAX_STEPS = [[0, 2], [0, 2, 4], [0, 2, 4, 8], [0, 2, 4, 8, 16], [0, 2, 4, 8, 16, 32], [0, 2, 4, 8, 16, 32, 64]]
     # UNROLL_MAX_STEPS = [[0, 2, 4, 8, 16, 32, 64]]
+    UNROLL_MAX_STEPS = [[0, 2, 4, 8], [0, 2, 4, 8, 16, 32, 64]]
     UNROLL_EXPLICIT = [False, True]
     # UNROLL_EXPLICIT = [True]
+    RANDOM_COMPUTE_LOCATION = [False, True]
+    # RANDOM_COMPUTE_LOCATION = [True]
+    AUTO_INLINE = [False, True]
+    # AUTO_INLINE = [True]
+    INLINE_CONST = [False, True]
+    # INLINE_CONST = [True]
+    # TODO: add model with activation func
+    # TODO: add model with bias
+    # TODO: add model with requant?
     for intrin in INTRINS:
-        for enable_mlt in MLT:
-            swap_mlt_rules_ = SWAP_MLT_RULES if intrin != "None" and enable_mlt else [False]
+        # print("intrin", intrin)
+        mlts_ = MLT if intrin == "none" or not SKIP_INTRIN_MLT else [False]
+        for enable_mlt in mlts_:
+            # print("  enable_mlt", enable_mlt)
+            swap_mlt_rules_ = SWAP_MLT_RULES if intrin != "none" and enable_mlt else [False]
             for swap_mlt_rules in swap_mlt_rules_:
+                # print("    swap_mlt_rules", swap_mlt_rules)
                 for enable_unroll in UNROLL:
-                    for enable_rfactor in RFACTOR:
-                        rfactor_max_innermost_factors = RFACTOR_MAX_INNERMOST_FACTOR if enable_rfactor else [None]
-                        for rfactor_max_innermost_factor in rfactor_max_innermost_factors:
-                            mlt_structures = MLT_STRUCTURE if enable_mlt or intrin != "none" else [None]  # TODO: different structure for mlti?
-                            for mlt_structure in mlt_structures:
-                                assert mlt_structure is None or len(mlt_structure) > 1
-                                mlt_max_innermost_factors = MLT_MAX_INNERMOST_FACTOR if enable_mlt else [None]
-                                for mlt_max_innermost_factor in mlt_max_innermost_factors:
-                                    unroll_max_steps_ = UNROLL_MAX_STEPS if enable_unroll else [None]
-                                    for unroll_max_steps in unroll_max_steps_:
-                                        unroll_explicits = UNROLL_EXPLICIT if enable_unroll else [None]
-                                        for unroll_explicit in unroll_explicits:
-                                            enabled_rules = [rule for rule in all_rules]
-                                            if not enable_mlt:
-                                                enabled_rules.remove("MultiLevelTiling")
-                                            if not enable_unroll:
-                                                enabled_rules.remove("ParallelizeVectorizeUnroll")
-                                            if not enable_rfactor:
-                                                enabled_rules.remove("AddRFactor")
-                                            rule_kwargs = dict(
-                                                rules=enabled_rules, rfactor_max_innermost_factor=rfactor_max_innermost_factor, mlt_structure=mlt_structure, mlt_max_innermost_factor=mlt_max_innermost_factor, unroll_max_steps=unroll_max_steps, unroll_explicit=unroll_explicit, intrin=intrin, swap_mlt_rules=swap_mlt_rules,
-                                            )
-                                            sch_rules = generate_rules(**rule_kwargs)
-                                            temp = (rule_kwargs, sch_rules)
-                                        sch_rules_space.append(temp)
+                    for enable_auto_inline in AUTO_INLINE:
+                        for enable_random_compute_location in RANDOM_COMPUTE_LOCATION:
+                            for enable_inline_const in INLINE_CONST:
+                                for enable_rfactor in RFACTOR:
+                                    rfactor_max_innermost_factors = RFACTOR_MAX_INNERMOST_FACTOR if enable_rfactor else [None]
+                                    for rfactor_max_innermost_factor in rfactor_max_innermost_factors:
+                                        mlt_structures = MLT_STRUCTURE if enable_mlt or intrin != "none" else [None]  # TODO: different structure for mlti?
+                                        for mlt_structure in mlt_structures:
+                                            assert mlt_structure is None or len(mlt_structure) > 1
+                                            mlt_max_innermost_factors = MLT_MAX_INNERMOST_FACTOR if enable_mlt else [None]
+                                            for mlt_max_innermost_factor in mlt_max_innermost_factors:
+                                                unroll_max_steps_ = UNROLL_MAX_STEPS if enable_unroll else [None]
+                                                for unroll_max_steps in unroll_max_steps_:
+                                                    unroll_explicits = UNROLL_EXPLICIT if enable_unroll else [None]
+                                                    for unroll_explicit in unroll_explicits:
+                                                        enabled_rules = [rule for rule in all_rules]
+                                                        if not enable_mlt:
+                                                            enabled_rules.remove("MultiLevelTiling")
+                                                        if not enable_unroll:
+                                                            enabled_rules.remove("ParallelizeVectorizeUnroll")
+                                                        if not enable_rfactor:
+                                                            enabled_rules.remove("AddRFactor")
+                                                        if not enable_auto_inline:
+                                                            enabled_rules.remove("AutoInline")
+                                                        if not enable_random_compute_location:
+                                                            enabled_rules.remove("RandomComputeLocation")
+                                                        if not enable_inline_const:
+                                                            enabled_rules.remove("InlineConstantScalars")
+                                                        rule_kwargs = dict(
+                                                            rules=enabled_rules, rfactor_max_innermost_factor=rfactor_max_innermost_factor, mlt_structure=mlt_structure, mlt_max_innermost_factor=mlt_max_innermost_factor, unroll_max_steps=unroll_max_steps, unroll_explicit=unroll_explicit, intrin=intrin, swap_mlt_rules=swap_mlt_rules,
+                                                        )
+                                                        sch_rules = generate_rules(**rule_kwargs)
+                                                        temp = (rule_kwargs, sch_rules)
+                                                    sch_rules_space.append(temp)
     print("len(sch_rules_space)", len(sch_rules_space))
     input("!!!")
     max_spaces = args.max_spaces
@@ -574,7 +495,7 @@ def main():
     # input("!")
     mods_dir = out_dir / "mods"
     mods_dir.mkdir(exist_ok=True)
-    for mod_id, (mod, params) in enumerate(mods):
+    for mod_id, (mod, params, mod_name, data_layout, kernel_layout) in enumerate(mods):
         if mod_id < args.start_mod_id:
             continue
         # summary_data = [{"space_id": None, "task_id": None, "task_name": None}]
@@ -588,16 +509,16 @@ def main():
             # TODO: restore rules from disk?
             summary_df = pd.read_csv(summary_file)
             summary_data = summary_df.to_dict(orient="records")
-            print("summary_data", summary_data, len(summary_data))
+            # print("summary_data", summary_data, len(summary_data))
             metrics_df = pd.read_csv(metrics_file)
             metrics_data = metrics_df.to_dict(orient="records")
-            print("metrics_data", metrics_data, len(metrics_data))
+            # print("metrics_data", metrics_data, len(metrics_data))
         else:
             summary_df = pd.DataFrame([])
             summary_df.to_csv(summary_file, index=False)
             metrics_df = pd.DataFrame([])
             metrics_df.to_csv(metrics_file, index=False)
-    for mod_id, (mod, params) in enumerate(mods):
+    for mod_id, (mod, params, mod_name, data_layout, kernel_layout) in enumerate(mods):
         if mod_id < args.start_mod_id:
             # TODO: auto
             continue
@@ -605,15 +526,15 @@ def main():
             # TODO: restore rules from disk?
             summary_df = pd.read_csv(summary_file)
             summary_data = summary_df.to_dict(orient="records")
-            print("summary_data", summary_data, len(summary_data))
+            # print("summary_data", summary_data, len(summary_data))
             metrics_df = pd.read_csv(metrics_file)
             metrics_data = metrics_df.to_dict(orient="records")
-            print("metrics_data", metrics_data, len(metrics_data))
+            # print("metrics_data", metrics_data, len(metrics_data))
             space_sizes = {}
             task_shashs = defaultdict(list)
             task_space_shashs = defaultdict(dict)
             task_ids = sorted(map(lambda p: int(p.name), tasks_dir.glob("*")))
-            print("task_ids", task_ids)
+            # print("task_ids", task_ids)
             for task_id in task_ids:
                 task_dir = tasks_dir / str(task_id)
                 assert task_dir.is_dir()
@@ -776,12 +697,13 @@ def main():
                             annotation_hist_df.to_csv(annotation_hist_file, index=False)
                             annotation_val_hist_df.to_csv(annotation_val_hist_file, index=False)
                             inst_hist_df.to_csv(inst_hist_file, index=False)
-                            print("work_dir", work_dir)
+                            # print("work_dir", work_dir)
                             # input("!!!")
                             recs = database.get_all_tuning_records()
                             # print("recs", len(recs))
                             status = "ok"
                             reason = None
+                            # input("!")
                         except Exception as e:
                             recs = []
                             status = "failed"
@@ -877,7 +799,7 @@ def main():
                         task_name = task_context.task_name
                         task_flop = task_rec.flop
                         task_weight = task_rec.task_weight
-                        new_data = {"space_id": space_id, "task_id": task_id, "task_name": task_name, "task_args": task_args_str, "task_args_hash": task_args_hash, "search_space_size": search_space_size, "sampling_sec": sampling_sec, "is_estimate": is_estimate, "status": status, "reason": reason}
+                        new_data = {"mod_id": mod_id, "mod_name": mod_name, "data_layout": data_layout, "kernel_layout": kernel_layout, "space_id": space_id, "task_id": task_id, "task_name": task_name, "task_args": task_args_str, "task_args_hash": task_args_hash, "search_space_size": search_space_size, "sampling_sec": sampling_sec, "is_estimate": is_estimate, "status": status, "reason": reason}
                         summary_data.append(new_data)
                         summary_df = pd.DataFrame(summary_data)
                         print(summary_df)
