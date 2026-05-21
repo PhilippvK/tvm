@@ -31,9 +31,9 @@ def analyze_ms_db(in_db):
         # input("!")
         target = rec.target
         target_str = str(target)
-        print("target", target, dir(target), type(target))
+        # print("target", target, dir(target), type(target))
         workload = rec.workload
-        print("workload", workload, dir(workload))
+        # print("workload", workload, dir(workload))
         if workload not in workloads:
             workloads.append(workload)
             # workload2args[workload] = args_info
@@ -43,11 +43,11 @@ def analyze_ms_db(in_db):
         if target_str not in targets:
             targets.append(target_str)
         # target2recs[target_str].append(rec)
-        print("rec.trace", rec.trace, dir(rec.trace))
+        # print("rec.trace", rec.trace, dir(rec.trace))
         # print("rec.trace.insts", rec.trace.insts, dir(rec.trace.insts))
         for i, inst in enumerate(rec.trace.insts):
-            print("i", i)
-            print("inst", inst)
+            # print("i", i)
+            # print("inst", inst)
             # print("inst", inst, dir(inst))
             # print("inst.attrs", inst.attrs, dir(inst.attrs))
             # print("inst.inputs", inst.inputs, dir(inst.inputs))
