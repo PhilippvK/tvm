@@ -546,6 +546,7 @@ def conv2d_nhwc_ohwi_compute(
     stride_h, stride_w = _unpack_2d_argument(strides)
     pad_up, pad_left, pad_down, pad_right = _unpack_padding(padding)
     _check_no_dilation(dilation)
+    # TODO: support dilation
 
     batch_size, data_h, data_w, in_channels = data.shape
     output_channels, kernel_h, kernel_w, _ = kernel.shape
@@ -559,17 +560,30 @@ def conv2d_nhwc_ohwi_compute(
     kc_i = te.reduce_axis((0, in_channels), name="rc")
 
     padded_data = _pad_if_needed(data, "NHWC", (pad_up, pad_left, pad_down, pad_right))
-    return _wrap_te_compute(
+    # return _wrap_te_compute(
+    #     (batch_size, output_h, output_w, output_channels),
+    #     lambda n, y, x, c: te.sum(
+    #         padded_data[n, y * stride_h + kh_i, x * stride_w + kw_i, kc_i].astype(out_dtype)
+    #         * kernel[c, kh_i, kw_i, kc_i].astype(out_dtype),
+    #         axis=(kh_i, kw_i, kc_i),
+    #     ),
+    #     out_layout,
+    #     name="conv2d",
+    #     tag="conv2d_nhwc_ohwi_dsp",
+    # )
+    conv = te.compute(
         (batch_size, output_h, output_w, output_channels),
         lambda n, y, x, c: te.sum(
-            padded_data[n, y * stride_h + kh_i, x * stride_w + kw_i, kc_i].astype(out_dtype)
+            padded_data[
+                n, y * stride_h + kh_i, x * stride_w + kw_i * 1, kc_i
+            ].astype(out_dtype)
             * kernel[c, kh_i, kw_i, kc_i].astype(out_dtype),
-            axis=(kh_i, kw_i, kc_i),
+            axis=[kh_i, kw_i, kc_i],
         ),
-        out_layout,
         name="conv2d",
-        tag="conv2d_nhwc_ohwi_dsp",
+        tag="conv2d_nhwc_ohwi",
     )
+    return conv
 
 
 @autotvm.register_topi_compute("conv2d_nhwc_ohwi.x86")
