@@ -13,6 +13,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from process_experiment import build_rules_df
+from shash_utils import drop_similar_shashs_nodes
 
 
 def main():
@@ -99,30 +100,31 @@ def main():
     print("num_unique_shashs", num_unique_shashs)
 
     THRESHOLD = 0.98
-    def jaccard(a, b):
-        return len(a & b) / len(a | b)
-    keep = []
-    seen = []
+    drop_similar_shashs_nodes(G, space2shashs, THRESHOLD)
+    # def jaccard(a, b):
+    #     return len(a & b) / len(a | b)
+    # keep = []
+    # seen = []
 
-    for idx, s in space2shashs.items():
-        redundant = False
-        for prev in seen:
-            if jaccard(s, prev) >= THRESHOLD:
-                redundant = True
-                break
-        if not redundant:
-            keep.append(idx)
-            seen.append(s)
+    # for idx, s in space2shashs.items():
+    #     redundant = False
+    #     for prev in seen:
+    #         if jaccard(s, prev) >= THRESHOLD:
+    #             redundant = True
+    #             break
+    #     if not redundant:
+    #         keep.append(idx)
+    #         seen.append(s)
 
 
-    print("keep", keep, len(keep))
-    # print("seen", seen, len(seen))
-    drop_nodes = set(list(G.nodes)) - set(keep)
-    print("drop_nodes", drop_nodes)
-    if len(drop_nodes) > 0:
-        print(f"Dropping {len(drop_nodes)} nodes...")
-        G.remove_nodes_from(drop_nodes)
-    input("!!")
+    # print("keep", keep, len(keep))
+    # # print("seen", seen, len(seen))
+    # drop_nodes = set(list(G.nodes)) - set(keep)
+    # print("drop_nodes", drop_nodes)
+    # if len(drop_nodes) > 0:
+    #     print(f"Dropping {len(drop_nodes)} nodes...")
+    #     G.remove_nodes_from(drop_nodes)
+    # input("!!")
 
 
     

@@ -6,6 +6,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from shash_utils import drop_similar_shashs_rows
+
 
 def build_rules_df(rules_dir):
     rows = []
@@ -235,31 +237,29 @@ def plot_helper(merged_df, out):
                 print("num_spaces", num_spaces)
                 assert num_spaces == len(intrin_df)
                 # Count unique spaces
-                unique_spaces_shashs = {}
-                for _, row in intrin_df.iterrows():
-                    space_id = row["space_id"]
-                    space_shashs = set(row["shashs"])
-                    is_redundant = False
-                    for space_id_, space_shashs_ in unique_spaces_shashs.items():
-                        if space_shashs == space_shashs_:
-                            is_redundant = True
-                            break
-                    if not is_redundant:
-                        unique_spaces_shashs[space_id] = space_shashs
-                num_unique_spaces = len(unique_spaces_shashs)
-                print("num_unique_spaces", num_unique_spaces)
-                unique_shashs = set().union(*intrin_df["shashs"])
-                all_unique_spaces_shashs = set().union(*list(unique_spaces_shashs.values()))
-                assert len(unique_shashs) == len(all_unique_spaces_shashs)
-                # print("unique_shashs", unique_shashs, len(unique_shashs))
-                num_unique_candidates = len(unique_shashs)
-                print("num_unique_candidates", num_unique_candidates)
+                # unique_spaces_shashs = {}
+                # for _, row in intrin_df.iterrows():
+                #     space_id = row["space_id"]
+                #     space_shashs = set(row["shashs"])
+                #     is_redundant = False
+                #     for space_id_, space_shashs_ in unique_spaces_shashs.items():
+                #         if space_shashs == space_shashs_:
+                #             is_redundant = True
+                #             break
+                #     if not is_redundant:
+                #         unique_spaces_shashs[space_id] = space_shashs
+                # num_unique_spaces = len(unique_spaces_shashs)
+                # print("num_unique_spaces", num_unique_spaces)
+                # unique_shashs = set().union(*intrin_df["shashs"])
+                # all_unique_spaces_shashs = set().union(*list(unique_spaces_shashs.values()))
+                # assert len(unique_shashs) == len(all_unique_spaces_shashs)
+                # # print("unique_shashs", unique_shashs, len(unique_shashs))
+                # num_unique_candidates = len(unique_shashs)
+                # print("num_unique_candidates", num_unique_candidates)
                 # input("!")
 
                 print("intrin_df", intrin_df)
                 # TODO: replace above with drop_duplicate_shashs
-                # UNIQUE_ONLY = False
-                UNIQUE_ONLY = True
                 # shashs = intrin_df["shashs"]
                 # print("shashs", shashs, shashs.dtype, len(shashs))
                 # shashs_counts = shashs.value_counts().to_dict()
@@ -267,10 +267,19 @@ def plot_helper(merged_df, out):
                 # for shashs, shashs_df in intrin_df.groupby("shashs"):
                 #     print("shashs", shashs)
                 #     print("shashs_df", shashs_df)
+                # UNIQUE_ONLY = False
+                UNIQUE_ONLY = True
                 if UNIQUE_ONLY:
                     tmp = intrin_df["shashs"].map(frozenset)
                     print("tmp", tmp)
                     intrin_df = intrin_df.loc[~tmp.duplicated(keep="first")]
+                    DROP_SIMILAR = True
+                    # DROP_SIMILAR = False
+                    if DROP_SIMILAR:
+                        THRESHOLD = 0.98
+                        print("intrin_df", len(intrin_df))
+                        intrin_df = drop_similar_shashs_rows(intrin_df, THRESHOLD)
+                        print("intrin_df_", len(intrin_df))
                 # print("intrin_df", intrin_df)
                 # input("!")
                 search_space_sizes = intrin_df["search_space_size"].values
@@ -278,6 +287,12 @@ def plot_helper(merged_df, out):
                 mean_search_space_size = intrin_df["search_space_size"].mean()
                 max_search_space_size = intrin_df["search_space_size"].max()
                 print("len(intrin_df)", len(intrin_df))
+                num_unique_spaces = len(intrin_df)
+                print("num_unique_spaces", num_unique_spaces)
+                unique_shashs = set().union(*intrin_df["shashs"])
+                # print("unique_shashs", unique_shashs, len(unique_shashs))
+                num_unique_candidates = len(unique_shashs)
+                print("num_unique_candidates", num_unique_candidates)
                 print("mean_search_space_size", mean_search_space_size)
                 print("max_search_space_size", max_search_space_size)
 
