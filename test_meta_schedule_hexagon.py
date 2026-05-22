@@ -316,20 +316,20 @@ def main():
 
     # OPS = ["dense", "conv2d_3x3"]
     # OPS = ["dense"]
-    # OPS = ["conv2d_3x3"]
-    OPS = ["conv2d_1x1"]
+    OPS = ["conv2d_3x3"]
+    # OPS = ["conv2d_1x1"]
     # DTYPES = ["float32", "int32"]
     # DTYPES = ["int32"]
     DTYPES = ["int8"]
     # DIMS = [8, 16, 32, 64, 128]
     # DIMS = [8, 32, 128]
     # DIMS = [8]
-    DIMS = [16]
-    # DIMS = [32]
+    # DIMS = [16]
+    DIMS = [32]
     LAYOUTS = [
         # ("NCHW", "OIHW"),
-        # ("NHWC", "OHWI"),
-        ("NHWC", "HWOI"),
+        ("NHWC", "OHWI"),
+        # ("NHWC", "HWOI"),
         # ("NHWC", "HWIO"),
     ]
 
