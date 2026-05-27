@@ -30,6 +30,8 @@ class ReplayTraceNode : public SearchStrategyNode {
     ReplayTraceNode* self;
     /*! \brief The design spaces. */
     Array<tir::Trace> design_spaces;
+    /*! \brief The design spaces mask. */
+    Array<Integer> design_spaces_mask;
     /*! \brief The number of total trials. */
     int max_trials;
     /*! \brief The number of trials per iteration. */
@@ -116,6 +118,15 @@ class ReplayTraceNode : public SearchStrategyNode {
     }
     this->state_ =
         std::make_unique<State>(this, design_space_traces, max_trials, num_trials_per_iter);
+  }
+
+  void MaskDesignSpaces(const Array<Integer>& design_spaces_mask) final {
+    CHECK(this->state_ != nullptr)
+        << "ValueError: `PreTuning` has to be called once fore using `MaskDesignSpaces`.";
+    CHECK(this->state_->design_spaces.size() == design_spaces_mask.size())
+        << "Size missmatch";
+    CHECK(this->state_->design_spaces_mask.size() == design_spaces_mask.size())
+        << "Size missmatch";
   }
 
   void PostTuning() final {

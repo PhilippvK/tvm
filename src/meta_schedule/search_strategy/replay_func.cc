@@ -88,6 +88,10 @@ class ReplayFuncNode : public SearchStrategyNode {
     this->state_ = std::make_unique<State>(this, max_trials, num_trials_per_iter);
   }
 
+  void MaskDesignSpaces(const Array<Integer>& design_spaces_mask) final {
+    CHECK(false) << "Unsupported: MaskDesignSpaces";
+  }
+
   void PostTuning() final {
     CHECK(this->state_ != nullptr) << "ValueError: `PostTuning` is invoked without corresponding "
                                       "`PreTuning`, or `PostTuning` is already invoked.";
