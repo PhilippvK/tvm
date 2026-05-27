@@ -38,7 +38,7 @@ from ..utils import _get_default_str
 class CostModel(Object):
     """Cost model."""
 
-    CostModelType = Union["CostModel", Literal["xgb", "mlp", "random"]]
+    CostModelType = Union["CostModel", Literal["xgb", "mlp", "random", "dummy"]]
 
     def load(self, path: str) -> None:
         """Load the cost model from given file location.
@@ -106,7 +106,7 @@ class CostModel(Object):
 
     @staticmethod
     def create(
-        kind: Literal["xgb", "mlp", "random", "none"],
+        kind: Literal["xgb", "mlp", "random", "none", "dummy"],
         *args,
         **kwargs,
     ) -> "CostModel":
@@ -114,7 +114,7 @@ class CostModel(Object):
 
         Parameters
         ----------
-        kind : Literal["xgb", "mlp", "random", "none"]
+        kind : Literal["xgb", "mlp", "random", "none", "dummy"]
             The kind of the cost model. Can be "xgb", "mlp", "random" or "none".
 
         Returns
@@ -122,7 +122,7 @@ class CostModel(Object):
         cost_model : CostModel
             The created cost model.
         """
-        from . import RandomModel, XGBModel  # pylint: disable=import-outside-toplevel
+        from . import RandomModel, DummyModel, XGBModel  # pylint: disable=import-outside-toplevel
 
         if kind == "xgb":
             return XGBModel(*args, **kwargs)  # type: ignore
@@ -136,6 +136,8 @@ class CostModel(Object):
 
         if kind == "random":
             return RandomModel(*args, **kwargs)  # type: ignore
+        if kind == "dummy":
+            return DummyModel(*args, **kwargs)  # type: ignore
         if kind == "mlp":
             from .mlp_model import (  # type: ignore  # pylint: disable=import-outside-toplevel
                 MLPModel,
