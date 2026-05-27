@@ -102,6 +102,8 @@ class SearchStrategyNode : public runtime::Object {
                          const Optional<Database>& database,
                          const Optional<CostModel>& cost_model) = 0;
 
+  virtual void MaskDesignSpaces(const Array<Integer>& design_spaces_mask) = 0;
+
   /*!
    * \brief Post-tuning for the search strategy.
    * \note Post-tuning is supposed to be called after the tuning process and before we reset the
@@ -150,6 +152,10 @@ class SearchStrategy : public runtime::ObjectRef {
   using FPreTuning = runtime::TypedPackedFunc<void(
       int max_trials, int num_trials_per_iter, const Array<tir::Schedule>&,
       const Optional<Database>&, const Optional<CostModel>&)>;
+  /*!
+   * \brief The function type of `MaskDesignSpaces` method.
+   */
+  using FMaskDesignSpaces = runtime::TypedPackedFunc<void(const Array<Integer>&)>;
   /*! \brief The function type of `PostTuning` method. */
   using FPostTuning = runtime::TypedPackedFunc<void()>;
   /*!
@@ -172,6 +178,7 @@ class SearchStrategy : public runtime::ObjectRef {
    * \brief Create a search strategy with customized methods on the python-side.
    * \param f_initialize_with_tune_context The packed function of `InitializeWithTuneContext`.
    * \param f_pre_tuning The packed function of `PreTuning`.
+   * \param f_mask_design_spaces The packed function of `MaskDesignSpaces`.
    * \param f_post_tuning The packed function of `PostTuning`.
    * \param f_generate_measure_candidates The packed function of `GenerateMeasureCandidates`.
    * \param f_notify_runner_results The packed function of `NotifyRunnerResults`.
@@ -181,6 +188,7 @@ class SearchStrategy : public runtime::ObjectRef {
   TVM_DLL static SearchStrategy PySearchStrategy(
       FInitializeWithTuneContext f_initialize_with_tune_context,  //
       FPreTuning f_pre_tuning,                                    //
+      FMaskDesignSpaces f_mask_design_spaces,                     //
       FPostTuning f_post_tuning,                                  //
       FGenerateMeasureCandidates f_generate_measure_candidates,   //
       FNotifyRunnerResults f_notify_runner_results,               //
@@ -223,6 +231,7 @@ class PySearchStrategyNode : public SearchStrategyNode {
  public:
   using FInitializeWithTuneContext = SearchStrategy::FInitializeWithTuneContext;
   using FPreTuning = SearchStrategy::FPreTuning;
+  using FMaskDesignSpaces = SearchStrategy::FMaskDesignSpaces;
   using FPostTuning = SearchStrategy::FPostTuning;
   using FGenerateMeasureCandidates = SearchStrategy::FGenerateMeasureCandidates;
   using FNotifyRunnerResults = SearchStrategy::FNotifyRunnerResults;
@@ -232,6 +241,8 @@ class PySearchStrategyNode : public SearchStrategyNode {
   FInitializeWithTuneContext f_initialize_with_tune_context;
   /*! \brief The packed function to the `PreTuning` method. */
   FPreTuning f_pre_tuning;
+  /*! \brief The packed function to the `MaskDesignSpaces` method. */
+  FMaskDesignSpaces f_mask_design_spaces;
   /*! \brief The packed function to the `PostTuning` method. */
   FPostTuning f_post_tuning;
   /*! \brief The packed function to the `GenerateMeasureCandidates` method. */
@@ -244,6 +255,7 @@ class PySearchStrategyNode : public SearchStrategyNode {
   void VisitAttrs(tvm::AttrVisitor* v) {
     // `f_initialize_with_tune_context` is not visited
     // `f_pre_tuning` is not visited
+    // `f_mask_design_spaces` is not visited
     // `f_post_tuning` is not visited
     // `f_generate_measure_candidates` is not visited
     // `f_notify_runner_results` is not visited
@@ -253,6 +265,7 @@ class PySearchStrategyNode : public SearchStrategyNode {
   void InitializeWithTuneContext(const TuneContext& context) final;
   void PreTuning(int max_trials, int num_trials_per_iter, const Array<tir::Schedule>& design_spaces,
                  const Optional<Database>& database, const Optional<CostModel>& cost_model) final;
+  void MaskDesignSpaces(const Array<Integer>& design_spaces_mask) final;
   void PostTuning() final;
   Optional<Array<MeasureCandidate>> GenerateMeasureCandidates() final;
   void NotifyRunnerResults(const Array<MeasureCandidate>& measure_candidates,
