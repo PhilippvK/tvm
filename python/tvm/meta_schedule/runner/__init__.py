@@ -20,6 +20,7 @@ Meta Schedule runners that runs an artifact either locally or through the RPC in
 """
 from .config import EvaluatorConfig, RPCConfig
 from .local_runner import LocalRunner, LocalRunnerFuture
+from .dummy_runner import DummyRunner
 from .rpc_runner import RPCRunner
 from .runner import (
     PyRunner,

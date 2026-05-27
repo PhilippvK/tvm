@@ -172,7 +172,7 @@ class PyRunnerFuture:
 class Runner(Object):
     """The abstract runner interface"""
 
-    RunnerType = Union["Runner", Literal["local", "rpc"]]
+    RunnerType = Union["Runner", Literal["local", "dummy", "rpc"]]
 
     def run(self, runner_inputs: List[RunnerInput]) -> List[RunnerFuture]:
         """Run the built artifact and get runner futures.
@@ -191,17 +191,21 @@ class Runner(Object):
 
     @staticmethod
     def create(  # pylint: disable=keyword-arg-before-vararg
-        kind: Literal["local", "rpc"] = "local",
+        kind: Literal["local", "dummy", "rpc"] = "local",
         *args,
         **kwargs,
     ) -> "Runner":
         """Create a Runner."""
-        from . import LocalRunner, RPCRunner  # pylint: disable=import-outside-toplevel
+        from . import LocalRunner, DummyRunner, RPCRunner  # pylint: disable=import-outside-toplevel
 
         if kind == "local":
             if "max_workers" in kwargs:
                 kwargs.pop("max_workers")
             return LocalRunner(*args, **kwargs)  # type: ignore
+        elif kind == "dummy":
+            if "max_workers" in kwargs:
+                kwargs.pop("max_workers")
+            return DummyRunner(*args, **kwargs)  # type: ignore
         elif kind == "rpc":
             return RPCRunner(*args, **kwargs)  # type: ignore
         raise ValueError(f"Unknown Runner: {kind}")
