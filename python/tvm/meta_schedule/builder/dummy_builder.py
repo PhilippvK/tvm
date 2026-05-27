@@ -1,0 +1,219 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+"""Dummy builder that compile on the local host"""
+import os
+import tempfile
+from typing import Callable, Dict, List, Optional, Union
+
+from tvm._ffi import register_func
+from tvm.ir import IRModule
+from tvm.runtime import Module, NDArray, load_param_dict, save_param_dict
+from tvm.target import Target
+
+from ...contrib.popen_pool import MapResult, PopenPoolExecutor, StatusKind
+from ..logging import get_logger
+from ..utils import cpu_count, derived_object, get_global_func_with_default_on_worker
+from .builder import BuilderInput, BuilderResult, PyBuilder
+from .local_builder import _serialize_params, _deserialize_params, T_BUILD, T_EXPORT
+
+logger = get_logger(__name__)  # pylint: disable=invalid-name
+
+
+@derived_object
+class DummyBuilder(PyBuilder):
+    """A builder that builds the given input on local host.
+
+    Parameters
+    ----------
+    pool : PopenPoolExecutor
+        The process pool to run the build.
+    max_workers: int
+        The max number of Popen workers.
+    timeout_sec : float
+        The timeout in seconds for the build.
+    initializer: Optional[Callable[[], None]]
+        The initializer function for each popen worker.
+    f_build : Union[None, str, T_BUILD]
+        Name of the build function to be used.
+        Defaults to `meta_schedule.builder.default_build`.
+    f_export : Union[None, str, T_EXPORT]
+        Name of the export function to be used.
+        Defaults to `meta_schedule.builder.default_export`.
+
+    Attributes
+    ----------
+    T_BUILD : typing._GenericAlias
+        The signature of the function `f_build`, which is
+
+        .. code-block:: python
+
+        def default_build(
+            mod: IRModule,
+            target: Target,
+            params: Optional[Dict[str, NDArray]]
+        ) -> Module:
+            ...
+
+    T_EXPORT : typing._GenericAlias
+        The signature of the function `f_export`, which is
+
+        .. code-block:: python
+
+        def default_export(mod: Module) -> str:
+            ...
+
+    Note
+    ----
+    The build function and export function should be registered in the worker process.
+    The worker process is only aware of functions registered in TVM package,
+    if there are extra functions to be registered,
+    please send the registration logic via initializer.
+    """
+
+    max_workers: int
+    timeout_sec: float
+    initializer: Optional[Callable[[], None]]
+    f_build: Union[None, str, T_BUILD]
+    f_export: Union[None, str, T_EXPORT]
+
+    def __init__(
+        self,
+        *,
+        max_workers: Optional[int] = None,
+        timeout_sec: float = 30.0,
+        f_build: Union[None, str, T_BUILD] = None,
+        f_export: Union[None, str, T_EXPORT] = None,
+        initializer: Optional[Callable[[], None]] = None,
+    ) -> None:
+        """Constructor.
+
+        Parameters
+        ----------
+        max_workers : Optional[int]
+            The maximum number of worker processes to be used.
+            Defaults to number of CPUs.
+        timeout_sec : float
+            The timeout in seconds for the build.
+        f_build : T_BUILD
+            Name of the build function to be used.
+            Defaults to `meta_schedule.builder.default_build`.
+        f_export : T_EXPORT
+            Name of the export function to be used.
+            Defaults to `meta_schedule.builder.default_export`.
+        initializer : Optional[Callable[[], None]]
+            The initializer to be used for the worker processes.
+        """
+        super().__init__()
+
+        if max_workers is None:
+            max_workers = cpu_count(logical=True)
+        logger.info("DummyBuilder: max_workers = %d", max_workers)
+
+        self.max_workers = max_workers
+        self.timeout_sec = timeout_sec
+        self.initializer = initializer
+        self.f_build = f_build
+        self.f_export = f_export
+        self._sanity_check()
+
+    def build(self, build_inputs: List[BuilderInput]) -> List[BuilderResult]:
+        results: List[BuilderResult] = []
+        map_result: MapResult
+
+        # Here we restart the PopenPool everytime because of a known memory leak issue with the
+        # PopenPool workers after a couple times of usage. We don't apply the same to runners to
+        # avoid potential problem caused by async behaviour.
+        pool = PopenPoolExecutor(
+            max_workers=self.max_workers,
+            timeout=self.timeout_sec,
+            initializer=self.initializer,
+        )
+
+        # Dispatch the build inputs to the worker processes.
+        func = _worker_func_dummy
+        for map_result in pool.map_with_error_catching(
+            lambda x: func(*x),
+            [
+                (
+                    self.f_build,
+                    self.f_export,
+                    build_input.mod,
+                    build_input.target,
+                    _serialize_params(build_input.params),
+                )
+                for build_input in build_inputs
+            ],
+        ):
+            if map_result.status == StatusKind.COMPLETE:
+                results.append(BuilderResult(map_result.value, None))
+            elif map_result.status == StatusKind.TIMEOUT:
+                results.append(
+                    BuilderResult(
+                        None,
+                        f"DummyBuilder: Timeout, killed after {self.timeout_sec} seconds",
+                    )
+                )
+            elif map_result.status == StatusKind.EXCEPTION:
+                results.append(
+                    BuilderResult(
+                        None,
+                        "DummyBuilder: An exception occurred\n" + str(map_result.value),
+                    )
+                )
+            else:
+                raise ValueError("Unreachable: unexpected result: {map_result}")
+        del pool
+        return results
+
+    def _sanity_check(self) -> None:
+        def _check(f_build, f_export) -> None:
+            get_global_func_with_default_on_worker(name=f_build, default=None)
+            get_global_func_with_default_on_worker(name=f_export, default=None)
+
+        # Same reason for the single use PopenPool as mentioned above
+        pool = PopenPoolExecutor(
+            max_workers=self.max_workers,
+            timeout=self.timeout_sec,
+            initializer=self.initializer,
+        )
+        value = pool.submit(_check, self.f_build, self.f_export)
+        value.result()
+        del pool
+
+
+def _worker_func_dummy(
+    _f_build: Union[None, str, T_BUILD],
+    _f_export: Union[None, str, T_EXPORT],
+    mod: IRModule,
+    target: Target,
+    params: Optional[bytearray],
+) -> str:
+    # artifact_path = "dummy"
+    artifact_path = os.path.join(tempfile.mkdtemp(), "tvm_tmp_mod.so")
+    return artifact_path
+
+
+@register_func("meta_schedule.builder.get_dummy_builder")
+def get_dummy_builder() -> DummyBuilder:
+    """Get the dummy builder.
+
+    Returns
+    -------
+    builder : DummyBuilder
+        The dummy builder.
+    """
+    return DummyBuilder()
