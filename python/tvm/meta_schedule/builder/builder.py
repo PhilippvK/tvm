@@ -112,7 +112,7 @@ class BuilderResult(Object):
 class Builder(Object):
     """The abstract builder interface."""
 
-    BuilderType = Union["Builder", Literal["local"]]
+    BuilderType = Union["Builder", Literal["local", "dummy"]]
 
     def build(self, build_inputs: List[BuilderInput]) -> List[BuilderResult]:
         """Build the given inputs.
@@ -130,7 +130,7 @@ class Builder(Object):
 
     @staticmethod
     def create(  # pylint: disable=keyword-arg-before-vararg
-        kind: Literal["local"] = "local",
+        kind: Literal["local", "dummy"] = "local",
         *args,
         **kwargs,
     ) -> "Builder":
@@ -138,7 +138,7 @@ class Builder(Object):
 
         Parameters
         ----------
-        kind : Literal["local"]
+        kind : Literal["local", "dummy"]
             The kind of the builder. For now, only "local" is supported.
 
         Returns
@@ -146,10 +146,12 @@ class Builder(Object):
         builder : Builder
             The builder created.
         """
-        from . import LocalBuilder  # pylint: disable=import-outside-toplevel
+        from . import LocalBuilder, DummyBuilder  # pylint: disable=import-outside-toplevel
 
         if kind == "local":
             return LocalBuilder(*args, **kwargs)  # type: ignore
+        elif kind == "dummy":
+            return DummyBuilder(*args, **kwargs)  # type: ignore
         raise ValueError(f"Unknown Builder: {kind}")
 
 
