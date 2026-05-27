@@ -42,6 +42,11 @@ void PySearchStrategyNode::PreTuning(int max_trials, int num_trials_per_iter,
   f_pre_tuning(max_trials, num_trials_per_iter, design_spaces, database, cost_model);
 }
 
+void PySearchStrategyNode::MaskDesignSpaces(const Array<Integer>& design_spaces_mask) {
+  ICHECK(f_mask_design_spaces != nullptr) << "PySearchStrategy's MaskDesignSpaces method not implemented!";
+  f_mask_design_spaces(design_spaces_mask);
+}
+
 void PySearchStrategyNode::PostTuning() {
   ICHECK(f_post_tuning != nullptr) << "PySearchStrategy's PostTuning method not implemented!";
   f_post_tuning();
@@ -68,6 +73,7 @@ SearchStrategy PySearchStrategyNode::Clone() const {
 SearchStrategy SearchStrategy::PySearchStrategy(
     PySearchStrategyNode::FInitializeWithTuneContext f_initialize_with_tune_context,  //
     PySearchStrategyNode::FPreTuning f_pre_tuning,                                    //
+    PySearchStrategyNode::FMaskDesignSpaces f_mask_design_spaces,                     //
     PySearchStrategyNode::FPostTuning f_post_tuning,                                  //
     PySearchStrategyNode::FGenerateMeasureCandidates f_generate_measure_candidates,   //
     PySearchStrategyNode::FNotifyRunnerResults f_notify_runner_results,               //
@@ -75,6 +81,7 @@ SearchStrategy SearchStrategy::PySearchStrategy(
   ObjectPtr<PySearchStrategyNode> n = make_object<PySearchStrategyNode>();
   n->f_initialize_with_tune_context = f_initialize_with_tune_context;
   n->f_pre_tuning = f_pre_tuning;
+  n->f_mask_design_spaces = f_mask_design_spaces;
   n->f_post_tuning = f_post_tuning;
   n->f_generate_measure_candidates = f_generate_measure_candidates;
   n->f_notify_runner_results = f_notify_runner_results;
@@ -96,6 +103,8 @@ TVM_REGISTER_GLOBAL("meta_schedule.SearchStrategyInitializeWithTuneContext")
     .set_body_method<SearchStrategy>(&SearchStrategyNode::InitializeWithTuneContext);
 TVM_REGISTER_GLOBAL("meta_schedule.SearchStrategyPreTuning")
     .set_body_method<SearchStrategy>(&SearchStrategyNode::PreTuning);
+TVM_REGISTER_GLOBAL("meta_schedule.SearchStrategyMaskDesignSpaces")
+    .set_body_method<SearchStrategy>(&SearchStrategyNode::MaskDesignSpaces);
 TVM_REGISTER_GLOBAL("meta_schedule.SearchStrategyPostTuning")
     .set_body_method<SearchStrategy>(&SearchStrategyNode::PostTuning);
 TVM_REGISTER_GLOBAL("meta_schedule.SearchStrategyGenerateMeasureCandidates")

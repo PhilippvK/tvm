@@ -131,6 +131,22 @@ class SearchStrategy(Object):
             cost_model,
         )
 
+    def mask_design_spaces(
+        self,
+        design_spaces_mask: List[int],
+    ) -> None:
+        """Disable/enable design spaces.
+
+        Parameters
+        ----------
+        design_spaces_mask : List[int]
+            Non-zero value indicates used design spaces.
+        """
+        _ffi_api.SearchStrategyMaskDesignSpaces(  # type: ignore # pylint: disable=no-member
+            self,
+            design_spaces_mask,
+        )
+
     def post_tuning(self) -> None:
         """Post-tuning for the search strategy."""
         _ffi_api.SearchStrategyPostTuning(self)  # type: ignore # pylint: disable=no-member
@@ -217,6 +233,7 @@ class _PySearchStrategy(SearchStrategy):
         self,
         f_initialize_with_tune_context: Callable = None,
         f_pre_tuning: Callable = None,
+        f_mask_design_spaces: Callable = None,
         f_post_tuning: Callable = None,
         f_generate_measure_candidates: Callable = None,
         f_notify_runner_results: Callable = None,
@@ -228,6 +245,7 @@ class _PySearchStrategy(SearchStrategy):
             _ffi_api.SearchStrategyPySearchStrategy,  # type: ignore # pylint: disable=no-member
             f_initialize_with_tune_context,
             f_pre_tuning,
+            f_mask_design_spaces,
             f_post_tuning,
             f_generate_measure_candidates,
             f_notify_runner_results,
@@ -248,6 +266,7 @@ class PySearchStrategy:
         "methods": [
             "_initialize_with_tune_context",
             "pre_tuning",
+            "mask_design_spaces",
             "post_tuning",
             "generate_measure_candidates",
             "notify_runner_results",
@@ -279,6 +298,19 @@ class PySearchStrategy:
         ----------
         design_spaces : List[Schedule]
             The design spaces for pre-tuning.
+        """
+        raise NotImplementedError
+
+    def mask_design_spaces(
+        self,
+        design_spaces_mask: List[int],
+    ) -> None:
+        """Disable/enable design spaces.
+
+        Parameters
+        ----------
+        design_spaces_mask : List[int]
+            Non-zero value indicates used design spaces.
         """
         raise NotImplementedError
 
