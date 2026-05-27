@@ -17,6 +17,7 @@
 """Evolutionary Search Strategy"""
 from tvm._ffi import register_object
 
+import tvm
 from .. import _ffi_api
 from .search_strategy import SearchStrategy
 
@@ -79,3 +80,13 @@ class EvolutionarySearch(SearchStrategy):
             genetic_max_fail_count,
             eps_greedy,
         )
+
+    def update_population_size(self, population_size: int):
+        # _ffi_api.SearchStrategyUpdatePopulationSize(  # type: ignore # pylint: disable=no-member
+        #     self,
+        #     population_size,
+        # )
+        update_population_size_func = tvm.get_global_func(
+            "meta_schedule.SearchStrategyEvolutionarySearchUpdatePopulationSize"
+        )
+        update_population_size_func(self, population_size)
