@@ -262,6 +262,7 @@ class EvolutionarySearchNode : public SearchStrategyNode {
     int num_empty_iters;
     /*! \brief The design spaces. Decisions are not used so traces only. */
     Array<tir::Trace> design_spaces;
+    Array<Integer> design_spaces_mask;
     /*! \brief Pre thread data including module to be tuned and random state. */
     std::vector<PerThreadData> per_thread_data_;
     /*!
@@ -287,8 +288,11 @@ class EvolutionarySearchNode : public SearchStrategyNode {
           measured_workloads_(database->GetModuleEquality()) {
       // LOG(INFO) << "design_space_schedules.size()=" << design_space_schedules.size();
       design_spaces.reserve(design_space_schedules.size());
+      design_spaces_mask.reserve(design_space_schedules.size());
+      // LOG(INFO) << "design_space_schedules.size()=" << design_space_schedules.size();
       for (const Schedule& space : design_space_schedules) {
         design_spaces.push_back(space->trace().value()->Simplified(true));
+        design_spaces_mask.push_back(1);
       }
       const TuneContextNode* ctx = self->ctx_;
       IRModule mod = ctx->mod.value();
@@ -471,6 +475,17 @@ class EvolutionarySearchNode : public SearchStrategyNode {
                                            database.value(), cost_model.value());
   }
 
+  void MaskDesignSpaces(const Array<Integer>& design_spaces_mask) final {
+    LOG(INFO) << "MaskDesignSpaces";
+    CHECK(this->state_ != nullptr)
+        << "ValueError: `PreTuning` has to be called once fore using `MaskDesignSpaces`.";
+    CHECK(this->state_->design_spaces.size() == design_spaces_mask.size())
+        << "Size missmatch";
+    CHECK(this->state_->design_spaces_mask.size() == design_spaces_mask.size())
+        << "Size missmatch";
+    this->state_->design_spaces_mask = design_spaces_mask;
+  }
+
   void PostTuning() final {
     CHECK(this->state_ != nullptr) << "ValueError: `PostTuning` is invoked without corresponding "
                                       "`PreTuning`, or `PostTuning` is already invoked.";
@@ -540,17 +555,33 @@ std::vector<Schedule> EvolutionarySearchNode::State::SampleInitPopulation(int nu
   auto _ = Profiler::TimedScope("EvoSearch/SampleInitPopulation");
   ThreadedTraceApply pp(self->postprocs_);
   std::vector<Schedule> out_schs;
+  std::vector<int> enabled_design_space_idxs;
+  // Array<Integer> design_spaces_mask;
+  int num_enabled = 0;
+  CHECK(design_spaces_mask.size() == design_spaces.size()) << "Size missmatch";
+  for (int i = 0; i < design_spaces_mask.size(); i++) {
+    int enabled = design_spaces_mask[i]->value;
+    // LOG(INFO) << "i,enabled=" << i << "," << enabled;
+    if (enabled) {
+      enabled_design_space_idxs.push_back(i);
+      num_enabled++;
+    }
+  }
+  LOG(INFO) << "num_enabled=" << num_enabled;
+  CHECK(num_enabled > 0) << "ValueError: all design_spaces are masked";
   int fail_count = 0;
   while (static_cast<int>(out_schs.size()) < self->init_min_unmeasured &&
          fail_count < self->max_fail_count) {
     std::vector<Schedule> results(num, Schedule{nullptr});
-    auto f_proc_unmeasured = [this, &results, &pp](int thread_id, int trace_id) -> void {
+    // auto f_proc_unmeasured = [this, &results, &pp, &decision_counts, &decision_counts_mutex](int thread_id, int trace_id) -> void {
+    auto f_proc_unmeasured = [this, &results, &pp, &enabled_design_space_idxs](int thread_id, int trace_id) -> void {
       PerThreadData& data = this->per_thread_data_.at(thread_id);
       TRandState* rand_state = &data.rand_state;
       const IRModule& mod = data.mod;
       Schedule& result = results.at(trace_id);
       ICHECK(!result.defined());
-      int design_space_index = tir::SampleInt(rand_state, 0, design_spaces.size());
+      int enabled_design_space_index = tir::SampleInt(rand_state, 0, enabled_design_space_idxs.size());
+      int design_space_index = enabled_design_space_idxs[enabled_design_space_index];
       tir::Trace trace(design_spaces[design_space_index]->insts, {});
       if (Optional<Schedule> sch = pp.Apply(mod, trace, rand_state)) {
         result = sch.value();
