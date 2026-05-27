@@ -123,6 +123,7 @@ def run(
     num_tuning_cores = "physical",
     pop_size = 128,
     min_pop_size = 128,
+    max_pop_size = (32 * 1024),
     step_space_generator_masks = None,
     step_ids = None,
     rule_ids = None,
@@ -274,6 +275,7 @@ def run(
         else:
             iters = list(range(MAX_ITERS))
         print("iters", iters, len(iters))
+        last_pop_size = None
         for i in iters:
             print("while", i)
             # if i < num_spaces:
@@ -283,14 +285,26 @@ def run(
                     spaces_mask = new_mask
                     assert step_sizes is not None
                     assert len(step_sizes) == num_steps
-                    new_pop_size = step_sizes[i]
+                    new_step_size = step_sizes[i]
+                    print("new_step_size", new_step_size)
+                    num_missing = new_step_size - task_trials
+                    print("num_missing", num_missing)
+                    if num_missing > 0:
+                        # new_pop_size = new_step_size
+                        new_pop_size = int(num_missing * 5)
+                    elif last_pop_size is not None:
+                        new_pop_size = last_pop_size
+                    else:
+                        new_pop_size = min_pop_size
                 else:
                     assert all(spaces_mask)
-                    new_pop_size = max(min_pop_size, task_trials * 2)
+                    new_pop_size =  task_trials * 2
                 print("spaces_mask", spaces_mask)
                 strategy.mask_design_spaces(spaces_mask)
             else:
-                new_pop_size = max(min_pop_size, task_trials * 2)
+                new_pop_size =  task_trials * 2
+            new_pop_size = min(max_pop_size, max(min_pop_size, new_pop_size))
+            last_pop_size = new_pop_size
             print("new_pop_size", new_pop_size)
             strategy.update_population_size(new_pop_size)
             candidates = strategy.generate_measure_candidates()
@@ -314,6 +328,7 @@ def run(
                     break
             else:
                 task_trials = num_candidates
+            print("task_trials", task_trials)
             for candidate in candidates:
                 # print("candidate", candidate, dir(candidate))
                 sch = candidate.sch
