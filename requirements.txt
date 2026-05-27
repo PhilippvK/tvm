@@ -14,3 +14,4 @@ pyyaml
 networkx
 pydot
 plotly
+rich
