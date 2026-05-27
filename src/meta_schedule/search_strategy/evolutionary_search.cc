@@ -808,6 +808,10 @@ Array<Schedule> EvolutionarySearchSampleInitPopulation(EvolutionarySearch self, 
   return Array<Schedule>(results.begin(), results.end());
 }
 
+void EvolutionarySearchUpdatePopulationSize(EvolutionarySearch self, int population_size) {
+  self->population_size = population_size;
+}
+
 Array<Schedule> EvolutionarySearchEvolveWithCostModel(EvolutionarySearch self,
                                                       Array<Schedule> population, int num) {
   Array<Schedule> result;
@@ -830,6 +834,8 @@ TVM_REGISTER_GLOBAL("meta_schedule.SearchStrategyEvolutionarySearch")
     .set_body_typed(SearchStrategy::EvolutionarySearch);
 TVM_REGISTER_GLOBAL("meta_schedule.SearchStrategyEvolutionarySearchSampleInitPopulation")
     .set_body_typed(EvolutionarySearchSampleInitPopulation);
+TVM_REGISTER_GLOBAL("meta_schedule.SearchStrategyEvolutionarySearchUpdatePopulationSize")
+    .set_body_typed(EvolutionarySearchUpdatePopulationSize);
 TVM_REGISTER_GLOBAL("meta_schedule.SearchStrategyEvolutionarySearchEvolveWithCostModel")
     .set_body_typed(EvolutionarySearchEvolveWithCostModel);
 
