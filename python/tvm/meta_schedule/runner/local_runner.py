@@ -441,7 +441,7 @@ def default_cleanup() -> None:
 
 
 @tvm.register_func("meta_schedule.runner.get_local_runner")
-def get_local_builder() -> LocalRunner:
+def get_local_runner() -> LocalRunner:
     """Get the local Runner.
 
     Returns
