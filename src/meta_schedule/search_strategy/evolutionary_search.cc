@@ -16,6 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+#include <chrono>
+#include <mutex>
 
 #include "../module_equality.h"
 #include "../utils.h"
@@ -523,6 +525,7 @@ class EvolutionarySearchNode : public SearchStrategyNode {
 
 std::vector<Schedule> EvolutionarySearchNode::State::PickBestFromDatabase(int num) {
   auto _ = Profiler::TimedScope("EvoSearch/PickBestFromDatabase");
+  // TODO: alternatively get random?
   std::vector<tir::Trace> measured_traces;
   measured_traces.reserve(num);
   Array<TuningRecord> top_records = this->database_->GetTopK(this->token_, num);
@@ -570,8 +573,21 @@ std::vector<Schedule> EvolutionarySearchNode::State::SampleInitPopulation(int nu
   LOG(INFO) << "num_enabled=" << num_enabled;
   CHECK(num_enabled > 0) << "ValueError: all design_spaces are masked";
   int fail_count = 0;
-  while (static_cast<int>(out_schs.size()) < self->init_min_unmeasured &&
+  bool auto_num = false;
+  if (num < 0) {
+      // auto num mode
+      auto_num = true;
+      // self->ctx_->num_threads
+      // num = 128;
+      num = 512;
+  }
+  // std::unordered_map<std::string, int> decision_counts;
+  // std::mutex decision_counts_mutex;
+  IRModuleSet exists(database_->GetModuleEquality());
+  exists = this->measured_workloads_;
+  while (static_cast<int>(out_schs.size()) < (auto_num ? 1000000 : self->init_min_unmeasured) &&
          fail_count < self->max_fail_count) {
+    // LOG(INFO) << "while";
     std::vector<Schedule> results(num, Schedule{nullptr});
     // auto f_proc_unmeasured = [this, &results, &pp, &decision_counts, &decision_counts_mutex](int thread_id, int trace_id) -> void {
     auto f_proc_unmeasured = [this, &results, &pp, &enabled_design_space_idxs](int thread_id, int trace_id) -> void {
@@ -581,23 +597,101 @@ std::vector<Schedule> EvolutionarySearchNode::State::SampleInitPopulation(int nu
       Schedule& result = results.at(trace_id);
       ICHECK(!result.defined());
       int enabled_design_space_index = tir::SampleInt(rand_state, 0, enabled_design_space_idxs.size());
+      // LOG(INFO) << "enabled_design_space_index=" << enabled_design_space_index;
       int design_space_index = enabled_design_space_idxs[enabled_design_space_index];
+      // LOG(INFO) << "design_space_index=" << design_space_index;
+      // auto t0 = std::chrono::high_resolution_clock::now();
       tir::Trace trace(design_spaces[design_space_index]->insts, {});
+      // auto t1 = std::chrono::high_resolution_clock::now();
       if (Optional<Schedule> sch = pp.Apply(mod, trace, rand_state)) {
         result = sch.value();
       }
+      // auto t2 = std::chrono::high_resolution_clock::now();
+      // std::string design_space_str = meta_schedule::JSONDumps(design_spaces[design_space_index]->AsJSON(false));
+      // std::string trace_str = meta_schedule::JSONDumps(trace->AsJSON(false));
+      // if (sch.defined()) {
+      // if (result.defined()) {
+      // std::string sch_trace_str = meta_schedule::JSONDumps(sch.value()->trace()->AsJSON(false));
+      // Optional<tir::Trace> sch_trace = result->trace();
+      // std::string sch_trace_str = "";
+      // std::string sch_trace_decisions_str = "";
+      // std::string key = "";
+
+      // if (sch_trace.defined()) {
+      //   ObjectRef trace_json = sch_trace.value()->AsJSON(false);
+      //   sch_trace_str = meta_schedule::JSONDumps(trace_json);
+      //   if (const auto* arr = trace_json.as<runtime::ArrayNode>()) {
+      //     // LOG(INFO) << "is arr";
+      //     ObjectRef decisions = arr->at(1);
+      //     sch_trace_decisions_str = meta_schedule::JSONDumps(decisions);
+      //     key = std::to_string(design_space_index) + ":" + sch_trace_decisions_str;
+      //     // LOG(INFO) << "key=" << key;
+      //     {
+      //       std::lock_guard<std::mutex> lock(decision_counts_mutex);
+      //       decision_counts[key]++;
+      //       if (decision_counts[key] > 1) {
+      //         // LOG(INFO) << "Duplicate decisions! count=" << decision_counts[key];
+      //       }
+      //     }
+      //   }
+      // }
+      // }
+      // auto t3 = std::chrono::high_resolution_clock::now();
+      // LOG(INFO) << "design_space_str=" << design_space_str;
+      // LOG(INFO) << "trace_str=" << trace_str;
+      // LOG(INFO) << "sch_trace_str=" << sch_trace_str;
+      // LOG(INFO) << "sch_trace_decisions_str=" << sch_trace_decisions_str;
+      // LOG(INFO) << "key=" << key;
+      // double trace_ms = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
+      // double apply_ms = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0;
+      // double json_ms = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count() / 1000.0;
+      // LOG(INFO) << "Trace took " << trace_ms << " ms";
+      // LOG(INFO) << "pp.Apply took " << apply_ms << " ms";
+      // LOG(INFO) << "AsJSON took " << json_ms << " ms";
     };
     support::parallel_for_dynamic(0, num, self->ctx_->num_threads, f_proc_unmeasured);
+    // support::parallel_for_dynamic(0, num, 1, f_proc_unmeasured);
     bool found_new = false;
+    int added = 0, skipped = 0;
     for (int i = 0; i < num; i++) {
       if (results[i].defined()) {
-        found_new = true;
-        out_schs.push_back(results[i]);
+        if (auto_num) {
+          Schedule sch = results[i];
+          IRModule mod = sch->mod();
+          size_t shash = ModuleHash(mod);
+          if (!exists.Has(mod, shash)) {
+            added += 1;
+            found_new = true;
+            exists.Add(mod, shash);
+            out_schs.push_back(results[i]);
+          } else {
+            skipped += 1;
+          }
+        } else {
+          added += 1;
+          found_new = true;
+          out_schs.push_back(results[i]);
+        }
       }
     }
     fail_count += !found_new;
-    TVM_PY_LOG(INFO, self->ctx_->logger) << "Sample-Init-Population summary:\n"
-                                         << pp.SummarizeFailures();
+    LOG(INFO) << "added=" << added;
+    LOG(INFO) << "skipped=" << skipped;
+    // LOG(INFO) << "fail_count=" << fail_count;
+    // LOG(INFO) << "static_cast<int>(out_schs.size())=" << static_cast<int>(out_schs.size());
+    // TVM_PY_LOG(INFO, self->ctx_->logger) << "Sample-Init-Population summary:\n"
+    //                                      << pp.SummarizeFailures();
+    // LOG(INFO) << "Sample-Init-Population summary:\n"
+    //                                      << pp.SummarizeFailures();
+    // int total = 0;
+    // int unique = decision_counts.size();
+
+    // for (const auto& kv : decision_counts) {
+    //   total += kv.second;
+    // }
+    // LOG(INFO) << "total_samples=" << total;
+    // LOG(INFO) << "unique_decisions=" << unique;
+    // LOG(INFO) << "duplicates=" << (total - unique);
   }
   return out_schs;
 }
@@ -651,52 +745,59 @@ std::vector<Schedule> EvolutionarySearchNode::State::EvolveWithCostModel(
       }
     }
     {
-      auto _ = Profiler::TimedScope("EvoSearch/Evolve/Mutation");
-      ThreadedTraceApply pp(self->postprocs_);
-      ConcurrentBitmask cbmask(self->population_size);
-      std::vector<Schedule> next_population(self->population_size, Schedule{nullptr});
-      // The worker function
-      auto f_find_candidate = [&cbmask, &population, &next_population, &pp, this](int thread_id,
-                                                                                  int trace_id) {
-        // Prepare samplers
-        PerThreadData& data = this->per_thread_data_.at(thread_id);
-        TRandState* rand_state = &data.rand_state;
-        const IRModule& mod = data.mod;
-        std::function<int()>& trace_sampler = data.trace_sampler;
-        std::function<Optional<Mutator>()>& mutator_sampler = data.mutator_sampler;
-        Schedule& result = next_population.at(trace_id);
-        int sampled_trace_id = -1;
-        // Loop until success
-        for (int fail_count = 0; fail_count <= self->genetic_max_fail_count; ++fail_count) {
-          sampled_trace_id = trace_sampler();
-          tir::Trace trace = population.at(sampled_trace_id)->trace().value();
-          if (Optional<Mutator> opt_mutator = mutator_sampler()) {
-            // Decision: mutate
-            Mutator mutator = opt_mutator.value();
-            if (Optional<tir::Trace> new_trace = mutator->Apply(trace, rand_state)) {
-              if (Optional<Schedule> sch = pp.Apply(mod, new_trace.value(), rand_state)) {
-                // note that sch's trace is different from new_trace
-                // because it contains post-processing information
-                result = sch.value();
-                break;
+      LOG(INFO) << "EvoSearch/Evolve/Mutation";
+      if (self->population_size < 0) {
+        LOG(INFO) << "skip mutate";
+      } else {
+        auto _ = Profiler::TimedScope("EvoSearch/Evolve/Mutation");
+        ThreadedTraceApply pp(self->postprocs_);
+        ConcurrentBitmask cbmask(self->population_size);
+        std::vector<Schedule> next_population(self->population_size, Schedule{nullptr});
+        // The worker function
+        auto f_find_candidate = [&cbmask, &population, &next_population, &pp, this](int thread_id,
+                                                                                    int trace_id) {
+          // Prepare samplers
+          PerThreadData& data = this->per_thread_data_.at(thread_id);
+          TRandState* rand_state = &data.rand_state;
+          const IRModule& mod = data.mod;
+          std::function<int()>& trace_sampler = data.trace_sampler;
+          std::function<Optional<Mutator>()>& mutator_sampler = data.mutator_sampler;
+          Schedule& result = next_population.at(trace_id);
+          int sampled_trace_id = -1;
+          // Loop until success
+          for (int fail_count = 0; fail_count <= self->genetic_max_fail_count; ++fail_count) {
+            sampled_trace_id = trace_sampler();
+            tir::Trace trace = population.at(sampled_trace_id)->trace().value();
+            if (Optional<Mutator> opt_mutator = mutator_sampler()) {
+              // Decision: mutate
+              Mutator mutator = opt_mutator.value();
+              if (Optional<tir::Trace> new_trace = mutator->Apply(trace, rand_state)) {
+                if (Optional<Schedule> sch = pp.Apply(mod, new_trace.value(), rand_state)) {
+                  // note that sch's trace is different from new_trace
+                  // because it contains post-processing information
+                  result = sch.value();
+                  break;
+                }
               }
+            } else if (cbmask.QueryAndMark(sampled_trace_id)) {
+              // Decision: do not mutate
+              break;
             }
-          } else if (cbmask.QueryAndMark(sampled_trace_id)) {
-            // Decision: do not mutate
-            break;
           }
-        }
-        // if retry count exceeds the limit, reuse an old sample
-        if (!result.defined()) {
-          result = population.at(sampled_trace_id);
-        }
-      };
-      support::parallel_for_dynamic(0, self->population_size, self->ctx_->num_threads,
-                                    f_find_candidate);
+          // if retry count exceeds the limit, reuse an old sample
+          if (!result.defined()) {
+            result = population.at(sampled_trace_id);
+          }
+        };
+        support::parallel_for_dynamic(0, self->population_size, self->ctx_->num_threads,
+                                      f_find_candidate);
 
-      population.swap(next_population);
-      TVM_PY_LOG(INFO, self->ctx_->logger) << "Evolve iter #" << iter << " done. Summary:\n"
-                                           << pp.SummarizeFailures();
+        population.swap(next_population);
+        // TVM_PY_LOG(INFO, self->ctx_->logger) << "Evolve iter #" << iter << " done. Summary:\n"
+        //                                           << pp.SummarizeFailures();
+        LOG(INFO) << "Evolve iter #" << iter << " done. Summary:\n"
+                                                  << pp.SummarizeFailures();
+      }
     }
   }
   // Return the best states from the heap, sorting from higher score to lower ones
@@ -789,6 +890,7 @@ std::vector<Schedule> EvolutionarySearchNode::State::PickWithEpsGreedy(
 }
 
 Optional<Array<MeasureCandidate>> EvolutionarySearchNode::State::GenerateMeasureCandidates() {
+  LOG(INFO) << "GenerateMeasureCandidates";
   if (st >= max_trials) {
     return NullOpt;
   }
@@ -799,24 +901,31 @@ Optional<Array<MeasureCandidate>> EvolutionarySearchNode::State::GenerateMeasure
   }
   ICHECK_LT(st, ed);
   int pop = self->population_size;
+  LOG(INFO) << "pop=" << pop;
   std::vector<Schedule> inits;
-  inits.reserve(pop);
 
-  TVM_PY_LOG(INFO, self->ctx_->logger) << "Generating candidates......";
-  std::vector<Schedule> measured = PickBestFromDatabase(pop * self->init_measured_ratio);
-  TVM_PY_LOG(INFO, self->ctx_->logger)
-      << "Picked top " << measured.size() << " candidate(s) from database";
-  // LOG(INFO) << "pop=" << pop;
+  // TVM_PY_LOG(INFO, self->ctx_->logger) << "Generating candidates......";
+  LOG(INFO) << "Generating candidates......";
+  std::vector<Schedule> measured;
+  if (pop >= 0) {
+      inits.reserve(pop);
+      measured = PickBestFromDatabase(pop * self->init_measured_ratio);
+      // TVM_PY_LOG(INFO, self->ctx_->logger)
+      //     << "Picked top " << measured.size() << " candidate(s) from database";
+      LOG(INFO)
+          << "Picked top " << measured.size() << " candidate(s) from database";
+      inits.insert(inits.end(), measured.begin(), measured.end());
+  }
   std::vector<Schedule> unmeasured = SampleInitPopulation(pop - measured.size());
-  if (static_cast<int>(unmeasured.size()) < self->init_min_unmeasured) {
-    TVM_PY_LOG(WARNING, self->ctx_->logger)
+  if ((static_cast<int>(unmeasured.size()) < self->init_min_unmeasured) && (pop >= 0)) {
+    // TVM_PY_LOG(WARNING, self->ctx_->logger)
+    //     << "Cannot sample enough initial population, evolutionary search failed.";
+    LOG(INFO)
         << "Cannot sample enough initial population, evolutionary search failed.";
     return NullOpt;
   }
-  TVM_PY_LOG(INFO, self->ctx_->logger) << "Sampled " << unmeasured.size() << " candidate(s)";
-  // LOG(INFO) << "measured.size()=" << measured.size();
-  // LOG(INFO) << "unmeasured.size()=" << unmeasured.size();
-  inits.insert(inits.end(), measured.begin(), measured.end());
+  // TVM_PY_LOG(INFO, self->ctx_->logger) << "Sampled " << unmeasured.size() << " candidate(s)";
+  LOG(INFO) << "Sampled " << unmeasured.size() << " candidate(s)";
   inits.insert(inits.end(), unmeasured.begin(), unmeasured.end());
   // LOG(INFO) << "inits.size()=" << inits.size();
   std::vector<Schedule> bests = EvolveWithCostModel(inits, sample_num);
