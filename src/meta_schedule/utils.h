@@ -19,6 +19,7 @@
 #ifndef TVM_META_SCHEDULE_UTILS_H_
 #define TVM_META_SCHEDULE_UTILS_H_
 
+#include <chrono>
 #include <dmlc/memory_io.h>
 #include <tvm/arith/analyzer.h>
 #include <tvm/meta_schedule/arg_info.h>
@@ -324,13 +325,42 @@ struct ThreadedTraceApply {
    */
   Optional<tir::Schedule> Apply(const IRModule& mod, const tir::Trace& trace,
                                 TRandState* rand_state) {
+    // auto t0 = std::chrono::high_resolution_clock::now();
     tir::Schedule sch =
         tir::Schedule::Traced(mod,
                               /*rand_state=*/ForkSeed(rand_state),
                               /*debug_mode=*/0,
                               /*error_render_level=*/tir::ScheduleErrorRenderLevel::kNone);
 
+    // std::string trace_str = meta_schedule::JSONDumps(trace->AsJSON(false));
+    // LOG(INFO) << "trace_str=" << trace_str;
+    // Optional<tir::Trace> sch_trace = sch->trace();
+    // if (sch_trace.defined()) {
+    //   std::string sch_trace_str = meta_schedule::JSONDumps(sch_trace.value()->AsJSON(false));
+    //   LOG(INFO) << "sch_trace_str=" << sch_trace_str;
+    // }
+    // if (sch.defined()) {
+    // if (result.defined()) {
+    // std::string sch_trace_str = meta_schedule::JSONDumps(sch.value()->trace()->AsJSON(false));
+    // ObjectRef trace_json = sch_trace.value()->AsJSON(false);
+    // sch_trace_str = meta_schedule::JSONDumps(trace_json);
+    // if (const auto* arr = trace_json.as<runtime::ArrayNode>()) {
+    //   // LOG(INFO) << "is arr";
+    //   ObjectRef decisions = arr->at(1);
+    //   sch_trace_decisions_str = meta_schedule::JSONDumps(decisions);
+    //   key = std::to_string(design_space_index) + ":" + sch_trace_decisions_str;
+    //   // LOG(INFO) << "key=" << key;
+    //   {
+    //     std::lock_guard<std::mutex> lock(decision_counts_mutex);
+    //     decision_counts[key]++;
+    //     if (decision_counts[key] > 1) {
+    //       // LOG(INFO) << "Duplicate decisions! count=" << decision_counts[key];
+    //     }
+    //   }
+    // }
+    // auto t1 = std::chrono::high_resolution_clock::now();
     trace->ApplyToSchedule(sch, /*remove_postproc=*/true);
+    // auto t2 = std::chrono::high_resolution_clock::now();
     sch->EnterPostproc();
 
     for (int i = 0; i < n_; ++i) {
@@ -340,6 +370,13 @@ struct ThreadedTraceApply {
         return NullOpt;
       }
     }
+    // auto t3 = std::chrono::high_resolution_clock::now();
+    // double trace_ms = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
+    // double apply_ms = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0;
+    // double postproc_ms = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count() / 1000.0;
+    // LOG(INFO) << "Trace2 took " << trace_ms << " ms";
+    // LOG(INFO) << "Apply2 took " << apply_ms << " ms";
+    // LOG(INFO) << "Postproc2 took " << postproc_ms << " ms";
     return sch;
   }
 
@@ -357,6 +394,9 @@ struct ThreadedTraceApply {
     return os.str();
   }
 
+ // public:
+ //  std::unordered_map<std::string, int> decision_counts;
+ //  std::mutex decision_counts_mutex;
  private:
   /*! \brief A helper data structure that stores the fail count for each postprocessor. */
   struct Item {
