@@ -292,8 +292,8 @@ def main():
     DIMS = [32]
     LAYOUTS = [
         # ("NCHW", "OIHW"),
-        ("NHWC", "OHWI"),
-        # ("NHWC", "HWOI"),
+        # ("NHWC", "OHWI"),
+        ("NHWC", "HWOI"),
         # ("NHWC", "HWIO"),
     ]
 
@@ -575,7 +575,8 @@ def main():
                 database = "json"
                 builder = "local"  # TODO: fake
                 runner = "local"  # TODO: fake
-                cost_model = "xgb"
+                # cost_model = "xgb"
+                cost_model = "dummy"
                 measure_callbacks = "default"
                 seed = None
                 num_tuning_cores = "physical"
