@@ -34,6 +34,9 @@ from rich.columns import Columns
 from rich.text import Text
 
 
+USE_SPINNER = False
+USE_LIVE = False
+
 def next_power_of_two(n):
     if n <= 1:
         return 1
@@ -107,6 +110,26 @@ def process_steps_data(steps_data, rule2space_generator, rule_ids):
     return step_space_generators, step_union_space_generator, step_total_size, step_space_generator_masks, step_ids
 
 
+def make_table(rows=[]):
+    table = Table()
+    table.add_column("Step", justify="right", style="cyan", no_wrap=True)
+    table.add_column("Pop Size")
+    table.add_column("Space Size")
+    table.add_column("Subspaces")
+    table.add_column("Masked Size")
+    table.add_column("New Candidates")
+    table.add_column("Total Trials")
+    table.add_column("Coverage")
+    table.add_column("Status")
+    if len(rows) == 0:
+        table.add_row("", "", "", "", "", "", "", "", Spinner("clock", style="orange", speed=0.1) if USE_SPINNER else Text("pending"))
+    else:
+        for row in rows:
+          table.add_row(*row)
+    table = Panel(table, title="Space DSE", border_style="blue")
+    return table
+
+
 def run(
     mod,
     params,
@@ -128,6 +151,8 @@ def run(
     step_ids = None,
     rule_ids = None,
     step_sizes = None,
+    # table = None,
+    live = None,
 ):
     strategy_kwargs = dict(
         population_size=pop_size,
@@ -276,14 +301,31 @@ def run(
             iters = list(range(MAX_ITERS))
         print("iters", iters, len(iters))
         last_pop_size = None
+        rows = []
         for i in iters:
             print("while", i)
             # if i < num_spaces:
+            # if table:
+            if True:
+                step_col = Text(str(i))
+                pop_size_col = Text("?")
+                total_space_est_col = Text("?")
+                subspaces_col = Text("?")
+                masked_size_col = Text("?")
+                new_candidates_col = Text("?")
+                task_trials_col = Text("?")
+                coverage_col = Text("?")
+                status_col = Spinner("dots", style="orange") if USE_SPINNER else Text("running")
+                if step_sizes is not None:
+                    assert len(step_sizes) > 0
+                    total_space_est = step_sizes[-1]
+                    total_space_est_col = Text(f"~{total_space_est}")
             if step_spaces_masks is not None:
+                assert step_sizes is not None
+                total_space_est = step_sizes[-1]
                 if i < num_steps:
                     new_mask = step_spaces_masks[i]
                     spaces_mask = new_mask
-                    assert step_sizes is not None
                     assert len(step_sizes) == num_steps
                     new_step_size = step_sizes[i]
                     print("new_step_size", new_step_size)
@@ -299,14 +341,33 @@ def run(
                 else:
                     assert all(spaces_mask)
                     new_pop_size =  task_trials * 2
+                    new_step_size = total_space_est
+                num_spaces_en = sum(spaces_mask)
+                print("num_spaces_en", num_spaces_en)
+                # if table:
+                if True:
+                    subspaces_col = Text(f"{num_spaces_en}/{num_spaces}")
+                    new_step_size_rel = new_step_size / total_space_est
+                    masked_size_col = Text(f"~{new_step_size} [{new_step_size_rel*100:.1f}%]")
                 print("spaces_mask", spaces_mask)
                 strategy.mask_design_spaces(spaces_mask)
             else:
                 new_pop_size =  task_trials * 2
             new_pop_size = min(max_pop_size, max(min_pop_size, new_pop_size))
+            if True:
+                pop_size_col = Text(str(new_pop_size))
+                # table.add_row(step_col, pop_size_col, total_space_est_col, subspaces_col, masked_size_col, new_candidates_col, task_trials_col, coverage_col, status_col)
+                row = (step_col, pop_size_col, total_space_est_col, subspaces_col, masked_size_col, new_candidates_col, task_trials_col, coverage_col, status_col)
+                rows.append(row)
+                table = make_table(rows)
+            if live:
+                live.update(table)
+            else:
+                print(table)
             last_pop_size = new_pop_size
             print("new_pop_size", new_pop_size)
-            strategy.update_population_size(new_pop_size)
+            # strategy.update_population_size(new_pop_size)
+            strategy.update_population_size(-1)
             candidates = strategy.generate_measure_candidates()
             # print("candidates", candidates, len(candidates))
             print("len(candidates)", len(candidates))
@@ -329,6 +390,10 @@ def run(
             else:
                 task_trials = num_candidates
             print("task_trials", task_trials)
+            # if table:
+            if True:
+                new_candidates_col = Text(str(num_candidates))
+                task_trials_col = Text(str(task_trials))
             for candidate in candidates:
                 # print("candidate", candidate, dir(candidate))
                 sch = candidate.sch
@@ -345,6 +410,26 @@ def run(
                 # print("record", record)
                 # print("commit_record")
                 database.commit_tuning_record(record)
+            # if table:
+            if True:
+                if step_sizes is not None:
+                    total_space_est = step_sizes[-1]
+                    if i < num_steps:
+                        new_step_size = step_sizes[i]
+                    else:
+                        new_step_size = total_space_est
+                    coverage_rel = task_trials / total_space_est
+                    masked_coverage_rel = task_trials / new_step_size
+                    coverage_col = Text(f"{coverage_rel*100:.1f}% [{masked_coverage_rel*100:.1f}%]")
+                status_col = Text("✓", style="green")
+                # table.add_row(step_col, pop_size_col, total_space_est_col, subspaces_col, masked_size_col, new_candidates_col, task_trials_col, coverage_col, status_col)
+                row = (step_col, pop_size_col, total_space_est_col, subspaces_col, masked_size_col, new_candidates_col, task_trials_col, coverage_col, status_col)
+                rows[-1] = row
+                table = make_table(rows)
+            if live:
+                live.update(table)
+            else:
+                print(table)
         print("task_trials", task_trials)
         print("sizes_hist", sizes_hist)
         search_space_size, is_estimate = estimate_size(sizes_hist)
@@ -402,21 +487,15 @@ def main():
     print("mod", mod)
     target = tvm.target.Target("llvm -num-cores=1")
 
-    tuning_table = Table()
-    tuning_table.add_column("Task", justify="right", style="cyan", no_wrap=True)
-    tuning_table.add_column("Space", justify="right", style="cyan", no_wrap=True)
-    tuning_table.add_column("Space Size")
-    tuning_table.add_column("Subspaces")
-    tuning_table.add_column("Masked Size")
-    tuning_table.add_column("Latency (ms)")
-    tuning_table.add_column("Performance (GFLOPS)")
-    tuning_table.add_column("Trials")
-    tuning_table.add_column("Coverage [Masked]")
-    tuning_table.add_column("Status")
-    tuning_table.add_row("T0", "S0", "~11256", "8/22", "6644 (59%)", "0.2325", "11.65", "105", "1.0% [1.6%]", Text("✓", style="green"))
-    tuning_table.add_row("T0", "S1", "~11256", "3/3", "11256 (100%)", "0.2325", "11.65", "105", "1.0% [1.6%]", Spinner("dots", style="orange"))
-    tuning_table.add_row("T0", "S2", "~11256", "3/3", "11256 (100%)", "N/A", "N/A", "0", "0.0% [0.0%]", Spinner("clock", style="orange", speed=0.1))
-    with Live(Panel(tuning_table, title="Tuning", border_style="blue"), refresh_per_second=5) as live:
+    # table.add_row("0", "~11256", "8/22", "6644 (59%)", "105", "1.0% [1.6%]", Text("✓", style="green"))
+    # table.add_row("0", "~11256", "8/22", "6644 (59%)", "105", "1.0% [1.6%]", Spinner("dots", style="orange"))
+    # table.add_row("T0", "S0", "~11256", "8/22", "6644 (59%)", "0.2325", "11.65", "105", "1.0% [1.6%]", Text("✓", style="green"))
+    # table.add_row("T0", "S1", "~11256", "3/3", "11256 (100%)", "0.2325", "11.65", "105", "1.0% [1.6%]", Spinner("dots", style="orange"))
+    # table.add_row("T0", "S2", "~11256", "3/3", "11256 (100%)", "N/A", "N/A", "0", "0.0% [0.0%]", Spinner("clock", style="orange", speed=0.1))
+    # with Live(Panel(table, title="Space DSE", border_style="blue"), refresh_per_second=5) as live:
+    table = make_table()
+    # with Live(table, refresh_per_second=1) as live:
+    if True:
         run(
             mod,
             params,
@@ -428,6 +507,8 @@ def main():
             step_ids=step_ids if args.masked else None,
             rule_ids=rule_ids if args.masked else None,
             step_sizes=step_sizes if args.masked else None,
+            live=live if USE_LIVE else None,
+
         )
 
 
