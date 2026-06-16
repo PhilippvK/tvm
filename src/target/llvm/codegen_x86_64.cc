@@ -93,7 +93,7 @@ llvm::Value* CodeGenX86_64::VisitExpr_(const CastNode* op) {
 llvm::Value* CodeGenX86_64::CallVectorIntrin(llvm::Intrinsic::ID id, size_t intrin_lanes,
                                              llvm::Type* result_ty,
                                              const std::vector<llvm::Value*>& args) {
-  llvm::Function* f = llvm::Intrinsic::getDeclaration(module_.get(), id, {});
+  llvm::Function* f = llvm::Intrinsic::getOrInsertDeclaration(module_.get(), id, {});
 #if TVM_LLVM_VERSION >= 120
   size_t num_elems = llvm::cast<llvm::FixedVectorType>(result_ty)->getNumElements();
 #else

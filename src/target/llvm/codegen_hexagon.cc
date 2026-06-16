@@ -211,7 +211,8 @@ llvm::Value* CodeGenHexagon::CreateIntrinsic(const CallNode* op) {
       op->op.same_as(builtin::end_profile_intrinsic())) {
     llvm::Value* id = MakeValue(op->args[0]);
     auto instrprof_id = llvm::Intrinsic::hexagon_instrprof_custom;
-    llvm::Function* func = llvm::Intrinsic::getDeclaration(module_.get(), instrprof_id);
+    // llvm::Function* func = llvm::Intrinsic::getDeclaration(module_.get(), instrprof_id);
+    llvm::Function* func = llvm::Intrinsic::getOrInsertDeclaration(module_.get(), instrprof_id);
     llvm::GlobalVariable* name_var = module_->getGlobalVariable("handler_name");
     if (!name_var) {
       llvm::StringRef init_str = "lwp_handler";
@@ -241,13 +242,13 @@ void CodeGenHexagon::CreatePrintf(const std::string& format,
     func = llvm::Function::Create(ftype, llvm::Function::ExternalLinkage, func_name, module_.get());
   }
 
-  llvm::Value* format_str = builder_->CreateGlobalStringPtr(format, "printf_format_str");
+  llvm::Value* format_str = builder_->CreateGlobalString(format, "printf_format_str");
 
   // The value of FARF_ALWAYS_LEVEL, defined as HAP_LEVEL_HIGH
   llvm::Value* level = ConstInt32(2);
 
   // There is no such filename/line number for this print statement
-  llvm::Value* filename = builder_->CreateGlobalStringPtr("generated-LLVM-code", "dummy_filename");
+  llvm::Value* filename = builder_->CreateGlobalString("generated-LLVM-code", "dummy_filename");
   llvm::Value* line_number = ConstInt32(1);
 
   std::vector<llvm::Value*> func_args = {level, filename, line_number, format_str};
@@ -369,7 +370,8 @@ CodeGenLLVM::TypedPointer CodeGenHexagon::CreateStructRefPtr(DataType t, llvm::V
 
 llvm::Value* CodeGenHexagon::Intrinsic(llvm::Intrinsic::ID IntID,
                                        llvm::ArrayRef<llvm::Value*> args) {
-  llvm::Function* intf = llvm::Intrinsic::getDeclaration(module_.get(), IntID);
+  // llvm::Function* intf = llvm::Intrinsic::getDeclaration(module_.get(), IntID);
+  llvm::Function* intf = llvm::Intrinsic::getOrInsertDeclaration(module_.get(), IntID);
 #if TVM_LLVM_VERSION >= 90
   auto intf_callee = llvm::FunctionCallee(intf);
 #else

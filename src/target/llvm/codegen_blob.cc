@@ -69,7 +69,9 @@ std::unique_ptr<llvm::Module> CodeGenBlob(const std::string& data, bool system_l
   llvm::LLVMContext* ctx = llvm_target->GetContext();
   std::string module_name = c_symbol_prefix + "devc";
   auto module = std::make_unique<llvm::Module>(module_name, *ctx);
-  module->setTargetTriple(triple.str());
+  // module->setTargetTriple(triple.str());
+  module->setTargetTriple(llvm::Triple(triple.str()));
+  // TODO: ifdef
   llvm_target->SetTargetMetadata(module.get());
   module->setDataLayout(tm->createDataLayout());
   auto* blob_value = llvm::ConstantDataArray::getString(*ctx, data, false);

@@ -232,7 +232,8 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const TargetJSON& target)
   }
 
   if (const auto& v = Downcast<Optional<Array<String>>>(target.Get("cl-opt"))) {
-    llvm::StringMap<llvm::cl::Option*>& options = llvm::cl::getRegisteredOptions();
+    // llvm::StringMap<llvm::cl::Option*>& options = llvm::cl::getRegisteredOptions();
+    auto& options = llvm::cl::getRegisteredOptions();
     bool parse_error = false;
     for (const String& s : v.value()) {
       Option opt = ParseOptionString(s);
@@ -286,9 +287,9 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance, const TargetJSON& target)
   // In clang, these are fed from LangOpts which describe language specific features
   // TODO(AndrewZhaoLuo): figure out how these relate to fast math flags
   target_options_.AllowFPOpFusion = llvm::FPOpFusion::Fast;
-  target_options_.UnsafeFPMath = false;
-  target_options_.NoInfsFPMath = false;
-  target_options_.NoNaNsFPMath = true;
+  // target_options_.UnsafeFPMath = false;
+  // target_options_.NoInfsFPMath = false;
+  // target_options_.NoNaNsFPMath = true;
   target_options_.FloatABIType = float_abi;
   if (target.find("mabi") != target.end()) {
     target_options_.MCOptions.ABIName = Downcast<String>(target.Get("mabi"));
@@ -403,7 +404,7 @@ static std::unique_ptr<llvm::TargetMachine> CreateLLVMTargetMachine(
     const llvm::CodeGenOptLevel& opt_level = llvm::CodeGenOptLevel(0)) {
 #endif
   llvm::TargetMachine* tm = llvm_instance->createTargetMachine(
-      triple, cpu, features, target_options, reloc_model, code_model, opt_level);
+      llvm::Triple(triple), cpu, features, target_options, reloc_model, code_model, opt_level);
   ICHECK(tm != nullptr);
 
   return std::unique_ptr<llvm::TargetMachine>(tm);
@@ -784,7 +785,8 @@ bool LLVMTargetInfo::MatchesGlobalState() const {
 }
 
 void LLVMTargetInfo::GetOptionValue(LLVMTargetInfo::Option* opt) const {
-  llvm::StringMap<llvm::cl::Option*>& options = llvm::cl::getRegisteredOptions();
+  // llvm::StringMap<llvm::cl::Option*>& options = llvm::cl::getRegisteredOptions();
+  auto& options = llvm::cl::getRegisteredOptions();
   llvm::cl::Option* base_op = options[opt->name];
 
   if (opt->type == Option::OptType::Bool) {
@@ -827,14 +829,16 @@ const Array<String> LLVMTargetInfo::GetAllLLVMTargetArches() const {
       CreateLLVMTargetMachine(llvm_instance, triple_, "", "");
   const auto MCInfo = target_machine->getMCSubtargetInfo();
 
-  if (!MCInfo) {
-    return cpu_arches;
-  }
+  // TODO: check if fine
+  // if (!MCInfo) {
+  //   return cpu_arches;
+  // }
   // get all arches
   llvm::ArrayRef<llvm::SubtargetSubTypeKV> llvm_arches =
 #if TVM_LLVM_VERSION < 170
       llvm::archViewer(*(const llvm::MCSubtargetInfo*)MCInfo);
 #else
+      // MCInfo.getAllProcessorDescriptions();
       MCInfo->getAllProcessorDescriptions();
 #endif
   for (const auto& arch : llvm_arches) {
@@ -860,11 +864,13 @@ const Map<String, String> LLVMTargetInfo::GetAllLLVMCpuFeatures() const {
 #if TVM_LLVM_VERSION < 180
       llvm::featViewer(*(const llvm::MCSubtargetInfo*)MCInfo);
 #else
+      // MCInfo.getAllProcessorFeatures();
       MCInfo->getAllProcessorFeatures();
 #endif
   // TVM doesn't have an FFI friendly Set, so use a Map instead for now
   Map<String, String> cpu_features;
   for (const auto& feat : llvm_features) {
+    // if (MCInfo.checkFeatures("+" + std::string(feat.Key))) {
     if (MCInfo->checkFeatures("+" + std::string(feat.Key))) {
       cpu_features.Set(feat.Key, "");
     }
@@ -928,7 +934,7 @@ std::string LLVMTarget::GetTargetMetadata(const llvm::Module& module) {
       return meta.str();
     }
   }
-  return "llvm -mtriple " + module.getTargetTriple();
+  return "llvm -mtriple " + module.getTargetTriple().str();
 }
 
 void LLVMTarget::SetTargetMetadata(llvm::Module* module) const {
@@ -937,7 +943,8 @@ void LLVMTarget::SetTargetMetadata(llvm::Module* module) const {
 }
 
 bool LLVMTarget::ApplyLLVMOptions(bool apply_otherwise_revert, bool dry_run) {
-  llvm::StringMap<llvm::cl::Option*>& options = llvm::cl::getRegisteredOptions();
+  // llvm::StringMap<llvm::cl::Option*>& options = llvm::cl::getRegisteredOptions();
+  auto& options = llvm::cl::getRegisteredOptions();
   bool changed = false;
 
 #define HANDLE_OPTION_VALUE(option, new_val, saved_val)                  \

@@ -187,7 +187,9 @@ class CodeGenAMDGPU : public CodeGenLLVM {
           LOG(FATAL) << "unknown workgroup idx";
       }
     }
-    llvm::Function* f = llvm::Intrinsic::getDeclaration(module_.get(), intrin_id);
+    // llvm::Function* f = llvm::Intrinsic::getDeclaration(module_.get(), intrin_id);
+    // TODO: ifdef
+    llvm::Function* f = llvm::Intrinsic::getOrInsertDeclaration(module_.get(), intrin_id);
     llvm::Value* result = builder_->CreateCall(f, {});
     return this->CreateCast(DataType::Int(32), iv->var->dtype, result);
   }
@@ -198,7 +200,9 @@ class CodeGenAMDGPU : public CodeGenLLVM {
       return nullptr;
     } else if (sync == "shared") {
       llvm::Function* f =
-          llvm::Intrinsic::getDeclaration(module_.get(), llvm::Intrinsic::amdgcn_s_barrier);
+          llvm::Intrinsic::getOrInsertDeclaration(module_.get(), llvm::Intrinsic::amdgcn_s_barrier);
+          // llvm::Intrinsic::getDeclaration(module_.get(), llvm::Intrinsic::amdgcn_s_barrier);
+      // TODO: ifdef
       return builder_->CreateCall(f, {});
     } else {
       LOG(FATAL) << "Do not support sync " << sync;
@@ -272,7 +276,10 @@ runtime::Module BuildAMDGPU(IRModule mod, Target target) {
 
   for (auto& bitcode_path : bitcode_files) {
     std::unique_ptr<llvm::Module> mlib = llvm_instance.LoadIR(bitcode_path);
-    mlib->setTargetTriple(llvm_target->GetTargetTriple());
+    // mlib->setTargetTriple(llvm_target->GetTargetTriple());
+    // TODO: ifdef
+    llvm::Triple triple(llvm_target->GetTargetTriple());
+    mlib->setTargetTriple(triple);
     mlib->setDataLayout(tm->createDataLayout());
 
     for (llvm::Function& f : mlib->functions()) {

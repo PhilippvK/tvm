@@ -26,6 +26,7 @@
 #include "llvm_module.h"
 
 #include <dmlc/io.h>
+#include <unistd.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
@@ -439,7 +440,7 @@ void LLVMModuleNode::InitMCJIT() {
   // create MCJIT
   mcjit_ee_ = builder.create(tm.release());
   ICHECK(mcjit_ee_ != nullptr) << "Failed to initialize LLVM MCJIT engine for "
-                               << module_->getTargetTriple();
+                               << module_->getTargetTriple().str();
 
   VLOG(2) << "LLVM MCJIT execute " << module_->getModuleIdentifier() << " for triple `"
           << llvm_target->GetTargetTriple() << "`"
@@ -510,7 +511,55 @@ void LLVMModuleNode::InitORCJIT() {
     return std::make_unique<llvm::orc::TMOwningSimpleCompiler>(std::move(tm));
   };
 
-#if TVM_LLVM_VERSION >= 130
+#if 1
+// const auto linkerBuilder =
+//   [](llvm::orc::ExecutionSession &session,
+//      llvm::jitlink::JITLinkMemoryManager &memMgr)
+//   -> llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>> {
+//
+//     return std::make_unique<llvm::orc::ObjectLinkingLayer>(
+//         session,
+//         memMgr);
+//   };
+const auto linkerBuilder =
+  [](llvm::orc::ExecutionSession &session)
+  -> llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>> {
+
+    auto memMgr =
+        llvm::cantFail(llvm::jitlink::InProcessMemoryManager::Create());
+
+    return std::make_unique<llvm::orc::ObjectLinkingLayer>(
+        session,
+        std::move(memMgr));
+  };
+// const auto linkerBuilder =
+//   [](llvm::orc::ExecutionSession &session,
+//      llvm::jitlink::JITLinkMemoryManager &) {
+//
+//     // static auto mem_mgr = llvm::jitlink::InProcessMemoryManager::Create().takeExpected();
+//     auto mem_mgr = llvm::cantFail(llvm::jitlink::InProcessMemoryManager::Create());
+//
+//
+//     return llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>>(
+//         std::make_unique<llvm::orc::ObjectLinkingLayer>(session, *mem_mgr));
+//   };
+// const auto linkerBuilder = [&](llvm::orc::ExecutionSession& session, const llvm::Triple&) {
+//   return std::make_unique<llvm::orc::ObjectLinkingLayer>(
+//     session,
+//     llvm::jitlink::InProcessMemoryManager());
+//   // return std::make_unique<llvm::orc::ObjectLinkingLayer>(session);
+// };
+// const auto linkerBuilder =
+//   [](llvm::orc::ExecutionSession &session,
+//      llvm::jitlink::JITLinkMemoryManager &)
+//   -> llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>> {
+//
+//     uint64_t page_size = 4096;
+//     return std::make_unique<llvm::orc::ObjectLinkingLayer>(
+//         session,
+//         llvm::jitlink::InProcessMemoryManager(page_size));
+//   };
+#elif TVM_LLVM_VERSION >= 130
   // linker
   const auto linkerBuilder = [&](llvm::orc::ExecutionSession& session, const llvm::Triple&) {
     return std::make_unique<llvm::orc::ObjectLinkingLayer>(session);
@@ -529,7 +578,7 @@ void LLVMModuleNode::InitORCJIT() {
                                   .create());
 
   ICHECK(orcjit_ee_ != nullptr) << "Failed to initialize LLVM ORCJIT engine for "
-                                << module_->getTargetTriple();
+                                << module_->getTargetTriple().str();
 
   // store ctors
   auto ctors = llvm::orc::getConstructors(*module_);
@@ -633,7 +682,8 @@ TVM_REGISTER_GLOBAL("codegen.LLVMModuleCreate")
       // Generate a LLVM module from an input target string
       auto module = std::make_unique<llvm::Module>(module_name, *llvm_target->GetContext());
       llvm_target->SetTargetMetadata(module.get());
-      module->setTargetTriple(llvm_target->GetTargetTriple());
+      llvm::Triple triple(llvm_target->GetTargetTriple());
+      module->setTargetTriple(triple);
       module->setDataLayout(llvm_target->GetOrCreateTargetMachine()->createDataLayout());
       n->Init(std::move(module), std::move(llvm_instance));
       n->SetJITEngine(llvm_target->GetJITEngine());
@@ -642,7 +692,8 @@ TVM_REGISTER_GLOBAL("codegen.LLVMModuleCreate")
 
 TVM_REGISTER_GLOBAL("target.llvm_lookup_intrinsic_id")
     .set_body_typed([](std::string name) -> int64_t {
-      return static_cast<int64_t>(llvm::Function::lookupIntrinsicID(name));
+      // return static_cast<int64_t>(llvm::Function::lookupIntrinsicID(name));
+      return static_cast<int64_t>(llvm::Intrinsic::lookupIntrinsicID(name));
     });
 
 TVM_REGISTER_GLOBAL("target.llvm_get_intrinsic_name").set_body_typed([](int64_t id) -> String {

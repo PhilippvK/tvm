@@ -167,9 +167,12 @@ void CodeGenLLVM::SetFastMathFlags(llvm::FastMathFlags fmf) { builder_->setFastM
 
 void CodeGenLLVM::InitTarget() {
   llvm::TargetMachine* tm = llvm_target_->GetOrCreateTargetMachine();
-  module_->setTargetTriple(tm->getTargetTriple().str());
+  // LOG(INFO) << "tm->getTargetTriple().str()=" << tm->getTargetTriple().str();
+  module_->setTargetTriple(llvm::Triple(tm->getTargetTriple().str()));
   module_->setDataLayout(tm->createDataLayout());
-  data_layout_.reset(new llvm::DataLayout(module_.get()));
+  // data_layout_.reset(new llvm::DataLayout(module_.get()));
+  data_layout_.reset(
+    new llvm::DataLayout(module_->getDataLayout()));
   if (native_vector_bits_ == 0) {
     const auto& arch = tm->getTargetTriple().getArch();
     if (arch == llvm::Triple::x86_64) {
@@ -382,7 +385,8 @@ void CodeGenLLVM::HandleImport(const std::string& code) {
     mlib = llvm_target_->GetInstance().ParseIR(code);
   }
 
-  mlib->setTargetTriple(llvm_target_->GetTargetTriple());
+  // LOG(INFO) << "llvm_target_->GetTargetTriple()=" << llvm_target_->GetTargetTriple();
+  mlib->setTargetTriple(llvm::Triple(llvm_target_->GetTargetTriple()));
   mlib->setDataLayout(llvm_target_->GetOrCreateTargetMachine()->createDataLayout());
   // mark all the functions as force inline
   for (llvm::Function& f : mlib->functions()) {
@@ -1012,7 +1016,7 @@ void CodeGenLLVM::CreatePrintf(const std::string& format,
         llvm::Function::Create(ftype, llvm::Function::ExternalLinkage, "fflush", module_.get());
   }
 
-  llvm::Value* str = builder_->CreateGlobalStringPtr(format);
+  llvm::Value* str = builder_->CreateGlobalString(format);
   str->setName("printf_format_str");
 
   std::vector<llvm::Value*> printf_args = {str};
@@ -1031,7 +1035,7 @@ llvm::Value* CodeGenLLVM::CreateLookupReturnAddress(unsigned int level) {
   EmitDebugLocation();
   llvm::Value* level_val = llvm::ConstantInt::get(t_int32_, level);
   llvm::Function* builtin =
-      llvm::Intrinsic::getDeclaration(module_.get(), llvm::Intrinsic::returnaddress);
+      llvm::Intrinsic::getOrInsertDeclaration(module_.get(), llvm::Intrinsic::returnaddress);
   llvm::Value* call = builder_->CreateCall(builtin, level_val);
   call->setName("return_addr");
 
@@ -1061,14 +1065,20 @@ llvm::Function* CodeGenLLVM::GetIntrinsicDecl(llvm::Intrinsic::ID id, llvm::Type
   llvm::Module* module = module_.get();
 
   if (!llvm::Intrinsic::isOverloaded(id)) {
-    return llvm::Intrinsic::getDeclaration(module, id, {});
+    return llvm::Intrinsic::getOrInsertDeclaration(module, id, {});
   }
 
   llvm::SmallVector<llvm::Intrinsic::IITDescriptor, 4> infos;
   llvm::Intrinsic::getIntrinsicInfoTableEntries(id, infos);
   llvm::SmallVector<llvm::Type*, 4> overload_types;
 
-#if TVM_LLVM_VERSION >= 90
+#if 1
+  return llvm::Intrinsic::getOrInsertDeclaration(
+      module,
+      id,
+      ret_type,
+      arg_types);
+#elif TVM_LLVM_VERSION >= 90
   auto try_match = [&](llvm::FunctionType* f_ty, bool var_arg) {
     overload_types.clear();
     llvm::ArrayRef<llvm::Intrinsic::IITDescriptor> ref(infos);
@@ -1089,7 +1099,7 @@ llvm::Function* CodeGenLLVM::GetIntrinsicDecl(llvm::Intrinsic::ID id, llvm::Type
       // The return type doesn't match, there is nothing else to do.
       return nullptr;
     case llvm::Intrinsic::MatchIntrinsicTypes_Match:
-      return llvm::Intrinsic::getDeclaration(module, id, overload_types);
+      return llvm::Intrinsic::getOrInsertDeclaration(module, id, overload_types);
     case llvm::Intrinsic::MatchIntrinsicTypes_NoMatchArg:
       break;
   }
@@ -1101,7 +1111,7 @@ llvm::Function* CodeGenLLVM::GetIntrinsicDecl(llvm::Intrinsic::ID id, llvm::Type
     if (i > 0) var_types.push_back(arg_types[i - 1]);
     auto* ft = llvm::FunctionType::get(ret_type, var_types, true);
     if (try_match(ft, true) == llvm::Intrinsic::MatchIntrinsicTypes_Match) {
-      return llvm::Intrinsic::getDeclaration(module, id, overload_types);
+      return llvm::Intrinsic::getOrInsertDeclaration(module, id, overload_types);
     }
   }
   // Failed to identify the type.
@@ -1118,7 +1128,7 @@ llvm::Function* CodeGenLLVM::GetIntrinsicDecl(llvm::Intrinsic::ID id, llvm::Type
       return nullptr;
     }
   }
-  return llvm::Intrinsic::getDeclaration(module, id, overload_types);
+  return llvm::Intrinsic::getOrInsertDeclaration(module, id, overload_types);
 #endif  // TVM_LLVM_VERSION
 }
 

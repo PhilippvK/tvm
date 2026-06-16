@@ -170,7 +170,7 @@ class CodeGenNVPTX : public CodeGenLLVM {
           LOG(FATAL) << "unknown thread idx";
       }
     }
-    llvm::Function* f = llvm::Intrinsic::getDeclaration(module_.get(), intrin_id);
+    llvm::Function* f = llvm::Intrinsic::getOrInsertDeclaration(module_.get(), intrin_id);
     return builder_->CreateCall(f, {});
   }
 
@@ -179,10 +179,10 @@ class CodeGenNVPTX : public CodeGenLLVM {
     if (sync == "warp") {
       // TODO(tqchen) warp sync in CUDA9
       return nullptr;
-    } else if (sync == "shared" || sync == "shared.dyn") {
-      llvm::Function* f =
-          llvm::Intrinsic::getDeclaration(module_.get(), llvm::Intrinsic::nvvm_barrier0);
-      return builder_->CreateCall(f, {});
+    // } else if (sync == "shared" || sync == "shared.dyn") {
+    //   llvm::Function* f =
+    //       llvm::Intrinsic::getOrInsertDeclaration(module_.get(), llvm::Intrinsic::nvvm_barrier0);
+    //   return builder_->CreateCall(f, {});
     } else {
       LOG(FATAL) << "Do not support sync " << sync;
     }
@@ -323,7 +323,8 @@ runtime::Module BuildNVPTX(IRModule mod, Target target) {
     std::string path = (*flibdevice_path)(compute_ver);
     if (path.length() != 0) {
       std::unique_ptr<llvm::Module> mlib = llvm_instance.LoadIR(path);
-      mlib->setTargetTriple(llvm_target->GetTargetTriple());
+      llvm::Triple triple(llvm_target->GetTargetTriple());
+      mlib->setTargetTriple(triple);
       mlib->setDataLayout(tm->createDataLayout());
       cg->AddLinkModule(std::move(mlib));
     }
