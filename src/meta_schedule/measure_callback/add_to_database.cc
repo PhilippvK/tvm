@@ -46,12 +46,17 @@ class AddToDatabaseNode : public MeasureCallbackNode {
       } else {
         run_secs = Array<FloatImm>{FloatImm(DataType::Float(32), 1e10)};
       }
+      Optional<FloatImm> timestamp;
+      if (result->timestamp.defined()) {
+          timestamp = result->timestamp.value();
+      }
       database->CommitTuningRecord(TuningRecord(
           /*trace=*/candidate->sch->trace().value(),
           /*workload=*/workload,
           /*run_secs=*/run_secs,
           /*target=*/target,
-          /*args_info=*/candidate->args_info));
+          /*args_info=*/candidate->args_info,
+          /*timestamp=*/timestamp));
     }
   }
 

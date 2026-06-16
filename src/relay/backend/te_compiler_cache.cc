@@ -622,7 +622,7 @@ class ScheduleBuilder : public ExprVisitor {
                     auto workload_dummy =
                         database_.value()->CommitWorkload(backend::PrimFuncToIRModule(f_dummy));
                     TuningRecord rec_dummy(record->trace, workload_dummy, record->run_secs,
-                                           record->target, record->args_info);
+                                           record->target, record->args_info, record->timestamp);
                     database_.value()->CommitTuningRecord(rec_dummy);
                   } else {
                     // The constant is already transformed, so this is the second case, reached
