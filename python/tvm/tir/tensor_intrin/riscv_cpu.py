@@ -116,6 +116,7 @@ def rvv_vec_dot_product_kernels(
             vec_A = T.call_llvm_intrin(
                 f"{data_dtype}xvscalex{d_dtype_lanes}",
                 "llvm.riscv.vle",
+                T.uint32(3),
                 T.broadcast(T.Cast(data_dtype, 0), T.vscale() * d_dtype_lanes),
                 T.tvm_access_ptr(T.type_annotation(data_dtype), A.data, 0, n_elems, 1),
                 T.int64(n_elems))
@@ -128,6 +129,7 @@ def rvv_vec_dot_product_kernels(
                     vec_B_row = T.call_llvm_intrin(
                         f"{weight_dtype}xvscalex{w_dtype_lanes}",
                         "llvm.riscv.vle",
+                        T.uint32(3),
                         T.broadcast(T.Cast(data_dtype, 0), T.vscale() * w_dtype_lanes),
                         T.tvm_access_ptr(T.type_annotation(weight_dtype), B.data, i * n_elems, n_elems, 1),
                         T.int64(n_elems))
@@ -137,6 +139,7 @@ def rvv_vec_dot_product_kernels(
                         "llvm.riscv.vfmul" if out_dtype[0] == "f" else \
                         "llvm.riscv.vwmulsu" if (data_dtype[0] != weight_dtype[0]) else \
                         "llvm.riscv.vwmul",
+                        T.uint32(6),
                         T.broadcast(T.Cast(wide_dtype, 0), T.vscale() * w_dtype_lanes),
                         vec_B_row,
                         vec_A,
@@ -146,6 +149,7 @@ def rvv_vec_dot_product_kernels(
                     ini_acc = T.call_llvm_intrin(
                         f"{out_dtype}xvscalex{o_dtype_lanes}",
                         "llvm.riscv.vle",
+                        T.uint32(3),
                         T.broadcast(T.Cast(out_dtype, 0), T.vscale() * o_dtype_lanes),
                         T.tvm_access_ptr(T.type_annotation(out_dtype), C.data, i, 1, 1),
                         T.int64(1))
@@ -154,6 +158,7 @@ def rvv_vec_dot_product_kernels(
                         f"{out_dtype}xvscalex{o_dtype_lanes}",
                         "llvm.riscv.vfredusum" if out_dtype[0] == "f" else \
                         "llvm.riscv.vwredsum",
+                        T.uint32(6),
                         T.broadcast(T.Cast(out_dtype, 0), T.vscale() * o_dtype_lanes),
                         product,
                         ini_acc,
@@ -164,6 +169,7 @@ def rvv_vec_dot_product_kernels(
                         out_dtype,
                         "llvm.riscv.vfmv.f.s" if out_dtype[0] == "f" else \
                         "llvm.riscv.vmv.x.s",
+                        T.uint32(1),
                         red_sum)
     # fmt: on
     return rvv_vec_dot_prod_desc, rvv_vec_dot_prod_impl
