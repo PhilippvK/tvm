@@ -63,8 +63,11 @@ def load_ms_db_archive(in_db_archive, module_equality: str = "structural"):
             if (temp_in_db_path / "work_dir").is_dir():
                 has_workdir = True
                 temp_in_db_path = temp_in_db_path / "work_dir"
-            return load_ms_db_dir(temp_in_db_path)
+            db = load_ms_db_dir(temp_in_db_path)
             # TODO: check if this works with tempdir? yield?
+            # TODO: convert to memory db!
+            return db
+            # yield db
         else:
             raise ValueError(f"Unsupported format")
 
