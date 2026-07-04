@@ -87,6 +87,8 @@ def load_ms_db_wrapper(in_arg, module_equality: str = "structural"):
             return load_ms_db_file(in_path, module_equality=module_equality)
         assert in_path.suffix in [".tar"]
         return load_ms_db_archive(in_path, module_equality=module_equality)
+        # with load_ms_db_archive(in_path, module_equality=module_equality) as db:
+        #     yield db
 
 
 def db_to_json_db(db: Union[ms.database.UnionDatabase, ms.database.MemoryDatabase], json_db, append: bool = False):
