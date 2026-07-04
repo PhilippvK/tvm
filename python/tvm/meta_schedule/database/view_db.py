@@ -144,7 +144,7 @@ def view_ms_db(in_db):
         mean_flops = sum(valid_flops_per_sec) / len(valid_flops_per_sec)
         num_workload_secs = len(workload_secs)
         print(
-            f"- {workload_str}: #measures={num_workload_secs} #invalid={num_invalid} min={min_secs:.5f}s [{min_flops/1e9:.5f} GFLOP/s] max={max_secs:.5f}s [{max_flops/1e9:.5f} GFLOP/s] mean={mean_secs:.5f}s [{mean_flops/1e9:.5f} GFLOP/s]"
+            f"- {workload_str}: #measures={num_workload_secs} #invalid={num_invalid} min={min_secs:.5f}s [{max_flops/1e9:.5f} GFLOP/s] max={max_secs:.5f}s [{min_flops/1e9:.5f} GFLOP/s] mean={mean_secs:.5f}s [{mean_flops/1e9:.5f} GFLOP/s]"
         )
         # TODO: GFLOP/s
         # TODO: make secs,... optional via cli
