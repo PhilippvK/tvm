@@ -97,6 +97,8 @@ class TuningRecord(Object):
         The argument information of the tuning record.
     timestamp : Optional[float]
         TODO.
+    space_idx : int
+        TODO.
     """
 
     trace: Trace
@@ -105,6 +107,7 @@ class TuningRecord(Object):
     target: Optional[Target]
     args_info: Optional[List[ArgInfo]]
     timestamp: Optional[float]
+    space_idx: int
 
     def __init__(  # type: ignore # pylint: disable=too-many-arguments
         self,
@@ -114,6 +117,7 @@ class TuningRecord(Object):
         target: Optional[Target] = None,
         args_info: Optional[List[ArgInfo]] = None,
         timestamp: Optional[float] = None,
+        space_idx: int = -1,
     ) -> None:
         self.__init_handle_by_constructor__(
             _ffi_api.TuningRecord,  # type: ignore # pylint: disable=no-member
@@ -123,6 +127,7 @@ class TuningRecord(Object):
             target,
             args_info,
             timestamp,
+            space_idx,
         )
 
     def as_measure_candidate(self) -> Any:

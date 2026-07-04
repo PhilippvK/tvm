@@ -125,6 +125,8 @@ class TuningRecordNode : public runtime::Object {
   Optional<Array<ArgInfo>> args_info;
   /*! \brief The timestamp of the tuning trial. */
   Optional<FloatImm> timestamp;
+  /*! \brief TODO. */
+  int space_idx;
 
   void VisitAttrs(tvm::AttrVisitor* v) {
     v->Visit("trace", &trace);
@@ -133,6 +135,7 @@ class TuningRecordNode : public runtime::Object {
     v->Visit("target", &target);
     v->Visit("args_info", &args_info);
     v->Visit("timestamp", &timestamp);
+    v->Visit("space_idx", &space_idx);
   }
 
   static constexpr const char* _type_key = "meta_schedule.TuningRecord";
@@ -170,7 +173,7 @@ class TuningRecord : public runtime::ObjectRef {
   */
   TVM_DLL explicit TuningRecord(tir::Trace trace, Workload workload,
                                 Optional<Array<FloatImm>> run_secs, Optional<Target> target,
-                                Optional<Array<ArgInfo>> args_info, Optional<FloatImm> timestamp);
+                                Optional<Array<ArgInfo>> args_info, Optional<FloatImm> timestamp, int space_idx = -1);
   /*!
    * \brief Create a tuning record from a json object.
    * \param json_obj The json object.
