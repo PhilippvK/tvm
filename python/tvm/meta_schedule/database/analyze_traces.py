@@ -5,7 +5,9 @@ import tarfile
 from datetime import datetime
 from collections import defaultdict
 from pathlib import Path
+import tvm  # avoid?
 from tvm import meta_schedule as ms
+from tvm import tir
 from tvm.tir.analysis import estimate_tir_flops
 
 from .db_utils import load_ms_db_wrapper
@@ -33,18 +35,52 @@ def analyze_ms_db(in_db):
         target_str = str(target)
         # print("target", target, dir(target), type(target))
         workload = rec.workload
-        # print("workload", workload, dir(workload))
+        print("workload", workload, dir(workload))
         if workload not in workloads:
             workloads.append(workload)
             # workload2args[workload] = args_info
             # flops = estimate_tir_flops(workload.mod)
             # workload2flops[workload] = flops
         # workload2recs[workload].append(rec)
+        print("workload.mod", workload.mod, dir(workload.mod))
+        lowered_mod = tvm.lower(workload.mod)
+        print("lowered_mod", lowered_mod)
+        sch = tir.Schedule(workload.mod)
+        print("sch", sch, dir(sch))
+        print("sch.mod", sch.mod)
+        rec.trace.apply_to_schedule(
+            sch,
+            remove_postproc=False,
+        )
+        print("sch", sch, dir(sch))
+        print("sch.mod", sch.mod)
+        lowered_mod = tvm.lower(sch.mod)
+        print("lowered_mod", lowered_mod)
+        # TODO: refactor mod analysis to other func/file
+        input("!")
         if target_str not in targets:
             targets.append(target_str)
         # target2recs[target_str].append(rec)
         # print("rec.trace", rec.trace, dir(rec.trace))
         # print("rec.trace.insts", rec.trace.insts, dir(rec.trace.insts))
+        # print("decisions", rec.trace.decisions)
+        output_decisions = {}
+        for k2, v2 in rec.trace.decisions.items():
+            # print("k2", k2, type(k2), dir(k2))
+            # print("v2", v2, type(v2), dir(v2))
+            outputs = k2.outputs
+            # print("outputs", outputs)
+            assert len(outputs) > 0
+            if len(outputs) == 1:
+                outp = outputs[0]
+                output_decisions[outp] = v2
+            else:
+                assert len(v2) == len(outputs)
+                for j, outp in enumerate(outputs):
+                    # print("outp", outp, type(outp), dir(outp))
+                    output_decisions[outp] = v2[j]
+        # print("output_decisions", output_decisions)
+
         for i, inst in enumerate(rec.trace.insts):
             # print("i", i)
             # print("inst", inst)
@@ -59,11 +95,18 @@ def analyze_ms_db(in_db):
             if kind == "Annotate":
                 assert len(inst.attrs) == 1
                 key = inst.attrs[0]
-                # print("key", key)
+                # print("key", key, dir(key))
                 annotation_hist[key] += 1
                 assert len(inst.inputs) > 0
                 val = inst.inputs[-1]
-                # print("val", val)
+                # print("val", val, dir(val), type(val))
+                # if "unroll" in key:
+                if isinstance(val, tir.expr.Var):
+                    assert val in output_decisions
+                    val = output_decisions[val]
+                    # print("val_new", val)
+                    # print("inst", inst)
+                    # input("$$$")
                 annotation_val_hist[key][val] += 1
 
         # target2workloads[target_str].add(workload)
