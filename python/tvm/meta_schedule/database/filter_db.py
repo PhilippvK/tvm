@@ -5,6 +5,7 @@ import tempfile
 from collections import defaultdict
 from typing import List, Optional, Union
 from pathlib import Path
+import tvm
 from tvm import meta_schedule as ms
 
 from .db_utils import load_ms_db_wrapper, db_to_json_db
