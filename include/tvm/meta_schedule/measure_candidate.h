@@ -36,10 +36,12 @@ class MeasureCandidateNode : public runtime::Object {
   tir::Schedule sch;
   /*! \brief The argument information, e.g., (shape, dtype) for tensors. */
   Array<ArgInfo> args_info;
+  int space_idx;
 
   void VisitAttrs(tvm::AttrVisitor* v) {
     v->Visit("sch", &sch);
     v->Visit("args_info", &args_info);
+    v->Visit("space_idx", &space_idx);
   }
 
   static constexpr const char* _type_key = "meta_schedule.MeasureCandidate";
@@ -57,7 +59,7 @@ class MeasureCandidate : public runtime::ObjectRef {
    * \param sch The schedule for measurement.
    * \param args_info The argument information, e.g., (shape, dtype) for tensors.
    */
-  TVM_DLL MeasureCandidate(tir::Schedule sch, Array<ArgInfo> args_info);
+  TVM_DLL MeasureCandidate(tir::Schedule sch, Array<ArgInfo> args_info, int space_idx = -1);
   TVM_DEFINE_NOTNULLABLE_OBJECT_REF_METHODS(MeasureCandidate, ObjectRef, MeasureCandidateNode);
 };
 
