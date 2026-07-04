@@ -62,8 +62,11 @@ def load_ms_db_archive(in_db_archive, module_equality: str = "structural"):
             if (temp_in_db_path / "work_dir").is_dir():
                 has_workdir = True
                 temp_in_db_path = temp_in_db_path / "work_dir"
-            return load_ms_db_dir(temp_in_db_path)
+            db = load_ms_db_dir(temp_in_db_path)
             # TODO: check if this works with tempdir? yield?
+            # TODO: convert to memory db!
+            return db
+            # yield db
         else:
             raise ValueError(f"Unsupported format")
 
@@ -84,6 +87,8 @@ def load_ms_db_wrapper(in_arg, module_equality: str = "structural"):
             return load_ms_db_file(in_path, module_equality=module_equality)
         assert in_path.suffix in [".tar"]
         return load_ms_db_archive(in_path, module_equality=module_equality)
+        # with load_ms_db_archive(in_path, module_equality=module_equality) as db:
+        #     yield db
 
 
 def db_to_json_db(db: Union[ms.database.UnionDatabase, ms.database.MemoryDatabase], json_db, append: bool = False):
