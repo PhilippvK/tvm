@@ -82,11 +82,19 @@ class S3JSONDatabase(ms.database.PyDatabase):
         try:
             self.s3.download_file(self.bucket, key, local_path)
         except self.s3.exceptions.ClientError as ex:
-            raise ex
+            if ex.response["Error"]["Code"] == "404":
+                print(f"Key: '{key}' does not exist!")
+                return False
+            else:
+                print("Something else went wrong")
+                raise ex
+            return True
 
     def _download(self):
-        self._download_file(self._key("database_workload.json"), self.path_workload)
-        self._download_file(self._key("database_tuning_record.json"), self.path_records)
+        ok = self._download_file(self._key("database_workload.json"), self.path_workload)
+        ok2 = self._download_file(self._key("database_tuning_record.json"), self.path_records)
+        if not (ok and ok2):
+            print("skipping download")
 
     def _upload(self):
         if self.readonly:
