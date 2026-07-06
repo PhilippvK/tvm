@@ -172,6 +172,7 @@ def view_ms_db(in_db, allow_empty: bool = False):
         valid_secs = [float(secs) for secs in workload_secs if secs <= 1000.0]
         workload_flops = workload2flops[workload]
         valid_flops_per_sec = [workload_flops / secs for secs in valid_secs]
+        num_workload_secs = len(workload_secs)
         has_valid = len(valid_secs) > 0
         if has_valid:
             min_secs = min(valid_secs)
