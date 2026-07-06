@@ -2,12 +2,35 @@ import logging
 import argparse
 import tarfile
 import tempfile
+from collections import defaultdict
 from typing import List, Optional, Union
 from pathlib import Path
 from tvm import meta_schedule as ms
 
 from .db_utils import load_ms_db_wrapper, db_to_json_db
 from tvm.tir.tensor_intrin.riscv_cpu import *
+
+
+def drop_duplicate_recs(recs):
+    hash2recs = defaultdict(list)
+    num = 0
+    ret = []
+    for rec in recs:
+        rec_json = str(rec.as_json()).encode()
+        import hashlib
+        m = hashlib.sha256()
+        m.update(rec_json)
+        rec_hash = m.hexdigest()
+        if rec_hash in hash2recs:
+            num += 1
+            continue
+            # print("hash2recs[rec_hash]", hash2recs[rec_hash])
+            # print("duplicate!")
+            # input("!!!")
+        hash2recs[rec_hash].append(rec)
+        ret.append(rec)
+    print("num_duplicates", num)
+    return ret
 
 
 def filter_ms_db(
@@ -26,6 +49,7 @@ def filter_ms_db(
     filter_timestamp_max: Optional[float] = None,
     drop_failing: bool = False,
     drop_non_failing: bool = False,
+    drop_duplicates: bool = False,
     module_equality: str = "structural",
 ) -> ms.database.MemoryDatabase:
     assert not (drop_failing and drop_non_failing), "drop_failing and drop_non_failing can only be used exclusively"
@@ -46,6 +70,12 @@ def filter_ms_db(
         print("len(recs)", len(recs))
         recs = [rec for rec in recs if rec in all_topk_recs]  # TODO: use filter()
         print("len(recs)", len(recs))
+    if drop_duplicates:
+        len_before = len(recs)
+        recs = drop_duplicate_recs(recs)
+        len_after = len(recs)
+        num_duplicates = len_after - len_before
+        print("Dropped {num_duplciates} duplicate records")
     for rec in recs:
         # print("rec.target", rec.target, dir(rec.target))
         # print("rec.target.keys", rec.target.keys)
@@ -139,6 +169,7 @@ def filter_ms_db_wrapper(
     filter_timestamp_max: Optional[float] = None,
     drop_failing: bool = False,
     drop_non_failing: bool = False,
+    drop_duplicates: bool = False,
 ):
     filter_kwargs = dict(
         filter_topk=filter_topk,
@@ -155,6 +186,7 @@ def filter_ms_db_wrapper(
         filter_timestamp_max=filter_timestamp_max,
         drop_failing=drop_failing,
         drop_non_failing=drop_non_failing,
+        drop_duplicates=drop_duplicates,
     )
     assert out_arg is not None
     in_db = load_ms_db_wrapper(in_arg)
@@ -214,6 +246,9 @@ if __name__ == "__main__":
     parser.add_argument("--drop-non-failing", action="store_true", help="Drop all non-failing records")
     parser.add_argument("--output", "-o", type=str, default=None, help="output file", required=True)
     parser.add_argument("--append", action="store_true", help="Append to existing non-empty out dbs")
+    parser.add_argument(
+        "--drop-duplicates", action="store_true", help="Drop duplicates (same JSON, including timestamp)"
+    )
     # parser.add_argument("--allow-empty", action="store_true", help="Allow empty out_db")  # TODO
     parser.add_argument("--module-equality", type=str, default="structural", help="module equality")
 
@@ -238,6 +273,7 @@ if __name__ == "__main__":
         filter_timestamp_max=args.filter_timestamp_max,
         drop_failing=args.drop_failing,
         drop_non_failing=args.drop_non_failing,
+        drop_duplicates=args.drop_duplicates,
         module_equality=args.module_equality,
         append=args.append,
     )
