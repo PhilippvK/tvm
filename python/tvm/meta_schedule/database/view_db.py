@@ -15,6 +15,7 @@ def view_ms_db(in_db):
     # print("DB", in_db, dir(in_db))
     recs = in_db.get_all_tuning_records()
     # print("recs", recs, len(recs))
+    hash2recs = defaultdict(list)
     workloads = []
     workload2args = {}
     workload2flops = {}
@@ -24,12 +25,20 @@ def view_ms_db(in_db):
     targets = []
     target2recs = defaultdict(list)
     target2workloads = defaultdict(set)
-    tensorize_hist = defaultdict(int)
-    workload_target2tensorize = defaultdict(lambda: defaultdict(int))
+    tensorize_hist = defaultdict(lambda: {"valid": 0, "invalid": 0})
+    workload_target2tensorize = defaultdict(lambda: defaultdict(lambda: {"valid": 0, "invalid": 0}))
 
     for rec in recs:
         # print("rec", rec, dir(rec))
         # print("rec.args_info", rec.args_info)
+        rec_json = str(rec.as_json()).encode()
+        # print("rec_json", rec_json, type(rec_json))
+        import hashlib
+
+        m = hashlib.sha256()
+        m.update(rec_json)
+        rec_hash = m.hexdigest()
+        hash2recs[rec_hash].append(rec)
         args_info = rec.args_info
         # print("rec.as_json()", rec.as_json())
         # print("rec.run_secs", rec.run_secs)
@@ -69,9 +78,18 @@ def view_ms_db(in_db):
             # print("intrin_name", intrin_name)
             assert intrin_name is not None
             workload_target = (workload, target_str)
-            tensorize_hist[intrin_name] += 1
-            workload_target2tensorize[workload_target][intrin_name] += 1
+            valid_secs = [float(secs) for secs in rec.run_secs if secs <= 1000.0]
+            is_valid = len(valid_secs) > 0
+            if is_valid:
+                tensorize_hist[intrin_name]["valid"] += 1
+                workload_target2tensorize[workload_target][intrin_name]["valid"] += 1
+            else:
+                tensorize_hist[intrin_name]["invalid"] += 1
+                workload_target2tensorize[workload_target][intrin_name]["invalid"] += 1
             # input()
+    hash2counts = {k: len(v) for k, v in hash2recs.items()}
+    hash2duplicate_counts = {k: cnt - 1 for k, cnt in hash2counts.items() if cnt > 1}
+    num_duplicates = sum(hash2duplicate_counts.values())
     # print("workloads", workloads, len(workloads))
     # print("workload_target2tensorize", workload_target2tensorize)
     print("--- MS Database ---")
@@ -115,6 +133,7 @@ def view_ms_db(in_db):
     print("## Records ##")
     num_recs = len(recs)
     print(f"Count: {num_recs}")
+    print(f"Duplicates: {num_duplicates}")
 
     print()
     print("## Records by Workload ##")
