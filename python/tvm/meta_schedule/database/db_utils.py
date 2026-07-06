@@ -73,6 +73,7 @@ def load_ms_db_archive(in_db_archive, module_equality: str = "structural"):
 
 
 def load_ms_db_wrapper(in_arg, module_equality: str = "structural"):
+    print("Loading MS database:", in_arg)
     if isinstance(in_arg, ms.Database):
         return in_arg
     # print("in_arg", in_arg)
