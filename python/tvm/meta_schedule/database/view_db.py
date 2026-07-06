@@ -183,16 +183,21 @@ def view_ms_db(in_db):
     print()
     print("## Tensorization ##")
     print(f"Unique Count: {len(tensorize_hist)}")
-    print(f"Total Count: {sum(tensorize_hist.values())}")
-    for intrin, freq in tensorize_hist.items():
-        print(f"- {intrin}: #recs={freq}")
+    total_count = sum(freqs["valid"] + freqs["invalid"] for freqs in tensorize_hist.values())
+    print(f"Total Count: {total_count}")
+    for intrin, freqs in tensorize_hist.items():
+        valid_freq, invalid_freq = freqs["valid"], freqs["invalid"]
+        total_freq = valid_freq + invalid_freq
+        print(f"- {intrin}: #recs={total_freq} #invalid={invalid_freq}")
     # workload_target2tensorize
     print()
     print("## Tensorization by Workload & Target ##")
     for (workload, target_str), tensorize_hist_ in workload_target2tensorize.items():
         print(f"({workload}, {target_str}):")
-        for intrin, freq in tensorize_hist_.items():
-            print(f"  - {intrin}: #recs={freq}")
+        for intrin, freqs in tensorize_hist_.items():
+            valid_freq, invalid_freq = freqs["valid"], freqs["invalid"]
+            total_freq = valid_freq + invalid_freq
+            print(f"  - {intrin}: #recs={total_freq} #invalid={invalid_freq}")
 
 
 # def view_ms_db_dir(in_db_dir):
