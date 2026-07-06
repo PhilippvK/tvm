@@ -155,16 +155,22 @@ def view_ms_db(in_db):
         valid_secs = [float(secs) for secs in workload_secs if secs <= 1000.0]
         workload_flops = workload2flops[workload]
         valid_flops_per_sec = [workload_flops / secs for secs in valid_secs]
-        min_secs = min(valid_secs)
-        max_secs = max(valid_secs)
-        mean_secs = sum(valid_secs) / len(valid_secs)
-        min_flops = min(valid_flops_per_sec)
-        max_flops = max(valid_flops_per_sec)
-        mean_flops = sum(valid_flops_per_sec) / len(valid_flops_per_sec)
         num_workload_secs = len(workload_secs)
-        print(
-            f"- {workload_str}: #measures={num_workload_secs} #invalid={num_invalid} min={min_secs:.5f}s [{max_flops/1e9:.5f} GFLOP/s] max={max_secs:.5f}s [{min_flops/1e9:.5f} GFLOP/s] mean={mean_secs:.5f}s [{mean_flops/1e9:.5f} GFLOP/s]"
-        )
+        has_valid = len(valid_secs) > 0
+        if has_valid:
+            min_secs = min(valid_secs)
+            max_secs = max(valid_secs)
+            mean_secs = sum(valid_secs) / len(valid_secs)
+            min_flops = min(valid_flops_per_sec)
+            max_flops = max(valid_flops_per_sec)
+            mean_flops = sum(valid_flops_per_sec) / len(valid_flops_per_sec)
+            print(
+                f"- {workload_str}: #measures={num_workload_secs} #invalid={num_invalid} min={min_secs:.5f}s [{max_flops/1e9:.5f} GFLOP/s] max={max_secs:.5f}s [{min_flops/1e9:.5f} GFLOP/s] mean={mean_secs:.5f}s [{mean_flops/1e9:.5f} GFLOP/s]"
+            )
+        else:
+            print(
+                f"- {workload_str}: #measures={num_workload_secs} #invalid={num_invalid} min=N/As [N/A GFLOP/s] max=N/As [N/A GFLOP/s] mean=N/As [N/A GFLOP/s]"
+            )
         # TODO: GFLOP/s
         # TODO: make secs,... optional via cli
 
