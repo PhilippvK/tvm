@@ -28,6 +28,7 @@ from tvm.ir import Array, IRModule, Map
 from tvm.rpc import RPCSession
 from tvm.runtime import PackedFunc, String
 from tvm.tir import FloatImm, IntImm
+from tvm.tir.function import IndexMap
 
 
 def derived_object(cls: type) -> type:
@@ -359,6 +360,8 @@ def _json_de_tvm(obj: Any) -> Any:
         return [_json_de_tvm(i) for i in obj]
     if isinstance(obj, Map):
         return {_json_de_tvm(k): _json_de_tvm(v) for k, v in obj.items()}
+    if isinstance(obj, IndexMap):
+        return obj
     raise TypeError("Not supported type: " + str(type(obj)))
 
 
