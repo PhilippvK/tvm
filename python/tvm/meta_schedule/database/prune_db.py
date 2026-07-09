@@ -17,7 +17,12 @@ def prune_ms_db(in_db, out_db=None, module_equality: str = "structural", append:
                 out_db = ms.database.MemoryDatabase(module_equality=module_equality)
             else:
                 assert append, "Out DB is non-empty. Use append=True or MemoryDatabase"
+    num_recs_before = len(in_db)
     in_db.dump_pruned(out_db)
+    num_recs_after = len(out_db)
+    num_pruned_recs = num_recs_before - num_recs_after
+    num_pruned_recs_rel = num_pruned_recs / num_recs_before
+    print(f"Pruned DB ({num_recs_before} -> {num_recs_after} [{num_pruned_recs_rel*100:.1f}%] records)")
     return out_db
 
 
