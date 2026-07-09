@@ -149,7 +149,7 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
                              int max_trials_global, int max_trials_per_task,
                              int num_trials_per_iter, Builder builder, Runner runner,
                              Array<MeasureCallback> measure_callbacks, Optional<Database> database,
-                             Optional<CostModel> cost_model) {
+                             Optional<CostModel> cost_model, Array<Integer> design_spaces_mask) {
   CHECK_EQ(ctxs.size(), task_weights.size()) << "ValueError: `task_weights` must have the same "
                                                 "length as `ctxs`";
   int n_tasks = this->remaining_tasks_ = ctxs.size();
@@ -176,8 +176,22 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
                                     << sch->mod() << "\n"
                                     << Concat(trace->AsPython(false), "\n");
     }
-    ctx->search_strategy.value()->PreTuning(max_trials_per_task, num_trials_per_iter, design_spaces,
-                                            database, cost_model);
+    if (ctx->database.defined()) {
+      ctx->search_strategy.value()->PreTuning(max_trials_per_task, num_trials_per_iter, design_spaces,
+                                              ctx->database.value(), cost_model);
+    } else {
+      ctx->search_strategy.value()->PreTuning(max_trials_per_task, num_trials_per_iter, design_spaces,
+                                              database, cost_model);
+    }
+    // TODO: PY LOG
+    if (ctx->design_spaces_mask.size() > 0) {
+        ICHECK_EQ(design_spaces_mask.size(), 0);
+        ctx->search_strategy.value()->MaskDesignSpaces(ctx->design_spaces_mask);
+    }
+    if (design_spaces_mask.size() > 0) {
+        ICHECK_EQ(ctx->design_spaces_mask.size(), 0);
+        ctx->search_strategy.value()->MaskDesignSpaces(design_spaces_mask);
+    }
   }
 
   int num_trials_already = 0;
@@ -385,14 +399,14 @@ void PyTaskSchedulerNode::Tune(Array<TuneContext> tasks, Array<FloatImm> task_we
                                int max_trials_global, int max_trials_per_task,
                                int num_trials_per_iter, Builder builder, Runner runner,
                                Array<MeasureCallback> measure_callbacks,
-                               Optional<Database> database, Optional<CostModel> cost_model) {
+                               Optional<Database> database, Optional<CostModel> cost_model, Array<Integer> design_spaces_mask) {
   if (f_tune == nullptr) {
     TaskSchedulerNode::Tune(tasks, task_weights, max_trials_global, max_trials_per_task,
                             num_trials_per_iter, builder, runner, measure_callbacks, database,
-                            cost_model);
+                            cost_model, design_spaces_mask);
   } else {
     f_tune(tasks, task_weights, max_trials_global, max_trials_per_task, num_trials_per_iter,
-           builder, runner, measure_callbacks, database, cost_model);
+           builder, runner, measure_callbacks, database, cost_model, design_spaces_mask);
   }
 }
 
