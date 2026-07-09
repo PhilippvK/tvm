@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 """XGBoost-based cost model"""
+import time
+import logging
 import os
 import tempfile
 from collections import OrderedDict
@@ -92,10 +94,32 @@ class PackSum:
             A batch of labels. None means no labels available.
         """
         import xgboost as xgb  # type: ignore # pylint: disable=import-outside-toplevel
+        # print("xs", xs, len(xs))
+        if ys is not None:
+            pass
+            # print("ys", ys, len(ys))
+        else:
+            # print("ys", None)
+            pass
+        # print("num candidates =", len(xs))
+        self.num_samples = len(xs)
+        # print("shapes =", [x.shape for x in xs])
 
         repeats = [x.shape[0] for x in xs]
+        # print("repeats", repeats)
+        # print("sum repeats =", sum(repeats))
+        # print("all_zero =", all(r == 0 for r in repeats))
         xs = np.concatenate(xs, axis=0)
-        self.ids = np.concatenate([[i] * repeat for i, repeat in enumerate(repeats)], axis=0)
+        tmp = [[i] * repeat for i, repeat in enumerate(repeats)]
+        # print("tmp =", tmp)
+        # print("tmp lens =", [len(t) for t in tmp])
+
+        self.ids = np.concatenate(tmp, axis=0)
+        # print("self.ids dtype =", self.ids.dtype)
+        # print("self.ids shape =", self.ids.shape)
+        # self.ids = np.concatenate([[i] * repeat for i, repeat in enumerate(repeats)], axis=0)
+        # print("self.ids", self.ids, self.ids.dtype)
+        self.ids = self.ids.astype(np.int64, copy=False)
         if ys is None:
             self.dmatrix = xgb.DMatrix(data=xs, label=None)
         else:
@@ -104,6 +128,9 @@ class PackSum:
             self.dmatrix.set_weight(ys)
 
     def predict_with_score(self, pred: np.ndarray) -> np.ndarray:
+        # print("predict_with_score")
+        # print("pred", pred, pred.dtype)
+        # print("self.ids", self.ids, self.ids.dtype)
         """Predict the labels given the block level prediction scores.
 
         Parameters
@@ -116,7 +143,15 @@ class PackSum:
         result : np.ndarray
             The predictions for each candidate.
         """
-        return np.bincount(self.ids, weights=pred)
+        # return np.bincount(self.ids, weights=pred)
+        # print("num_samples =", self.num_samples)
+        # print("max id =", self.ids.max())
+        # print("unique ids =", len(np.unique(self.ids)))
+        return np.bincount(
+            self.ids,
+            weights=pred,
+            minlength=self.num_samples,
+        )
 
     def obj_square_error(self, ys_pred: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Implement square error loss on pack-sum format as
@@ -432,7 +467,9 @@ class XGBModel(PyCostModel):
         previously cached feature vectors and results, so that the subsequent training process could
         use all the existing data being stored on disk.
         """
+        print("save", path, time.time())
         with tempfile.TemporaryDirectory() as tmp_dir:
+            print("with", tmp_dir, time.time())
             model_path = os.path.join(tmp_dir, "model.bin")
             data_path = os.path.join(tmp_dir, "data.npy")
             # Step 1. Save the model
@@ -455,8 +492,16 @@ class XGBModel(PyCostModel):
                 arr=np.array(data, dtype=object),
             )
             # Step 3. Tar it
+            # print("before tar", time.time())
             tar(path, [x for x in [model_path, data_path] if x is not None])
-            logger.info("Saved XGBModel to %s", path)
+            # print("before log", time.time())
+            # print("handlers", logger.handlers)
+            # print("root handlers", logging.getLogger().handlers)
+            # print("disabled?", logger.disabled, "level", logger.level, "propagate", logger.propagate)
+            # logger.info("Saved XGBModel to %s", path)
+            print(f"Saved XGBModel to {path}")
+            # print("after log", time.time())
+        # print("after with", time.time())
 
     def update(
         self,
@@ -550,6 +595,9 @@ class XGBModel(PyCostModel):
         context: "TuneContext",
         candidates: List[MeasureCandidate],
     ) -> np.ndarray:
+        # print("predict")
+        # print("len(candidates)", len(candidates))
+        # print("self.data_size", self.data_size)
         """Predict the normalized score using the cost model.
 
         Parameters
@@ -622,8 +670,12 @@ class XGBModel(PyCostModel):
         self,
         xs: List[np.ndarray],
     ) -> np.ndarray:
+        # print("_predict")
+        # print("len(xs)", len(xs))
         d_test = PackSum(xs=xs, ys=None)
+        # print("d_test", d_test)
         pred = self.booster.predict(d_test.dmatrix)
+        # print("pred", pred)
         ret = d_test.predict_with_score(pred)
         return ret
 
