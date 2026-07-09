@@ -21,10 +21,11 @@
 namespace tvm {
 namespace meta_schedule {
 
-MeasureCandidate::MeasureCandidate(tir::Schedule sch, Array<ArgInfo> args_info) {
+MeasureCandidate::MeasureCandidate(tir::Schedule sch, Array<ArgInfo> args_info, int space_idx) {
   ObjectPtr<MeasureCandidateNode> n = make_object<MeasureCandidateNode>();
   n->sch = sch;
   n->args_info = args_info;
+  n->space_idx = space_idx;
   data_ = std::move(n);
 }
 
@@ -94,8 +95,8 @@ TVM_REGISTER_OBJECT_TYPE(SearchStrategyNode);
 TVM_REGISTER_NODE_TYPE(PySearchStrategyNode);
 
 TVM_REGISTER_GLOBAL("meta_schedule.MeasureCandidate")
-    .set_body_typed([](tir::Schedule sch, Array<ArgInfo> args_info) -> MeasureCandidate {
-      return MeasureCandidate(sch, args_info);
+    .set_body_typed([](tir::Schedule sch, Array<ArgInfo> args_info, int space_idx = -1) -> MeasureCandidate {
+      return MeasureCandidate(sch, args_info, space_idx);
     });
 TVM_REGISTER_GLOBAL("meta_schedule.SearchStrategyPySearchStrategy")
     .set_body_typed(SearchStrategy::PySearchStrategy);

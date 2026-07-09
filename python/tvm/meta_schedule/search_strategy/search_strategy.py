@@ -48,15 +48,19 @@ class MeasureCandidate(Object):
         The schedule to be measured.
     args_info : List[ArgInfo]
         The argument information.
+    space_idx: int
+        The index of the space. -1 if undefined.
     """
 
     sch: Schedule
     args_info: List[ArgInfo]
+    space_idx: int
 
     def __init__(
         self,
         sch: Schedule,
         args_info: List[ArgInfo],
+        space_idx: int = -1,
     ) -> None:
         """Constructor.
 
@@ -66,11 +70,14 @@ class MeasureCandidate(Object):
             The schedule to be measured.
         args_info : List[ArgInfo]
             The argument information.
+        space_idx: int
+            The index of the space. -1 if undefined.
         """
         self.__init_handle_by_constructor__(
             _ffi_api.MeasureCandidate,  # type: ignore # pylint: disable=no-member
             sch,
             args_info,
+            space_idx,
         )
 
 

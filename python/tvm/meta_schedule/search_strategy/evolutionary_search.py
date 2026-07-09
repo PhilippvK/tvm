@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 """Evolutionary Search Strategy"""
+from typing import List, Tuple
+from tvm.tir.schedule import Schedule
 from tvm._ffi import register_object
 
 import tvm
@@ -90,3 +92,9 @@ class EvolutionarySearch(SearchStrategy):
             "meta_schedule.SearchStrategyEvolutionarySearchUpdatePopulationSize"
         )
         update_population_size_func(self, population_size)
+
+    def update_pool(self, pool_schs: List[Schedule], pool_indices: List[int]):
+        update_pool_func = tvm.get_global_func(
+            "meta_schedule.SearchStrategyEvolutionarySearchUpdatePool"
+        )
+        update_pool_func(self, pool_schs, pool_indices)
