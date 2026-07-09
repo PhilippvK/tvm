@@ -18,6 +18,11 @@ try:
 except ImportError:
     pass
 
+try:
+    from wca.tensor_intrin_esp_pie import *
+except ImportError:
+    pass
+
 
 def load_ms_db_dir(in_db_dir, module_equality: str = "structural"):
     if register_wca_dot_intrinsics is not None:
