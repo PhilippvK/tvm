@@ -102,6 +102,7 @@ class TaskScheduler(Object):
         measure_callbacks: List[MeasureCallback],
         database: Optional[Database],
         cost_model: Optional[CostModel],
+        design_spaces_mask: List[int] = [],
     ) -> None:
         """Auto-tuning.
 
@@ -127,6 +128,7 @@ class TaskScheduler(Object):
             The database.
         cost_model : Optional[CostModel]
             The cost model.
+        design_spaces_mask : TODO
         """
         task_weights = [float(w) for w in task_weights]
         _ffi_api.TaskSchedulerTune(  # type: ignore # pylint: disable=no-member
@@ -141,6 +143,7 @@ class TaskScheduler(Object):
             measure_callbacks,
             database,
             cost_model,
+            design_spaces_mask,
         )
 
     def terminate_task(self, task_id: int) -> None:

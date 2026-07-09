@@ -26,7 +26,7 @@ namespace meta_schedule {
 TuneContext::TuneContext(Optional<IRModule> mod, Optional<Target> target,
                          Optional<SpaceGenerator> space_generator,
                          Optional<SearchStrategy> search_strategy, Optional<String> task_name, Optional<String> group,
-                         int num_threads, TRandState rand_state, PackedFunc logger) {
+                         int num_threads, TRandState rand_state, PackedFunc logger, Array<Integer> design_spaces_mask, Optional<Database> database) {
   CHECK(rand_state == -1 || rand_state >= 0) << "ValueError: Invalid random state: " << rand_state;
   ObjectPtr<TuneContextNode> n = make_object<TuneContextNode>();
   n->mod = mod;
@@ -38,6 +38,8 @@ TuneContext::TuneContext(Optional<IRModule> mod, Optional<Target> target,
   n->num_threads = num_threads;
   n->rand_state = support::LinearCongruentialEngine::NormalizeSeed(rand_state);
   n->logger = logger;
+  n->design_spaces_mask = design_spaces_mask;
+  n->database = database;
   data_ = std::move(n);
 }
 
@@ -50,6 +52,7 @@ TuneContext TuneContextNode::Clone() const {
     n->search_strategy = this->search_strategy.value()->Clone();
   }
   n->rand_state = ForkSeed(&n->rand_state);
+  // TODO: clone design spaces mask?
   n->Initialize();
   return TuneContext(n);
 }
@@ -68,9 +71,9 @@ TVM_REGISTER_GLOBAL("meta_schedule.TuneContext")
     .set_body_typed([](Optional<IRModule> mod, Optional<Target> target,
                        Optional<SpaceGenerator> space_generator,
                        Optional<SearchStrategy> search_strategy, Optional<String> task_name, Optional<String> group,
-                       int num_threads, TRandState rand_state, PackedFunc logger) -> TuneContext {
+                       int num_threads, TRandState rand_state, PackedFunc logger, Array<Integer> design_spaces_mask, Optional<Database> database) -> TuneContext {
       return TuneContext(mod, target, space_generator, search_strategy, task_name, group, num_threads,
-                         rand_state, logger);
+                         rand_state, logger, design_spaces_mask, database);
     });
 TVM_REGISTER_GLOBAL("meta_schedule._SHash2Hex").set_body_typed(SHash2Hex);
 TVM_REGISTER_GLOBAL("meta_schedule.TuneContextInitialize")

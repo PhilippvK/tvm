@@ -84,6 +84,8 @@ class TuneContext(Object):
         Need to be in integer in [1, 2^31-1], -1 means using random number.
     num_threads : int = None
         The number of threads to be used, None means using the logical cpu count.
+    design_spaces_mask : TODO
+    database : TODO
     """
 
     mod: Optional[IRModule]
@@ -95,6 +97,8 @@ class TuneContext(Object):
     logger: Optional[Logger]
     rand_state: int
     num_threads: int
+    design_spaces_mask: List[int]
+    database: Optional["Database"]
 
     def __init__(
         self,
@@ -108,6 +112,8 @@ class TuneContext(Object):
         rand_state: int = -1,
         num_threads: Union[int, Literal["physical", "logical"]] = "physical",
         logger: Optional[Logger] = None,
+        design_spaces_mask: List[int] = [],
+        database: Optional["Database"] = None,
     ):
         # pylint: disable=import-outside-toplevel
         import tvm.tir.tensor_intrin  # pylint: disable=unused-import
@@ -150,6 +156,8 @@ class TuneContext(Object):
             num_threads,
             rand_state,
             get_logging_func(logger),
+            design_spaces_mask,
+            database,
         )
         _ffi_api.TuneContextInitialize(self)  # type: ignore # pylint: disable=no-member
 

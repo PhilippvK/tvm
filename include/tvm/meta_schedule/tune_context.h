@@ -65,6 +65,10 @@ class TuneContextNode : public runtime::Object {
   TRandState rand_state;
   /*! \brief The tuning task's logging function. */
   PackedFunc logger;
+  /*! \brief TODO. */
+  Array<Integer> design_spaces_mask;
+  /*! \brief The database used in tuning */
+  Optional<Database> database;
 
   void VisitAttrs(tvm::AttrVisitor* v) {
     v->Visit("mod", &mod);
@@ -75,7 +79,10 @@ class TuneContextNode : public runtime::Object {
     v->Visit("group", &group);
     v->Visit("num_threads", &num_threads);
     v->Visit("rand_state", &rand_state);
+    v->Visit("logger", &logger);
     // `logger` is not visited
+    v->Visit("design_spaces_mask", &design_spaces_mask);
+    v->Visit("database", &database);
   }
   /*!
    * \brief Initialize members that needs initialization with tune context.
@@ -112,7 +119,7 @@ class TuneContext : public runtime::ObjectRef {
   TVM_DLL explicit TuneContext(Optional<IRModule> mod, Optional<Target> target,
                                Optional<SpaceGenerator> space_generator,
                                Optional<SearchStrategy> search_strategy, Optional<String> task_name, Optional<String> group,
-                               int num_threads, TRandState rand_state, PackedFunc logger);
+                               int num_threads, TRandState rand_state, PackedFunc logger, Array<Integer> design_spaces_mask, Optional<Database> database);
   TVM_DEFINE_MUTABLE_NOTNULLABLE_OBJECT_REF_METHODS(TuneContext, ObjectRef, TuneContextNode);
 };
 
