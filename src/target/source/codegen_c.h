@@ -189,6 +189,16 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
   // statment
   void VisitStmt_(const LetStmtNode* op) override;
   void VisitStmt_(const BufferStoreNode* op) override;
+  // todo start
+  std::string current_function_name_;
+  int parallel_region_counter_{0};
+  void EmitStackAllocationDecl(const tir::AllocateNode* op);
+  void EmitSerialFor(const tir::ForNode* op);
+  void EmitRestrictedParallelLaunch(const tir::ForNode* op);
+
+  bool parallel_codegen_active_{false};
+  std::vector<const tir::AllocateNode*> parallel_private_allocs_;
+  // todo end
   void VisitStmt_(const ForNode* op) override;
   void VisitStmt_(const WhileNode* op) override;
   void VisitStmt_(const IfThenElseNode* op) override;
