@@ -86,6 +86,7 @@ class TaskRecord : public runtime::ObjectRef {
   /*! \brief Constructor */
   explicit TaskRecord(TuneContext task, double task_weight);
 
+  TVM_DLL static TaskRecord PyTaskRecord(TuneContext task, double task_weight);
   TVM_DEFINE_MUTABLE_NOTNULLABLE_OBJECT_REF_METHODS(TaskRecord, ObjectRef, TaskRecordNode);
 };
 
@@ -139,6 +140,10 @@ class TaskSchedulerNode : public runtime::Object {
   Optional<CostModel> cost_model_;
   /*! \brief The number of remaining tasks to be tuned. */
   int remaining_tasks_;
+  /*! \brief TODO. */
+  Optional<PackedFunc> print_tuning_statistics_func_;
+  /*! \brief TODO. */
+  Optional<PackedFunc> tune_func_;
 
   /*! \brief The default destructor. */
   virtual ~TaskSchedulerNode() = default;
@@ -150,6 +155,8 @@ class TaskSchedulerNode : public runtime::Object {
     v->Visit("database_", &database_);
     v->Visit("cost_model_", &cost_model_);
     v->Visit("remaining_tasks_", &remaining_tasks_);
+    v->Visit("print_tuning_statistics_func_", &print_tuning_statistics_func_);
+    v->Visit("tune_func_", &tune_func_);
   }
 
   /*!
