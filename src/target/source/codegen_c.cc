@@ -156,6 +156,8 @@ void CodeGenC::AddFunction(const GlobalVar& gvar, const PrimFunc& f) {
   // no-op.
   DeclareFunction(gvar, f);
   auto function_name = GetFunctionName(gvar);
+  current_function_name_ = function_name;
+  parallel_region_counter_ = 0;
 
   // clear previous generated state.
   InitFuncState(f);
@@ -1003,7 +1005,9 @@ void CodeGenC::VisitStmt_(const LetStmtNode* op) {
   PrintStmt(op->body);
 }
 
-void CodeGenC::VisitStmt_(const AllocateNode* op) {
+// void CodeGenC::VisitStmt_(const AllocateNode* op) {
+void CodeGenC::EmitStackAllocationDecl(const AllocateNode* op) {
+  // LOG(INFO) << "EmitStackAllocationDecl";
   ICHECK(!is_zero(op->condition));
   std::string vid = AllocVarID(op->buffer_var.get());
 
@@ -1019,6 +1023,50 @@ void CodeGenC::VisitStmt_(const AllocateNode* op) {
   stream << ' ' << vid << '[' << constant_size << "];\n";
 
   RegisterHandleType(op->buffer_var.get(), op->dtype);
+}
+
+static bool IsDirectParallelLaunchBody(const Stmt& stmt) {
+  if (const ForNode* for_node = stmt.as<ForNode>()) {
+    return for_node->kind == ForKind::kParallel;
+  }
+
+  if (const AttrStmtNode* attr = stmt.as<AttrStmtNode>()) {
+    return IsDirectParallelLaunchBody(attr->body);
+  }
+
+  if (const LetStmtNode* let = stmt.as<LetStmtNode>()) {
+    return IsDirectParallelLaunchBody(let->body);
+  }
+
+  if (const SeqStmtNode* seq = stmt.as<SeqStmtNode>()) {
+    if (seq->seq.size() != 1) {
+      return false;
+    }
+    return IsDirectParallelLaunchBody(seq->seq[0]);
+  }
+
+  return false;
+}
+
+void CodeGenC::VisitStmt_(const AllocateNode* op) {
+  // Restricted microTVM/CRT parallel lowering support: if a stack allocation directly
+  // wraps a kParallel loop, privatize the allocation by emitting it inside the
+  // generated parallel lambda instead of in the caller.  This handles the common
+  // generated-C pattern where a temporary such as conv2d[64] is reused for each
+  // outer spatial tile.  Emitting it in the caller would make all workers race on
+  // the same scratch buffer.
+  if (const ForNode* for_node = op->body.as<ForNode>()) {
+    // if (for_node->kind == ForKind::kParallel) {
+    if (IsDirectParallelLaunchBody(op->body)) {
+      // LOG(INFO) << "AllocateNode: kParallel";
+      parallel_private_allocs_.push_back(op);
+      this->PrintStmt(op->body);
+      parallel_private_allocs_.pop_back();
+      return;
+    }
+  }
+
+  EmitStackAllocationDecl(op);
   this->PrintStmt(op->body);
 }
 
@@ -1054,7 +1102,146 @@ void CodeGenC::VisitStmt_(const AssertStmtNode* op) {
   this->PrintStmt(op->body);
 }
 
-void CodeGenC::VisitStmt_(const ForNode* op) {
+void CodeGenC::EmitRestrictedParallelLaunch(const ForNode* op) {
+  // TODO: make optional feature?
+  // LOG(INFO) << "EmitRestrictedParallelLaunch";
+  ICHECK(is_zero(op->min));
+  ICHECK(!parallel_codegen_active_)
+      << "Nested parallel loops are not supported by restricted CodeGenC parallel lowering";
+  // LOG(INFO) << "current_function_name_=" << current_function_name_;
+  // LOG(INFO) << "parallel_region_counter_=" << parallel_region_counter_;
+
+  std::string parallel_prefix =
+      current_function_name_ + "_tvm_parallel_" + std::to_string(parallel_region_counter_++);
+
+  std::string closure_type = parallel_prefix + "_closure_t";
+  std::string lambda_name = parallel_prefix + "_lambda";
+  std::string closure_name =
+      "parallel_closure_" + std::to_string(parallel_region_counter_ - 1);
+  // std::string name_suffix = name_supply_->FreshName("tvm_parallel");
+  // std::string closure_type = name_suffix + "_closure_t";
+  // std::string lambda_name = name_suffix + "_lambda";
+  // std::string closure_name = name_supply_->FreshName("parallel_closure");
+  // std::string lambda_name = name_supply_->FreshName("tvm_parallel_lambda");
+  // std::string closure_name = name_supply_->FreshName("tvm_parallel_closure");
+  // std::string closure_var = name_supply_->FreshName("parallel_closure");
+
+  std::unordered_set<const VarNode*> private_alloc_vars;
+  for (const AllocateNode* alloc : parallel_private_allocs_) {
+    private_alloc_vars.insert(alloc->buffer_var.get());
+  }
+
+  Array<Var> undefined = tir::UndefinedVars(GetRef<Stmt>(op), {});
+  Array<Var> captures;
+  for (const Var& v : undefined) {
+    if (!private_alloc_vars.count(v.get())) {
+      captures.push_back(v);
+    }
+  }
+
+  // Emit closure type and lambda forward declaration before the generated TIR entry.
+  decl_stream << "\ntypedef struct " << closure_type << " {\n";
+  for (const Var& v : captures) {
+    decl_stream << "  ";
+    PrintType(GetType(v), decl_stream);
+    // decl_stream << " " << AllocVarID(v.get()) << ";\n";
+    decl_stream << " " << GetVarID(v.get()) << ";\n";
+  }
+  decl_stream << "} " << closure_type << ";\n";
+  decl_stream << "static int32_t " << lambda_name
+              << "(int32_t task_id, TVMParallelGroupEnv* penv, void* cdata);\n";
+
+  // Emit the helper function into a side stream.  Finish() emits decl_stream before
+  // stream, so the helper appears before the entry function that calls it.
+  std::ostringstream old_stream;
+  std::swap(stream, old_stream);
+
+  stream << "static int32_t " << lambda_name
+         << "(int32_t task_id, TVMParallelGroupEnv* penv, void* cdata) {\n";
+  int lambda_scope = BeginScope();
+
+  PrintIndent();
+  stream << closure_type << "* closure = (" << closure_type << "*)cdata;\n";
+
+  for (const Var& v : captures) {
+    // std::string vid = AllocVarID(v.get());
+    std::string vid = GetVarID(v.get());
+    PrintIndent();
+    PrintType(GetType(v), stream);
+    stream << " " << vid << " = closure->" << vid << ";\n";
+  }
+
+  for (const AllocateNode* alloc : parallel_private_allocs_) {
+    EmitStackAllocationDecl(alloc);
+  }
+
+  PrintIndent();
+  stream << "int32_t num_task = penv->num_task;\n";
+  PrintIndent();
+  stream << "if (num_task <= 0) { num_task = 1; }\n";
+
+  std::string extent = PrintExpr(op->extent);
+  std::string loop_var = AllocVarID(op->loop_var.get());
+  DataType loop_dtype = op->loop_var.dtype();
+
+  PrintIndent();
+  PrintType(loop_dtype, stream);
+  stream << " " << loop_var << "_extent = " << extent << ";\n";
+  PrintIndent();
+  PrintType(loop_dtype, stream);
+  stream << " " << loop_var << "_step = (" << loop_var
+         << "_extent + num_task - 1) / num_task;\n";
+  PrintIndent();
+  PrintType(loop_dtype, stream);
+  stream << " " << loop_var << "_begin = task_id * " << loop_var << "_step;\n";
+  PrintIndent();
+  PrintType(loop_dtype, stream);
+  stream << " " << loop_var << "_end = (task_id + 1) * " << loop_var << "_step;\n";
+  PrintIndent();
+  stream << "if (" << loop_var << "_begin > " << loop_var << "_extent) { " << loop_var
+         << "_begin = " << loop_var << "_extent; }\n";
+  PrintIndent();
+  stream << "if (" << loop_var << "_end > " << loop_var << "_extent) { " << loop_var
+         << "_end = " << loop_var << "_extent; }\n";
+
+  PrintIndent();
+  stream << "for (";
+  PrintType(loop_dtype, stream);
+  stream << " " << loop_var << " = " << loop_var << "_begin; " << loop_var << " < "
+         << loop_var << "_end; ++" << loop_var << ") {\n";
+  parallel_codegen_active_ = true;
+  int for_scope = BeginScope();
+  PrintStmt(op->body);
+  EndScope(for_scope);
+  parallel_codegen_active_ = false;
+  PrintIndent();
+  stream << "}\n";
+
+  PrintIndent();
+  stream << "return 0;\n";
+  EndScope(lambda_scope);
+  stream << "}\n\n";
+
+  decl_stream << stream.str();
+  std::swap(stream, old_stream);
+
+  // Emit closure setup and launch at the original statement location.
+  PrintIndent();
+  stream << closure_type << " " << closure_name << ";\n";
+  for (const Var& v : captures) {
+    // std::string vid = AllocVarID(v.get());
+    std::string vid = GetVarID(v.get());
+    PrintIndent();
+    stream << closure_name << "." << vid << " = " << vid << ";\n";
+  }
+
+  PrintIndent();
+  stream << "TVMBackendParallelLaunch(" << lambda_name << ", &" << closure_name << ", 0);\n";
+}
+
+// void CodeGenC::VisitStmt_(const ForNode* op) {
+void CodeGenC::EmitSerialFor(const ForNode* op) {
+  // LOG(INFO) << "EmitSerialFor";
   std::string extent = PrintExpr(op->extent);
   PrintIndent();
   std::string vid = AllocVarID(op->loop_var.get());
@@ -1067,6 +1254,18 @@ void CodeGenC::VisitStmt_(const ForNode* op) {
   this->EndScope(for_scope);
   PrintIndent();
   stream << "}\n";
+}
+
+void CodeGenC::VisitStmt_(const ForNode* op) {
+  if (op->kind == ForKind::kParallel) {
+    // LOG(INFO) << "ForNode: kParallel";
+    EmitRestrictedParallelLaunch(op);
+    return;
+  }
+
+  ICHECK(op->kind == ForKind::kSerial || op->kind == ForKind::kUnrolled)
+      << "CodeGenC restricted parallel lowering does not support loop kind " << op->kind;
+  EmitSerialFor(op);
 }
 
 void CodeGenC::VisitStmt_(const WhileNode* op) {
