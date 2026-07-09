@@ -7,6 +7,7 @@ from tvm import meta_schedule as ms
 from tvm.meta_schedule.database.s3_json_database import S3JSONDatabase
 from tvm.tir.tensor_intrin.riscv_cpu import *
 from ime.tensor_intrin_ime import *
+from wca.tensor_intrin_esp_pie import *
 
 
 def load_ms_db_dir(in_db_dir, module_equality: str = "structural"):
