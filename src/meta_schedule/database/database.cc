@@ -199,6 +199,7 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
       trace = sch->trace().value();
     }
   } catch (const std::runtime_error& e) {  // includes tvm::Error and dmlc::Error
+    // TODO: check err string?
     if (!reg_rvv_intrins) {
       return FromJSON(json_obj, workload, true);
     }
