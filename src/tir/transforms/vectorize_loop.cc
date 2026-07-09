@@ -40,6 +40,34 @@
 namespace tvm {
 namespace tir {
 
+bool ContainsScalableLLVMIntrinsic(const Stmt& stmt) {
+  // LOG(INFO) << "ContainsScalableLLVMIntrinsic";
+  // LOG(INFO) << "stmt=" << stmt;
+  bool found = false;
+  PostOrderVisit(stmt, [&](const ObjectRef& node) {
+    if (const auto* call = node.as<CallNode>()) {
+      bool is_llvm_intrin =
+          call->op.same_as(builtin::call_llvm_intrin()) ||
+          call->op.same_as(builtin::call_llvm_pure_intrin());
+
+      // LOG(INFO) << "is_llvm_intrin=" << is_llvm_intrin;
+      if (is_llvm_intrin) {
+        if (call->dtype.is_scalable_vector()) {
+          // LOG(INFO) << "call has scalable ret";
+          found = true;
+        }
+        for (const PrimExpr& arg : call->args) {
+          if (arg.dtype().is_scalable_vector()) {
+            // LOG(INFO) << "call has scalable arg";
+            found = true;
+          }
+        }
+      }
+    }
+  });
+  return found;
+}
+
 inline PrimExpr CreateNewLanes(bool is_scalable, int lanes_or_vscale_factor) {
   if (is_scalable) {
     return Mul(Call(DataType::Int(32), builtin::vscale(), {}), lanes_or_vscale_factor);
@@ -392,9 +420,10 @@ class Vectorizer : public StmtMutator, public ExprFunctor<PrimExpr(const PrimExp
         return Ramp(base_ramp->base, stride, op_lanes * base_ramp_lanes);
       }
     }
-    int lanes = std::max(base.dtype().lanes(), stride.dtype().lanes());
-    base = BroadcastTo(base, lanes, false);
-    stride = BroadcastTo(stride, lanes, false);
+    bool is_scalable = base.dtype().is_scalable_vector() || stride.dtype().is_scalable_vector();
+    int lanes = std::max(base.dtype().get_lanes_or_vscale_factor(), stride.dtype().get_lanes_or_vscale_factor());
+    base = BroadcastTo(base, lanes, is_scalable);
+    stride = BroadcastTo(stride, lanes, is_scalable);
     Array<PrimExpr> elems;
     for (int i = 0; i < lanes; ++i) {
       elems.push_back(
@@ -509,6 +538,7 @@ class Vectorizer : public StmtMutator, public ExprFunctor<PrimExpr(const PrimExp
   }
   // Call
   PrimExpr VisitExpr_(const CallNode* op) final {
+    // LOG(INFO) << "LoopVectorizer::VisitExpr_(CallNode)";
     if (op->op.same_as(builtin::if_then_else())) {
       return MutateIfThenElseExpr_(op);
     } else if (op->op.same_as(builtin::texture2d_load())) {
@@ -531,6 +561,10 @@ class Vectorizer : public StmtMutator, public ExprFunctor<PrimExpr(const PrimExp
     auto optional_op = op->op.as<Op>();
     bool vectorizable = optional_op && op_vectorizable_.get(optional_op.value(), false) &&
                         !op->dtype.is_scalable_vector();
+    // LOG(INFO) << "vectorizable=" << vectorizable;
+    if (op->op.same_as(builtin::call_llvm_pure_intrin())) {
+        vectorizable = 0;
+    }
 
     if (!vectorizable) {
       // Cannot vectorize this op
@@ -539,6 +573,7 @@ class Vectorizer : public StmtMutator, public ExprFunctor<PrimExpr(const PrimExp
         auto new_arg = this->VisitExpr(arg);
         if (new_arg.dtype().is_scalable_or_fixed_length_vector()) {
           need_scalarize_ = true;
+          // need_scalarize_ = false;
           return GetRef<PrimExpr>(op);
         }
         new_args.push_back(new_arg);
@@ -838,12 +873,14 @@ class Vectorizer : public StmtMutator, public ExprFunctor<PrimExpr(const PrimExp
       PrimExpr new_elem = this->VisitExpr(old_elem);
       if (!new_elem.same_as(old_elem)) changed = true;
       new_arr[i] = new_elem;
-      lanes = std::max(lanes, new_elem.dtype().lanes());
+      // lanes = std::max(lanes, new_elem.dtype().lanes());
+      lanes = std::max(lanes, new_elem.dtype().get_lanes_or_vscale_factor());
     }
 
     for (size_t i = 0; i < arr.size(); ++i) {
-      if (new_arr[i].dtype().lanes() != lanes) {
-        new_arr[i] = BroadcastTo(new_arr[i], lanes, false);
+      if (new_arr[i].dtype().get_lanes_or_vscale_factor() != lanes) {
+        bool is_scalable = new_arr[i].dtype().is_scalable_vector();
+        new_arr[i] = BroadcastTo(new_arr[i], lanes, is_scalable);
         changed = true;
       }
     }
@@ -902,6 +939,15 @@ class LoopVectorizer : public StmtMutator {
 
   Stmt VisitStmt_(const ForNode* op) final {
     if (op->kind == ForKind::kVectorized) {
+      if (ContainsScalableLLVMIntrinsic(op->body)) {
+        auto n = CopyOnWrite(op);
+        n->kind = ForKind::kSerial;
+        n->body = StmtMutator::VisitStmt(op->body);
+        Var idx(n->loop_var->name_hint + ".s", n->loop_var->dtype);
+        n->body = Substitute(n->body, {{n->loop_var, idx}});
+        return For(idx, n->min, n->extent, ForKind::kSerial, n->body);
+      }
+
       auto* extent_as_int = op->extent.as<IntImmNode>();
 
       if (!extent_as_int || extent_as_int->value < 1) {
@@ -934,6 +980,7 @@ class LoopVectorizer : public StmtMutator {
 class VectorizeSkipper : public StmtMutator {
  public:
   Stmt VisitStmt_(const ForNode* op) final {
+    // LOG(INFO) << "VectorizeSkipper::VisitStmt_(ForNode)";
     Stmt stmt = StmtMutator::VisitStmt_(op);
     op = stmt.as<ForNode>();
     if (op->kind == ForKind::kVectorized) {
@@ -950,6 +997,8 @@ namespace transform {
 
 // TODO(tvm-team): Make it as a target property.
 Pass VectorizeLoop(bool enable_vectorize) {
+  // LOG(INFO) << "VectorizeLoop";
+  // LOG(INFO) << "enable_vectorize=" << enable_vectorize;
   auto pass_func = [=](PrimFunc f, IRModule m, PassContext ctx) {
     auto* n = f.CopyOnWrite();
     if (enable_vectorize) {
