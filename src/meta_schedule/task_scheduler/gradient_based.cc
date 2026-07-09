@@ -26,6 +26,8 @@ class GradientBasedNode final : public TaskSchedulerNode {
  public:
   double alpha;
   int window_size;
+  /*! \brief The current task id processed. */
+  int task_id = -1;
   support::LinearCongruentialEngine::TRandState rand_state;
 
   int round_robin_rounds_;
@@ -47,28 +49,67 @@ class GradientBasedNode final : public TaskSchedulerNode {
   void Tune(Array<TuneContext> tasks, Array<FloatImm> task_weights, int max_trials_global,
             int max_trials_per_task, int num_trials_per_iter, Builder builder, Runner runner,
             Array<MeasureCallback> measure_callbacks, Optional<Database> database,
-            Optional<CostModel> cost_model) final {
+            Optional<CostModel> cost_model, Array<Integer> design_spaces_mask) final {
+            // Optional<CostModel> cost_model, Array<Array<tir::Schedule>> task_pool_schs, Array<Array<Integer>> task_pool_idxs) final {
     int n_tasks = tasks.size();
     round_robin_rounds_ = 0;
     best_latency_history_.resize(n_tasks, std::vector<double>());
     TaskSchedulerNode::Tune(tasks, task_weights, max_trials_global, max_trials_per_task,
                             num_trials_per_iter, builder, runner, measure_callbacks, database,
-                            cost_model);
+                            cost_model, design_spaces_mask);
+                            // cost_model, task_pool_schs, task_pool_idxs);
   }
 
   int NextTaskId() final {
+    bool round_robin = true;
+    if (round_robin) {
+        int n_tasks = this->tasks_.size();
+        for (int i = 0; i < n_tasks; ++i) {
+          this->TouchTask(i);
+        }
+        for (int i = 0; i < n_tasks; ++i) {
+          task_id = (task_id + 1) % n_tasks;
+          TaskRecordNode* task = this->tasks_[task_id].get();
+          if (!task->is_terminated) {
+            if (task->runner_futures.defined()) {
+              JoinRunningTask(task_id);
+            }
+            return task_id;
+          }
+        }
+        return -1;
+    }
     int n_tasks = this->tasks_.size();
+    std::vector<int> tasks_mask = {};
+    std::vector<TaskRecord> tasks_enabled = {};
+    LOG(INFO) << "tasks_mask.size()=" << tasks_mask.size();
+    // TODO: check size match
+    for (int i = 0; i < n_tasks; ++i) {
+        if (tasks_mask.size() == 0) {
+            tasks_enabled.push_back(this->tasks_[i]);
+            continue;
+        }
+        if (tasks_mask[i])
+            tasks_enabled.push_back(this->tasks_[i]);
+    }
+    int n_tasks_enabled = tasks_enabled.size();
+    LOG(INFO) << "n_tasks_enabled=" << n_tasks_enabled;
     // Step 1. Check if it's in round robin mode.
     if (round_robin_rounds_ == 0) {
       TVM_PY_LOG_CLEAR_SCREEN(this->logger);
       this->PrintTuningStatistics();
     }
-    if (round_robin_rounds_ < n_tasks) {
+    // if (round_robin_rounds_ < n_tasks) {
+    if (round_robin_rounds_ < n_tasks_enabled) {
       return round_robin_rounds_++;
     }
-    if (round_robin_rounds_ == n_tasks) {
+    // TODO: check what happens if mnask changes before rounds reached
+    // if (round_robin_rounds_ == n_tasks) {
+    if (round_robin_rounds_ == n_tasks_enabled) {
+      // for (int i = 0; i < n_tasks; ++i) {
       for (int i = 0; i < n_tasks; ++i) {
-        if (this->tasks_[i]->runner_futures.defined()) {
+        // if (this->tasks_[i]->runner_futures.defined()) {
+        if (tasks_mask[i] and this->tasks_[i]->runner_futures.defined()) {
           this->JoinRunningTask(i);
         }
       }
@@ -79,6 +120,9 @@ class GradientBasedNode final : public TaskSchedulerNode {
     {
       tasks_alive.reserve(n_tasks);
       for (int i = 0; i < n_tasks; ++i) {
+        if (tasks_mask[i] == 0) {
+            continue;
+        }
         this->TouchTask(i);
         if (!this->tasks_[i]->is_terminated) {
           tasks_alive.push_back(i);
@@ -90,7 +134,7 @@ class GradientBasedNode final : public TaskSchedulerNode {
     }
     // Step 3. Calculate the gradient of each task alive
     std::vector<double> grad;
-    grad.reserve(n_tasks);
+    grad.reserve(n_tasks);  // TODO: use n_tasks_alive?
     for (int task_id : tasks_alive) {
       const std::vector<double>& best_latency = this->best_latency_history_.at(task_id);
       int n = best_latency.size();
