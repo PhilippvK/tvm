@@ -72,7 +72,7 @@ Workload Workload::FromJSON(const ObjectRef& json_obj) {
 /******** TuningRecord ********/
 
 TuningRecord::TuningRecord(tir::Trace trace, Workload workload, Optional<Array<FloatImm>> run_secs,
-                           Optional<Target> target, Optional<Array<ArgInfo>> args_info, Optional<FloatImm> timestamp) {
+                           Optional<Target> target, Optional<Array<ArgInfo>> args_info, Optional<FloatImm> timestamp, int space_idx) {
   ObjectPtr<TuningRecordNode> n = make_object<TuningRecordNode>();
   n->trace = trace;
   n->workload = workload;
@@ -80,6 +80,7 @@ TuningRecord::TuningRecord(tir::Trace trace, Workload workload, Optional<Array<F
   n->target = target;
   n->args_info = args_info;
   n->timestamp = timestamp;
+  n->space_idx = space_idx;
   this->data_ = n;
 }
 
@@ -91,7 +92,7 @@ MeasureCandidate TuningRecordNode::AsMeasureCandidate() const {
   tir::Schedule sch =
       tir::Schedule::Traced(workload->mod, -1, 0, tir::ScheduleErrorRenderLevel::kDetail);
   trace->ApplyToSchedule(sch, false, nullptr);
-  return MeasureCandidate(sch, ArgInfo::FromEntryFunc(sch->mod(), /*remove_preproc=*/true));
+  return MeasureCandidate(sch, ArgInfo::FromEntryFunc(sch->mod(), /*remove_preproc=*/true), space_idx);
 }
 
 ObjectRef TuningRecordNode::AsJSON() const {
@@ -112,7 +113,9 @@ ObjectRef TuningRecordNode::AsJSON() const {
                           run_secs,              //
                           json_target,           //
                           json_args_info,        //
-                          timestamp};
+                          timestamp,
+                          IntImm(DataType::Int(64), space_idx)};
+                          // space_idx};
 }
 
 bool TuningRecordNode::IsValid() const {
@@ -136,9 +139,12 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
   Optional<Target> target{nullptr};
   Optional<Array<ArgInfo>> args_info{nullptr};
   Optional<FloatImm> timestamp;
+  int space_idx = -1;
+  // IntImm space_idx = -1;
   try {
     const ArrayNode* json_array = json_obj.as<ArrayNode>();
-    CHECK(json_array && json_array->size() == 5);
+    // CHECK(json_array && json_array->size() == 6);  // TODO
+    CHECK(json_array && json_array->size() >= 4 && json_array->size() <= 6);
     // Load json[1] => run_secs
     if (json_array->at(1).defined()) {
       run_secs = AsFloatArray(json_array->at(1));
@@ -166,11 +172,21 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
       args_info = info;
     }
     // Load json[4] => timestamp
-    if (json_array->at(4).defined()) {
+    if ((json_array->size() >= 5) && json_array->at(4).defined()) {
       if (const auto* float_imm = json_array->at(4).as<FloatImmNode>()) {
         timestamp = FloatImm(DataType::Float(64), float_imm->value);
       } else if (const auto* runtime_float = json_array->at(4).as<runtime::Float::ContainerType>()) {
         timestamp = FloatImm(DataType::Float(64), runtime_float->value);
+      }
+    }
+    // Load json[5] => space_idx
+    if ((json_array->size() == 6) && json_array->at(5).defined()) {
+      if (const auto* int_imm = json_array->at(5).as<IntImmNode>()) {
+        // space_idx = IntImm(DataType::Int(64), int_imm->value);
+        space_idx = int_imm->value;
+      } else if (const auto* int_imm = json_array->at(5).as<runtime::Int::ContainerType>()) {
+        // space_idx = int_imm->value);
+        space_idx = int_imm->value;
       }
     }
     // Load json[0] => trace
@@ -313,7 +329,7 @@ TVM_REGISTER_GLOBAL("meta_schedule.WorkloadAsJSON")
 TVM_REGISTER_GLOBAL("meta_schedule.WorkloadFromJSON").set_body_typed(&Workload::FromJSON);
 TVM_REGISTER_GLOBAL("meta_schedule.TuningRecord")
     .set_body_typed([](tir::Trace trace, Workload workload, Optional<Array<FloatImm>> run_secs,
-                       Optional<Target> target, Optional<Array<ArgInfo>> args_info, Optional<FloatImm> timestamp) {
+                       Optional<Target> target, Optional<Array<ArgInfo>> args_info, Optional<FloatImm> timestamp, int space_idx) {
       return TuningRecord(trace, workload, run_secs, target, args_info, timestamp);
     });
 TVM_REGISTER_GLOBAL("meta_schedule.TuningRecordAsMeasureCandidate")
