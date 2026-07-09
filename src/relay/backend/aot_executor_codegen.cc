@@ -1260,7 +1260,16 @@ class AOTExecutorCodegen : public MixedModeVisitor {
 
     lowered_mod->Update(GlobalVar(::tvm::runtime::symbol::tvm_module_main), tir_main_func);
     // Parallel for loops are not supported in AoT codegen.
-    lowered_mod = tir::transform::ConvertForLoopsToSerial()(lowered_mod);
+    constexpr const char* kAotPreserveParallelForOption = "tir.aot_preserve_parallel_for";
+    // bool opt_preserve_parallel_for = false;
+    bool opt_preserve_parallel_for = true;
+    if (pass_ctx->GetConfig<Bool>(kAotPreserveParallelForOption) != nullptr) {
+      opt_preserve_parallel_for = pass_ctx->GetConfig<Bool>(kAotPreserveParallelForOption, Bool(false)).value();
+    }
+    LOG(INFO) << "opt_preserve_parallel_for=" << opt_preserve_parallel_for;
+    if (!opt_preserve_parallel_for) {
+      lowered_mod = tir::transform::ConvertForLoopsToSerial()(lowered_mod);
+    }
 
     // Check USMP option
     bool enable_usmp = false;
