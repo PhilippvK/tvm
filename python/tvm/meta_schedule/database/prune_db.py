@@ -6,6 +6,7 @@ from pathlib import Path
 from tvm import meta_schedule as ms
 
 from tvm.tir.tensor_intrin.riscv_cpu import *
+from ime.tensor_intrin_ime import *
 
 
 def prune_ms_db(in_db, out_db=None, module_equality: str = "structural", append: bool = False):
