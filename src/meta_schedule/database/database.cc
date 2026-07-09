@@ -193,6 +193,16 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
         space_idx = int_imm->value;
       }
     }
+    // Load json[5] => space_idx
+    if ((json_array->size() == 6) && json_array->at(5).defined()) {
+      if (const auto* int_imm = json_array->at(5).as<IntImmNode>()) {
+        // space_idx = IntImm(DataType::Int(64), int_imm->value);
+        space_idx = int_imm->value;
+      } else if (const auto* int_imm = json_array->at(5).as<runtime::Int::ContainerType>()) {
+        // space_idx = int_imm->value);
+        space_idx = int_imm->value;
+      }
+    }
     // Load json[0] => trace
     {
       const ObjectRef& json_trace = json_array->at(0);
