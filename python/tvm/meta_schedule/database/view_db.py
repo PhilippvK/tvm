@@ -9,9 +9,10 @@ from tvm import meta_schedule as ms
 from tvm.tir.analysis import estimate_tir_flops
 
 from .db_utils import load_ms_db_wrapper
+from .filter_db import drop_duplicate_candidates_helper
 
 
-def view_ms_db(in_db):
+def view_ms_db(in_db, allow_empty: bool = False):
     # print("DB", in_db, dir(in_db))
     recs = in_db.get_all_tuning_records()
     # print("recs", recs, len(recs))
@@ -27,6 +28,13 @@ def view_ms_db(in_db):
     target2workloads = defaultdict(set)
     tensorize_hist = defaultdict(lambda: {"valid": 0, "invalid": 0})
     workload_target2tensorize = defaultdict(lambda: defaultdict(lambda: {"valid": 0, "invalid": 0}))
+    # TODO: optionally call drop_duplicate_candidates_helper, drop_duplicate_candidates_helper(lower=True)
+    if len(recs) == 0:
+        if allow_empty:
+            print("Empty DB (no records found)")
+            return
+        else:
+            raise RuntimeError("Empty DB (no records found)")
 
     for rec in recs:
         # print("rec", rec, dir(rec))
@@ -152,10 +160,11 @@ def view_ms_db(in_db):
         workload_str = workload_str.replace("meta_schedule.", "")
         invalid_secs = [secs for secs in workload_secs if secs > 1000.0]
         num_invalid = len(invalid_secs)
+        num_workload_secs = len(workload_secs)
+        num_invalid_rel = num_invalid / num_workload_secs
         valid_secs = [float(secs) for secs in workload_secs if secs <= 1000.0]
         workload_flops = workload2flops[workload]
         valid_flops_per_sec = [workload_flops / secs for secs in valid_secs]
-        num_workload_secs = len(workload_secs)
         has_valid = len(valid_secs) > 0
         if has_valid:
             min_secs = min(valid_secs)
@@ -165,11 +174,11 @@ def view_ms_db(in_db):
             max_flops = max(valid_flops_per_sec)
             mean_flops = sum(valid_flops_per_sec) / len(valid_flops_per_sec)
             print(
-                f"- {workload_str}: #measures={num_workload_secs} #invalid={num_invalid} min={min_secs:.5f}s [{max_flops/1e9:.5f} GFLOP/s] max={max_secs:.5f}s [{min_flops/1e9:.5f} GFLOP/s] mean={mean_secs:.5f}s [{mean_flops/1e9:.5f} GFLOP/s]"
+                f"- {workload_str}: #measures={num_workload_secs} #invalid={num_invalid} [{num_invalid_rel*100:.1f}%] min={min_secs:.5f}s [{max_flops/1e9:.5f} GFLOP/s] max={max_secs:.5f}s [{min_flops/1e9:.5f} GFLOP/s] mean={mean_secs:.5f}s [{mean_flops/1e9:.5f} GFLOP/s]"
             )
         else:
             print(
-                f"- {workload_str}: #measures={num_workload_secs} #invalid={num_invalid} min=N/As [N/A GFLOP/s] max=N/As [N/A GFLOP/s] mean=N/As [N/A GFLOP/s]"
+                f"- {workload_str}: #measures={num_workload_secs} #invalid={num_invalid} [{num_invalid_rel*100:.1f}%] min=N/As [N/A GFLOP/s] max=N/As [N/A GFLOP/s] mean=N/As [N/A GFLOP/s]"
             )
         # TODO: GFLOP/s
         # TODO: make secs,... optional via cli
@@ -188,7 +197,8 @@ def view_ms_db(in_db):
     for intrin, freqs in tensorize_hist.items():
         valid_freq, invalid_freq = freqs["valid"], freqs["invalid"]
         total_freq = valid_freq + invalid_freq
-        print(f"- {intrin}: #recs={total_freq} #invalid={invalid_freq}")
+        invalid_freq_rel = invalid_freq / total_freq
+        print(f"- {intrin}: #recs={total_freq} #invalid={invalid_freq} [{invalid_freq_rel*100:.1f}%]")
     # workload_target2tensorize
     print()
     print("## Tensorization by Workload & Target ##")
@@ -197,7 +207,8 @@ def view_ms_db(in_db):
         for intrin, freqs in tensorize_hist_.items():
             valid_freq, invalid_freq = freqs["valid"], freqs["invalid"]
             total_freq = valid_freq + invalid_freq
-            print(f"  - {intrin}: #recs={total_freq} #invalid={invalid_freq}")
+            invalid_freq_rel = invalid_freq / total_freq
+            print(f"  - {intrin}: #recs={total_freq} #invalid={invalid_freq} [{invalid_freq_rel*100:.1f}%]")
 
 
 # def view_ms_db_dir(in_db_dir):
@@ -249,11 +260,11 @@ def view_ms_db(in_db):
 #             raise ValueError(f"Unsupported format")
 
 
-def view_ms_db_wrapper(db_arg):
+def view_ms_db_wrapper(db_arg, allow_empty: bool = False):
     db = load_ms_db_wrapper(db_arg)
     # print("db", db)
     assert isinstance(db, ms.Database)
-    _ = view_ms_db(db)
+    _ = view_ms_db(db, allow_empty=allow_empty)
     # if isinstance(db_arg, ms.Database):
     #     _ = view_ms_db(db_arg)
     #     return
@@ -272,8 +283,9 @@ def view_ms_db_wrapper(db_arg):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("db", type=str, help="input file/dir")
+    parser.add_argument("--allow-empty", action="store_true", help="Do not fail if DB is empty")
 
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
 
-    view_ms_db_wrapper(args.db)
+    view_ms_db_wrapper(args.db, allow_empty=args.allow_empty)
