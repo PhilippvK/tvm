@@ -65,13 +65,28 @@ class UnionDatabaseNode : public DatabaseNode {
   }
 
   Array<TuningRecord> GetAllTuningRecords() final {
-    LOG(FATAL) << "NotImplementedError: UnionDatabase.GetAllTuningRecords";
-    throw;
+    std::vector<TuningRecord> results;
+    // TODO: reserve?
+    for (const Database& db : databases) {
+      auto recs = db->GetAllTuningRecords();
+      for (const TuningRecord& rec : recs) {
+        results.push_back(rec);
+      }
+    }
+    std::stable_sort(results.begin(), results.end(), SortTuningRecordByMeanRunSecs());
+    return Array<TuningRecord>(results);
+    // LOG(FATAL) << "NotImplementedError: UnionDatabase.GetAllTuningRecords";
+    // throw;
   }
 
   int64_t Size() final {
-    LOG(FATAL) << "NotImplementedError: UnionDatabase.size";
-    throw;
+    int64_t total_size = 0;
+    for (const Database& db : databases) {
+        total_size += db->Size();
+    }
+    return total_size;
+    // LOG(FATAL) << "NotImplementedError: UnionDatabase.size";
+    // throw;
   }
 };
 
