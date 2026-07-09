@@ -78,6 +78,7 @@ class TuneContext(Object):
         The name of the tuning task.
     logger : logging.Logger
         The logger for the tuning task.
+    group : TODO
     rand_state : int = -1
         The random state.
         Need to be in integer in [1, 2^31-1], -1 means using random number.
@@ -90,6 +91,7 @@ class TuneContext(Object):
     space_generator: Optional["SpaceGenerator"]
     search_strategy: Optional["SearchStrategy"]
     task_name: str
+    group: str
     logger: Optional[Logger]
     rand_state: int
     num_threads: int
@@ -102,6 +104,7 @@ class TuneContext(Object):
         space_generator: Union["SpaceGenerator.SpaceGeneratorType", None] = None,
         search_strategy: Union["SearchStrategy.SearchStrategyType", None] = None,
         task_name: str = "main",
+        group: str = "",
         rand_state: int = -1,
         num_threads: Union[int, Literal["physical", "logical"]] = "physical",
         logger: Optional[Logger] = None,
@@ -143,6 +146,7 @@ class TuneContext(Object):
             space_generator,
             search_strategy,
             task_name,
+            group,
             num_threads,
             rand_state,
             get_logging_func(logger),

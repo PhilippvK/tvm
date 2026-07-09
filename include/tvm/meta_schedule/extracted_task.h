@@ -43,6 +43,8 @@ class ExtractedTaskNode : public runtime::Object {
  public:
   /*! \brief The name of the task extracted */
   String task_name;
+  /*! \brief The group of the task extracted */
+  String group;
   /*! \brief The high-level IR */
   IRModule mod;
   /*! \brief Target */
@@ -54,6 +56,7 @@ class ExtractedTaskNode : public runtime::Object {
 
   void VisitAttrs(tvm::AttrVisitor* v) {
     v->Visit("task_name", &task_name);
+    v->Visit("group", &group);
     v->Visit("mod", &mod);
     v->Visit("target", &target);
     v->Visit("dispatched", &dispatched);
@@ -70,7 +73,7 @@ class ExtractedTaskNode : public runtime::Object {
  */
 class ExtractedTask : public runtime::ObjectRef {
  public:
-  explicit ExtractedTask(String task_name, IRModule mod, Target target, Array<IRModule> dispatched,
+  explicit ExtractedTask(String task_name, String group, IRModule mod, Target target, Array<IRModule> dispatched,
                          int weight);
   TVM_DEFINE_MUTABLE_NOTNULLABLE_OBJECT_REF_METHODS(ExtractedTask, runtime::ObjectRef,
                                                     ExtractedTaskNode);

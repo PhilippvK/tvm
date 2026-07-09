@@ -27,10 +27,11 @@
 namespace tvm {
 namespace meta_schedule {
 
-ExtractedTask::ExtractedTask(String task_name, IRModule mod, Target target,
+ExtractedTask::ExtractedTask(String task_name, String group, IRModule mod, Target target,
                              Array<IRModule> dispatched, int weight) {
   ObjectPtr<ExtractedTaskNode> n = make_object<ExtractedTaskNode>();
   n->task_name = task_name;
+  n->group = group;
   n->mod = mod;
   n->target = target;
   n->dispatched = dispatched;
@@ -40,9 +41,9 @@ ExtractedTask::ExtractedTask(String task_name, IRModule mod, Target target,
 
 TVM_REGISTER_NODE_TYPE(ExtractedTaskNode);
 TVM_REGISTER_GLOBAL("meta_schedule.ExtractedTask")
-    .set_body_typed([](String task_name, IRModule mod, Target target, Array<IRModule> dispatched,
+    .set_body_typed([](String task_name, String group, IRModule mod, Target target, Array<IRModule> dispatched,
                        int weight) -> ExtractedTask {
-      return ExtractedTask(task_name, mod, target, dispatched, weight);
+      return ExtractedTask(task_name, group, mod, target, dispatched, weight);
     });
 
 }  // namespace meta_schedule
