@@ -52,12 +52,14 @@ int TVMBackendFreeWorkspace(int device_type, int device_id, void* ptr) {
   return err;
 }
 
+#ifndef IDF_BACKEND_PARALLEL_LAUNCH
 int TVMBackendParallelLaunch(FTVMParallelLambda flambda, void* cdata, int num_task) {
   TVMParallelGroupEnv env;
   env.num_task = 1;
   flambda(0, &env, cdata);
   return 0;
 }
+#endif
 
 int TVMBackendRegisterSystemLibSymbol(const char* name, void* ptr) {
   return TVMFuncRegisterGlobal(name, ptr, 0);
