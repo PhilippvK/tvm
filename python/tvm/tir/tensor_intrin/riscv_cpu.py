@@ -113,12 +113,13 @@ def rvv_vec_dot_product_kernels(
             T.reads(C[0:n_lanes], A[0:n_elems], B[0:n_lanes, 0:n_elems])
             T.writes(C[0:n_lanes])
 
-            vec_A = T.call_llvm_intrin(
+            # vec_A = T.call_llvm_intrin(
+            vec_A = T.call_llvm_pure_intrin(
                 f"{data_dtype}xvscalex{d_dtype_lanes}",
                 "llvm.riscv.vle",
                 T.uint32(3),
                 T.broadcast(T.Cast(data_dtype, 0), T.vscale() * d_dtype_lanes),
-                T.tvm_access_ptr(T.type_annotation(data_dtype), A.data, 0, n_elems, 1),
+                T.tvm_access_ptr(T.type_annotation(data_dtype), A.data, A.elem_offset, n_elems, 1),
                 T.int64(n_elems))
 
             for i in range(n_lanes):
@@ -126,15 +127,17 @@ def rvv_vec_dot_product_kernels(
                     T.reads(B[i, 0:n_elems])
                     T.writes(C[i])
 
-                    vec_B_row = T.call_llvm_intrin(
+                    # vec_B_row = T.call_llvm_intrin(
+                    vec_B_row = T.call_llvm_pure_intrin(
                         f"{weight_dtype}xvscalex{w_dtype_lanes}",
                         "llvm.riscv.vle",
                         T.uint32(3),
                         T.broadcast(T.Cast(data_dtype, 0), T.vscale() * w_dtype_lanes),
-                        T.tvm_access_ptr(T.type_annotation(weight_dtype), B.data, i * n_elems, n_elems, 1),
+                        T.tvm_access_ptr(T.type_annotation(weight_dtype), B.data, B.elem_offset + i * n_elems, n_elems, 1),
                         T.int64(n_elems))
 
-                    product = T.call_llvm_intrin(
+                    # product = T.call_llvm_intrin(
+                    product = T.call_llvm_pure_intrin(
                         f"{wide_dtype}xvscalex{w_dtype_lanes}",
                         "llvm.riscv.vfmul" if out_dtype[0] == "f" else \
                         "llvm.riscv.vwmulsu" if (data_dtype[0] != weight_dtype[0]) else \
@@ -146,15 +149,17 @@ def rvv_vec_dot_product_kernels(
                         *mask_args,
                         T.uint64(n_elems))
 
-                    ini_acc = T.call_llvm_intrin(
+                    # ini_acc = T.call_llvm_intrin(
+                    ini_acc = T.call_llvm_pure_intrin(
                         f"{out_dtype}xvscalex{o_dtype_lanes}",
                         "llvm.riscv.vle",
                         T.uint32(3),
                         T.broadcast(T.Cast(out_dtype, 0), T.vscale() * o_dtype_lanes),
-                        T.tvm_access_ptr(T.type_annotation(out_dtype), C.data, i, 1, 1),
+                        T.tvm_access_ptr(T.type_annotation(out_dtype), C.data, C.elem_offset + i, 1, 1),
                         T.int64(1))
 
-                    red_sum = T.call_llvm_intrin(
+                    # red_sum = T.call_llvm_intrin(
+                    red_sum = T.call_llvm_pure_intrin(
                         f"{out_dtype}xvscalex{o_dtype_lanes}",
                         "llvm.riscv.vfredusum" if out_dtype[0] == "f" else \
                         "llvm.riscv.vwredsum",
@@ -165,7 +170,8 @@ def rvv_vec_dot_product_kernels(
                         *mask_args,
                         T.uint64(n_elems))
 
-                    C[i] = T.call_llvm_intrin(
+                    # C[i] = T.call_llvm_intrin(
+                    C[i] = T.call_llvm_pure_intrin(
                         out_dtype,
                         "llvm.riscv.vfmv.f.s" if out_dtype[0] == "f" else \
                         "llvm.riscv.vmv.x.s",
@@ -194,32 +200,40 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
         raise RuntimeError("Current target does not support `v` extension.")
 
     vlen = llvm_get_vector_width(target)
+    print("vlen", vlen)
     if vlen == 0:
         # Can't infer vlen
         return {}
     # get maximum reduction lanes (without grouping)
     n_lanes = get_max_elems(vlen, lmul=1, sew=32)
+    print("n_lanes", n_lanes)
 
     kernels_inventory = {}
 
-    data_dtype = ["uint8", "int8", "float16", "float32"]
-    weight_dtype = ["int8", "int8", "float16", "float32"]
-    output_dtype = ["int32", "int32", "float16", "float32"]
+    # data_dtype = ["uint8", "int8", "float16", "float32"]
+    # weight_dtype = ["int8", "int8", "float16", "float32"]
+    # output_dtype = ["int32", "int32", "float16", "float32"]
+    data_dtype = ["int8"]
+    weight_dtype = ["int8"]
+    output_dtype = ["int32"]
 
     iters = 0
     for d_dtype, w_dtype, o_dtype in zip(data_dtype, weight_dtype, output_dtype):
         # print("for", d_dtype, w_dtype, o_dtype, time.time())
         # max elements to grouped registers
         max_elems = get_max_elems(vlen, lmul=8, sew=DataType(d_dtype).bits)
+        print("max_elems", max_elems)
         # data widening halves available vector registers
         if DataType(o_dtype).bits > DataType(d_dtype).bits:
             max_elems //= 2
+        print("max_elems", max_elems)
         # compute optimal LMUL for full load
         lmul = max_elems // (vlen // DataType(d_dtype).bits)
+        print("lmul", lmul)
 
         n_elems = max_elems
         while n_elems >= 4:
-            # print("while", n_elems, time.time())
+            print("while", n_elems, time.time())
             iters += 1
 
             dt = DataType(d_dtype)
@@ -229,6 +243,7 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
             kernel_name += f"_{n_elems}{d_dtype[0]}{dt.bits}"
             kernel_name += f"_{n_lanes}x{n_elems}{w_dtype[0]}{wt.bits}"
             kernel_name += f"_{n_lanes}{o_dtype[0]}{ot.bits}"
+            print("kernel_name", kernel_name)
             kernels_inventory[kernel_name] = tvm.tir.IntImm("int64", n_elems)
 
             if not inventory_only:
