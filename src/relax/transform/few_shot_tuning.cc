@@ -65,6 +65,7 @@ tir::PrimFunc FewShotTunePrimFunc(const tir::PrimFunc& prim_func, const Target& 
                                                     /*mutator_probs=*/NullOpt),
       /*search_strategy=*/meta_schedule::SearchStrategy::ReplayTrace(/*max_fail_count=*/100),
       /*task_name=*/NullOpt,
+      /*group=*/NullOpt,
       /*num_threads=*/num_threads,  // use all available local threads
       /*rand_state=*/-1,            // -1 means use random seed
       /*logger=*/nullptr);

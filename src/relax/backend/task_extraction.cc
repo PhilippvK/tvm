@@ -124,7 +124,9 @@ class TaskExtractor : public ExprVisitor {
       }
     }
 
+    String group = "";
     ExtractedTask task(/*task_name=*/global_var->name_hint,  //
+                       /*group=*/group,
                        /*mod=*/mod,                          //
                        /*target=*/target_,                   //
                        /*dispatched=*/{mod},                 //
