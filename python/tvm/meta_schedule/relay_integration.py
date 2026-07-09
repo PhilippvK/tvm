@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 """MetaSchedule-Relay integration"""
+
 from contextlib import contextmanager
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
@@ -205,6 +206,9 @@ def extracted_tasks_to_tune_contexts(
     strategy: SearchStrategy.SearchStrategyType = "evolutionary",
     num_tuning_cores: Union[Literal["physical", "logical"], int] = "physical",
     seed: Optional[int] = None,
+    mask_mode: Optional[str] = None,
+    database="json",
+    module_equality="ignore-ndarray",
 ) -> Tuple[List[TuneContext], List[float]]:
     """Convert ExtractedTask to TuneContext.
 
@@ -222,6 +226,12 @@ def extracted_tasks_to_tune_contexts(
         The number of CPU cores to use during tuning.
     seed : Optional[int]
         The random seed to use.
+    mask_mode : Optional[str]
+        TODO
+    database : Optional[str]
+        TODO
+    module_equality : Optional[str]
+        TODO
 
     Returns
     -------
@@ -230,6 +240,124 @@ def extracted_tasks_to_tune_contexts(
     task_weights : List[float]
         The weights of the tasks
     """
+
+    def split_tasks_per_space(tasks, task_weights, mask_mode: str, database="json", module_equality="ignore-ndarray"):
+        print("split_tasks_per_space", tasks, task_weights, mask_mode)
+        assert mask_mode in ["split", "union", "all"]
+        # if mask_mode == "split":
+        # if mask_mode == "union":
+        # if mask_mode == "all":
+        all_ctx_kwargs = []
+        all_task_names = []
+        for i, task in enumerate(tasks):
+            weight = task_weights[i]
+
+            # space_generator2space_idxs = None
+            spaces_ = []
+            if mask_mode == "union":
+                from .space_generator import SpaceGeneratorUnion
+
+                if isinstance(task.space_generator, SpaceGeneratorUnion):
+
+                    spaces_ = []
+                    for k, space_generator in enumerate(task.space_generator.space_generators):
+                        spaces__ = task.space_generator.generate_design_space(task.mod)
+                        space_idxs = []
+                        for m, space in enumerate(spaces__):
+                            space_idx = len(spaces_)
+                            spaces_.append(space)
+                            space_idxs.append(space_idx)
+                    space_groups = space_idxs
+                    print("space_groups", space_groups)
+                else:
+                    spaces_ = task.space_generator.generate_design_space(task.mod)
+                    mask_mode = "all"
+            else:
+                spaces_ = task.space_generator.generate_design_space(task.mod)
+            print("spaces_", spaces_)
+
+            num_spaces = len(spaces_)
+            if mask_mode == "all":
+                space_groups = [[idx for idx in range(num_spaces)]]
+                assert len(space_groups) == 1
+            elif mask_mode == "split":
+                space_groups = [[idx] for idx in range(num_spaces)]
+                assert len(space_groups) == num_spaces
+            else:
+                assert num_spaces == sum(len(idxs) for idxs in space_groups)
+
+            print("space_groups", space_groups)
+
+            for j, space_idxs in enumerate(space_groups):
+                # print("i,j", i, j)
+                # print("space", space, dir(space))
+                # print("space.mod", space.mod)
+                # print("space.trace", space.trace)
+                # input("%%%")
+                mask = [0] * num_spaces
+                for space_idx in space_idxs:
+                    mask[space_idx] = 1
+                # print("mask", mask)
+                # group = f"T{i}_M{j}"
+                group = f"T{i}"
+                # new_task_name = f"{task.task_name}_{group}"
+                new_task_name = f"{task.task_name}_M{j}"
+                all_task_names.append(new_task_name)
+                # new_rand_state = fork_seed(seed, n=1)[0]
+                # print("new_task_name", new_task_name)
+                work_dir_ = f"{work_dir}/T{i}_M{j}"
+                from pathlib import Path
+
+                Path(work_dir_).mkdir(exist_ok=True)
+                if database == "json":
+                    database = Database.create(database, work_dir=work_dir_, module_equality=module_equality)
+                ctx_kwargs = dict(
+                    mod=task.mod,
+                    target=task.target,
+                    space_generator=task.space_generator,
+                    search_strategy=task.search_strategy,
+                    task_name=new_task_name,
+                    group=group,
+                    # logger=new_logger,
+                    # rand_state=new_rand_state,
+                    design_spaces_mask=mask,
+                    database=database,
+                )
+                all_ctx_kwargs.append(ctx_kwargs)
+                # new_logger = get_loggers_from_work_dir(work_dir, [new_task_name])[0]
+                # new_logger.debug("DEBUG")
+                # new_logger.info("INFO")
+                # print("new_logger", new_logger)
+                # print("new_logger.root", new_logger.root)
+                # print("new_logger.handlers", new_logger.handlers)
+                # print("dir(new_logger)", dir(new_logger))
+        ret_tasks = []
+        ret_weights = []
+        print("all_ctx_kwargs", all_ctx_kwargs)
+        print("all_task_names", all_task_names)
+        print("all_task_names", all_task_names)
+        for ctx_kwargs, logger, rand_state in zip(
+            all_ctx_kwargs,
+            get_loggers_from_work_dir(work_dir, all_task_names),
+            fork_seed(seed, n=len(all_task_names)),
+        ):
+            ctx_kwargs["logger"] = logger
+            ctx_kwargs["rand_state"] = rand_state
+            new_task = TuneContext(**ctx_kwargs)
+            # print("new_task.logger", new_task.logger, new_task.logger.root, new_task.logger.handlers)
+            # print("new_task.logger", new_task.logger)
+            import logging
+
+            new_task.logger(int(logging.DEBUG), "foo", 42, "msg")
+            new_task = new_task.clone()
+            # print("new_task.logger", new_task.logger, new_task.logger.root, new_task.logger.handlers)
+            # print("new_task.logger", new_task.logger)
+            new_task.logger(int(logging.DEBUG), "bar", 43, "msg2")
+            # input("1")
+            ret_tasks.append(new_task)
+            ret_weights.append(weight)
+        return ret_tasks, ret_weights
+
     tasks: List[TuneContext] = []
     task_weights: List[float] = []
     for task, logger, rand_state in zip(
@@ -250,6 +378,15 @@ def extracted_tasks_to_tune_contexts(
             ).clone()
         )
         task_weights.append(task.weight)
+    if mask_mode is not None:
+        tasks_per_space, task_weights_per_space = split_tasks_per_space(
+            tasks, task_weights, mask_mode=mask_mode, database=database, module_equality=module_equality
+        )
+        tasks = tasks_per_space
+        task_weights = task_weights_per_space
+        print("tasks", tasks)
+        print("task_weights", task_weights)
+        # input("!!!")
     return tasks, task_weights
 
 
