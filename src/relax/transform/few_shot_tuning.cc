@@ -68,7 +68,7 @@ tir::PrimFunc FewShotTunePrimFunc(const tir::PrimFunc& prim_func, const Target& 
       /*group=*/NullOpt,
       /*num_threads=*/num_threads,  // use all available local threads
       /*rand_state=*/-1,            // -1 means use random seed
-      /*logger=*/nullptr);
+      /*logger=*/nullptr, {}, NullOpt);
   task->Initialize();
   task->search_strategy.value()->PreTuning(
       /*max_trials=*/valid_count, /*num_trials_per_iter=*/valid_count,
