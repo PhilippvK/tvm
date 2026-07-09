@@ -221,8 +221,11 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
     TaskRecordNode* task = tasks_[task_id].get();
     ICHECK(!task->is_terminated);
     ICHECK(!task->runner_futures.defined());
-    if (task->latency_ms.size() == 0) {  // first trial
+    bool query_first_trial_from_db = false;  // TODO: expose
+    // TODO: also check group?
+    if (query_first_trial_from_db && task->latency_ms.size() == 0) {  // first trial
       // LOG(INFO) << "if a";
+      // TODO: handle task-specific db?
       if (database.defined()) {  // has db
         // // LOG(INFO) << "if b";
         if (task->ctx->mod.defined()) {  // ctx has mod
