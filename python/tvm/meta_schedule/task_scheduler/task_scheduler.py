@@ -26,16 +26,28 @@ from tvm._ffi import register_object
 from tvm.runtime import Object
 
 from .. import _ffi_api
-from ..builder import Builder, BuilderResult
+from ..builder import Builder, BuilderResult, BuilderInput
 from ..cost_model import CostModel
 from ..database import Database
 from ..logging import get_logger, get_logging_func
 from ..measure_callback import MeasureCallback
-from ..runner import Runner, RunnerResult
+from ..runner import Runner, RunnerResult, RunnerFuture, RunnerInput
 from ..search_strategy import MeasureCandidate
 from ..tune_context import TuneContext
 
 logger = get_logger(__name__)  # pylint: disable=invalid-name
+
+
+def get_run_ms_median(runner_result: RunnerResult):
+    run_secs = runner_result.run_secs
+    assert len(run_secs) > 0
+    v = sorted(list(run_secs))
+    n = len(v)
+    if n % 2 == 0:
+        return (v[n // 2 - 1] + v[n // 2]) * 0.5 * 1000.0
+    else:
+        return v[n // 2] * 1000.0
+
 
 
 @register_object("meta_schedule.TaskRecord")
@@ -51,6 +63,139 @@ class TaskRecord(Object):
     measure_candidates: List[MeasureCandidate]
     builder_results: List[BuilderResult]
     runner_results: List[RunnerResult]
+
+    # def __init__(
+    #     self,
+    #     ctx: TuneContext,
+    #     task_weight: float,
+    # ):
+    #     """Constructor."""
+
+    #     self.__init_handle_by_constructor__(
+    #         _ffi_api.TaskRecordPyTaskRecord,  # type: ignore # pylint: disable=no-member
+    #         ctx,
+    #         task_weight,
+    #     )
+
+class TaskRecord2(Object):
+    """The running record of a task."""
+
+    ctx: TuneContext
+    task_weight: float
+    flop: float
+    is_terminated: bool
+    build_error_count: int
+    run_error_count: int
+    latency_ms: List[float]
+    measure_candidates: Optional[List[MeasureCandidate]]
+    builder_results: Optional[List[BuilderResult]]
+    runner_results: Optional[List[RunnerResult]]
+    runner_futures: Optional[List[RunnerFuture]]
+
+    def __init__(
+        self,
+        ctx: TuneContext,
+        task_weight: float,
+    ):
+        self.ctx = ctx
+        self.task_weight = task_weight
+        self.flop = 1.0
+        self.is_terminated = False
+        self.build_error_count = 0
+        self.run_error_count = 0
+        self.latency_ms = []
+        self.measure_candidates = None
+        self.builder_results = None
+        self.runner_results = None
+        self.runner_futures = None
+        if self.ctx.search_strategy is not None:
+            self.ctx.search_strategy._initialize_with_tune_context(self.ctx)
+        if self.ctx.space_generator is not None:
+            self.ctx.space_generator._initialize_with_tune_context(self.ctx)
+        from tvm.tir.analysis import estimate_tir_flops
+        self.flops = estimate_tir_flops(self.ctx.mod)
+
+    def send_to_builder(self, builder):
+        candidates = self.measure_candidates
+        target = self.ctx.target
+        inputs = []
+        for candidate in candidates:
+            inputs.append(BuilderInput(candidate.sch.mod, target))
+        self.builder_results = builder.build(inputs)
+
+    def send_to_runner(self, runner):
+        candidates = self.measure_candidates
+        builder_results = self.builder_results
+        target = self.ctx.target
+        assert len(candidates) == len(builder_results)
+        n = len(candidates)
+        n_build_errors = 0
+        inputs = []
+        for i in range(n):
+            # TODO: use enumerate
+            candidate = candidates[i]
+            builder_result = builder_results[i]
+            if builder_result.error_msg is not None:
+                n_build_errors += 1
+                continue
+            inputs.append(RunnerInput(builder_result.artifact_path, target.kind.name, candidate.args_info));
+        futures = runner.run(inputs);
+        if n_build_errors == 0:
+            self.runner_futures = futures
+            return
+        results = []
+        j = 0
+        for i in range(n):
+            # TODO: use enumerate
+            builder_result = builder_results[i];
+            # TODO: check if pickable?
+            def f_result():
+                timestamp = None
+                # TODO: timestamp
+                return RunnerResult(None, builder_result.error_msg, timestamp)
+            if builder_result.error_msg is not None:
+                results.append(RunnerFuture(f_done=lambda: True, f_result=f_result))
+            else:
+                results.append(futures[j])
+                j += 1
+        self.runner_futures = results
+
+    def cleanup(self, task_id: int, results: List[RunnerResult]):
+        assert len(self.builder_results) == len(results)
+        assert len(self.runner_futures) == len(results)
+        n = len(results)
+        name = self.ctx.task_name
+        # TODO: logger
+        for i in range(n):
+            builder_result = self.builder_results[i]
+            candidate = self.measure_candidates[i]
+            runner_result = results[i]
+            error_msg = None
+            trials = len(self.latency_ms) + 1
+            run_ms = 1.0e9
+            if builder_result.error_msg:
+                error_msg = builder_result.error_msg
+                self.build_error_count += 1
+            elif runner_result.error_msg:
+                error_msg = runner_result.error_msg
+                self.run_error_count += 1
+            else:
+                run_ms = get_run_ms_median(runner_result)
+            self.latency_ms.append(run_ms)
+            if error_msg is not None:
+                # TODO: logging
+                print(f"Error: {error_msg}")
+            else:
+                # TODO: logging
+                best_ms = min(self.latency_ms)
+                print(f"[Task #{task_id}: {name}] Trial #{trials}: GFLOPs: {self.flop / run_ms / 1e6}. Time: {run_ms * 1e3}. Best GFLOPs: {self.flop / best_ms / 1e6}")
+        self.measure_candidates = None
+        self.builder_results = None
+        self.runner_futures = None
+
+
+
+
 
 
 @register_object("meta_schedule.TaskScheduler")
@@ -131,6 +276,7 @@ class TaskScheduler(Object):
         design_spaces_mask : TODO
         """
         task_weights = [float(w) for w in task_weights]
+        print("mmoodd", tasks[0].mod)
         _ffi_api.TaskSchedulerTune(  # type: ignore # pylint: disable=no-member
             self,
             tasks,
