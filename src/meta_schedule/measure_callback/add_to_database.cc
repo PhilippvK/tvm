@@ -27,16 +27,22 @@ class AddToDatabaseNode : public MeasureCallbackNode {
              const Array<MeasureCandidate>& measure_candidates,
              const Array<BuilderResult>& builder_results,
              const Array<RunnerResult>& runner_results) final {
-    if (!task_scheduler->database_.defined()) {
-      return;
-    }
     auto _ = Profiler::TimedScope("MeasureCallback/AddToDatabase");
     TuneContext task = task_scheduler->tasks_[task_id]->ctx;
-    Database database = task_scheduler->database_.value();
-    Workload workload = database->CommitWorkload(task->mod.value());
     Target target = task->target.value();
     ICHECK_EQ(runner_results.size(), measure_candidates.size());
     int n = runner_results.size();
+    Optional<Workload> workload, workload2;
+    if (task->database.defined()) {
+      workload = task->database.value()->CommitWorkload(task->mod.value());
+    }
+    if (task_scheduler->database_.defined()) {
+      workload2 = task_scheduler->database_.value()->CommitWorkload(task->mod.value());
+    }
+    if (!workload.defined() && !workload2.defined()) {
+      LOG(INFO) << "No database found (skipping)";
+      return;
+    }
     for (int i = 0; i < n; ++i) {
       RunnerResult result = runner_results[i];
       MeasureCandidate candidate = measure_candidates[i];
@@ -50,13 +56,19 @@ class AddToDatabaseNode : public MeasureCallbackNode {
       if (result->timestamp.defined()) {
           timestamp = result->timestamp.value();
       }
-      database->CommitTuningRecord(TuningRecord(
+      auto rec = TuningRecord(
           /*trace=*/candidate->sch->trace().value(),
-          /*workload=*/workload,
+          /*workload=*/workload.defined() ? workload.value() : workload2.value(),
           /*run_secs=*/run_secs,
           /*target=*/target,
           /*args_info=*/candidate->args_info,
-          /*timestamp=*/timestamp));
+          /*timestamp=*/timestamp);
+      if (task->database.defined()) {
+        task->database.value()->CommitTuningRecord(rec);
+      }
+      if (task_scheduler->database_.defined()) {
+        task_scheduler->database_.value()->CommitTuningRecord(rec);
+      }
     }
   }
 
