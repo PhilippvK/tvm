@@ -38,6 +38,10 @@ TaskRecord::TaskRecord(TuneContext ctx, double task_weight) {
   this->data_ = std::move(n);
 }
 
+TaskRecord TaskRecord::PyTaskRecord(TuneContext ctx, double task_weight) {
+  return TaskRecord(ctx, task_weight);
+}
+
 void SendToBuilder(TaskRecordNode* self, const Builder& builder) {
   auto _ = Profiler::TimedScope("SendToBuilder");
   Array<MeasureCandidate> candidates = self->measure_candidates.value();
@@ -150,6 +154,22 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
                              int num_trials_per_iter, Builder builder, Runner runner,
                              Array<MeasureCallback> measure_callbacks, Optional<Database> database,
                              Optional<CostModel> cost_model, Array<Integer> design_spaces_mask) {
+  if (this->tune_func_.defined()) {
+    this->tune_func_.value()(
+        GetRef<TaskScheduler>(this),
+        ctxs,
+        task_weights,
+        max_trials_global,
+        max_trials_per_task,
+        num_trials_per_iter,
+        builder,
+        runner,
+        measure_callbacks,
+        database,
+        cost_model,
+        design_spaces_mask);
+    return;
+  }
   CHECK_EQ(ctxs.size(), task_weights.size()) << "ValueError: `task_weights` must have the same "
                                                 "length as `ctxs`";
   int n_tasks = this->remaining_tasks_ = ctxs.size();
@@ -312,6 +332,10 @@ void TaskSchedulerNode::TerminateTask(int task_id) {
 }
 
 void TaskSchedulerNode::PrintTuningStatistics() {
+  if (this->print_tuning_statistics_func_.defined()) {
+    this->print_tuning_statistics_func_.value()(GetRef<TaskScheduler>(this));
+    return;
+  }
   std::ostringstream os;
   int n_tasks = this->tasks_.size();
   int total_trials = 0;
@@ -411,6 +435,8 @@ void PyTaskSchedulerNode::Tune(Array<TuneContext> tasks, Array<FloatImm> task_we
 }
 
 TVM_REGISTER_NODE_TYPE(TaskRecordNode);
+TVM_REGISTER_GLOBAL("meta_schedule.TaskRecordPyTaskRecord")
+    .set_body_typed(TaskRecord::PyTaskRecord);
 TVM_REGISTER_OBJECT_TYPE(TaskSchedulerNode);
 TVM_REGISTER_NODE_TYPE(PyTaskSchedulerNode);
 TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerPyTaskScheduler")
@@ -427,6 +453,86 @@ TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerTouchTask")
     .set_body_method<TaskScheduler>(&TaskSchedulerNode::TouchTask);
 TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerPrintTuningStatistics")
     .set_body_method<TaskScheduler>(&TaskSchedulerNode::PrintTuningStatistics);
+
+TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerNumTasks")
+    .set_body_typed([](TaskScheduler self) -> int {
+      return self->tasks_.size();
+    });
+
+TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerTaskIsTerminated")
+    .set_body_typed([](TaskScheduler self, int task_id) -> bool {
+      return self->tasks_[task_id]->is_terminated;
+    });
+
+TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerTaskHasRunnerFutures")
+    .set_body_typed([](TaskScheduler self, int task_id) -> bool {
+      return self->tasks_[task_id]->runner_futures.defined();
+    });
+
+TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerTaskWeight")
+    .set_body_typed([](TaskScheduler self, int task_id) -> double {
+      return self->tasks_[task_id]->task_weight;
+    });
+
+TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerTaskBestLatency")
+    .set_body_typed([](TaskScheduler self, int task_id) -> double {
+      const auto& xs = self->tasks_[task_id]->latency_ms;
+      if (xs.empty()) return 1e9;
+      return *std::min_element(xs.begin(), xs.end());
+    });
+
+TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerSetPrintTuningStatisticsFunc")
+    .set_body_typed([](TaskScheduler self, PackedFunc f) {
+      self->print_tuning_statistics_func_ = f;
+    });
+
+TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerTaskStats")
+    .set_body_typed([](TaskScheduler self) -> Array<Map<String, ObjectRef>> {
+      Array<Map<String, ObjectRef>> out;
+
+      for (int i = 0, n = self->tasks_.size(); i < n; ++i) {
+        TaskRecordNode* task = self->tasks_[i].get();
+
+        double best_ms = 1e9;
+        if (!task->latency_ms.empty()) {
+          best_ms = *std::min_element(task->latency_ms.begin(), task->latency_ms.end());
+        }
+
+        out.push_back({
+            {"id", Integer(i)},
+            {"name", task->ctx->task_name.value()},
+            {"group", task->ctx->group.value()},
+            {"flop", FloatImm(DataType::Float(64), task->flop)},
+            {"weight", FloatImm(DataType::Float(64), task->task_weight)},
+            {"best_latency_ms", FloatImm(DataType::Float(64), best_ms)},
+            {"trials", Integer(task->latency_ms.size())},
+            {"done", Bool(task->is_terminated)},
+            {"build_errors", Integer(task->build_error_count)},
+            {"run_errors", Integer(task->run_error_count)},
+            {"mask", task->ctx->design_spaces_mask},
+        });
+      }
+
+      return out;
+    });
+
+TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerSetTuneFunc")
+    .set_body_typed([](TaskScheduler self, PackedFunc f) {
+      self->tune_func_ = f;
+    });
+
+TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerTuneDefault")
+    .set_body_typed([](TaskScheduler self, Array<TuneContext> ctxs, Array<FloatImm> task_weights,
+                       int max_trials_global, int max_trials_per_task, int num_trials_per_iter,
+                       Builder builder, Runner runner,
+                       Array<MeasureCallback> measure_callbacks,
+                       Optional<Database> database, Optional<CostModel> cost_model, Array<Integer> design_spaces_mask) {
+      Optional<PackedFunc> saved = self->tune_func_;
+      self->tune_func_ = NullOpt;
+      self->Tune(ctxs, task_weights, max_trials_global, max_trials_per_task,
+                 num_trials_per_iter, builder, runner, measure_callbacks, database, cost_model, design_spaces_mask);
+      self->tune_func_ = saved;
+    });
 
 }  // namespace meta_schedule
 }  // namespace tvm
