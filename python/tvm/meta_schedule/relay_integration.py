@@ -35,7 +35,7 @@ from tvm.target import Target
 
 from .builder import Builder
 from .cost_model import CostModel
-from .database import Database, MemoryDatabase
+from .database import Database, MemoryDatabase, JSONDatabase
 from .extracted_task import ExtractedTask
 from .logging import get_loggers_from_work_dir
 from .measure_callback import MeasureCallback
@@ -299,18 +299,34 @@ def extracted_tasks_to_tune_contexts(
                     mask[space_idx] = 1
                 # print("mask", mask)
                 # group = f"T{i}_M{j}"
-                group = f"T{i}"
+                group = task.group
+                if group:
+                    group = task.group
+                else:
+                    group = f"T{i}"
                 # new_task_name = f"{task.task_name}_{group}"
                 new_task_name = f"{task.task_name}_M{j}"
                 all_task_names.append(new_task_name)
                 # new_rand_state = fork_seed(seed, n=1)[0]
                 # print("new_task_name", new_task_name)
-                work_dir_ = f"{work_dir}/T{i}_M{j}"
+                work_dir_ = f"{work_dir}/{group}_M{j}"
                 from pathlib import Path
 
                 Path(work_dir_).mkdir(exist_ok=True)
+                if database is None:
+                    database = "memory"
+                if isinstance(database, Database):
+                    if isinstance(database, JSONDatabase):
+                        database = "json"
+                    else:
+                        assert isinstance(database, MemoryDatabase)
+                        database = "memory"
+                assert isinstance(database, str)
                 if database == "json":
                     database = Database.create(database, work_dir=work_dir_, module_equality=module_equality)
+                else:
+                    assert database == "memory"
+                    database = Database.create(database, module_equality=module_equality)
                 ctx_kwargs = dict(
                     mod=task.mod,
                     target=task.target,
@@ -344,16 +360,7 @@ def extracted_tasks_to_tune_contexts(
             ctx_kwargs["logger"] = logger
             ctx_kwargs["rand_state"] = rand_state
             new_task = TuneContext(**ctx_kwargs)
-            # print("new_task.logger", new_task.logger, new_task.logger.root, new_task.logger.handlers)
-            # print("new_task.logger", new_task.logger)
-            import logging
-
-            new_task.logger(int(logging.DEBUG), "foo", 42, "msg")
             new_task = new_task.clone()
-            # print("new_task.logger", new_task.logger, new_task.logger.root, new_task.logger.handlers)
-            # print("new_task.logger", new_task.logger)
-            new_task.logger(int(logging.DEBUG), "bar", 43, "msg2")
-            # input("1")
             ret_tasks.append(new_task)
             ret_weights.append(weight)
         return ret_tasks, ret_weights
