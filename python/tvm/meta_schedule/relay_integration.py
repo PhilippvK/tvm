@@ -199,7 +199,9 @@ def extract_tasks(
                 disabled_pass=disabled_pass,
                 instruments=instruments,
             ):
-                return list(_extract_task(mod, target, params, module_equality))
+                multi_dispatch = True
+                ret = list(_extract_task(mod, target, params, module_equality, multi_dispatch))
+                assert len(ret) > 0
     if not include_simple_tasks:
         # ret = [task for task in ret if task.flops >= 100]
         temp = []
@@ -386,19 +388,36 @@ def extracted_tasks_to_tune_contexts(
         get_loggers_from_work_dir(work_dir, [t.task_name for t in extracted_tasks]),
         fork_seed(seed, n=len(extracted_tasks)),
     ):
-        tasks.append(
-            TuneContext(
-                mod=task.dispatched[0],
-                target=task.target,
-                space_generator=space,
-                search_strategy=strategy,
-                task_name=task.task_name,
-                logger=logger,
-                rand_state=rand_state,
-                num_threads=num_tuning_cores,
-            ).clone()
-        )
-        task_weights.append(task.weight)
+        # TODO: multi-dispatch?
+        multi_dispatch = True
+        dispatched = task.dispatched
+        assert len(dispatched) >= 1
+        if not multi_dispatch:
+            dispatched = dispatched[:1]
+        for d, disp in enumerate(dispatched):
+            if multi_dispatch:
+                task_name = f"{task.task_name}_D{d}"
+                task_idx = len(tasks)
+                group = f"T{task_idx}"
+            else:
+                task_name = task.task_name
+
+            print("disp", disp)
+
+            tasks.append(
+                TuneContext(
+                    mod=disp,
+                    target=task.target,
+                    space_generator=space,
+                    search_strategy=strategy,
+                    task_name=task_name,
+                    group=group,
+                    logger=logger,
+                    rand_state=rand_state,
+                    num_threads=num_tuning_cores,
+                ).clone()
+            )
+            task_weights.append(task.weight)
     if mask_mode is not None:
         tasks_per_space, task_weights_per_space = split_tasks_per_space(
             tasks, task_weights, mask_mode=mask_mode, database=database, module_equality=module_equality
