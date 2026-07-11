@@ -131,6 +131,7 @@ def extract_tasks(
     module_equality: str = "structural",
     disabled_pass: Optional[Union[List[str], Set[str], Tuple[str]]] = None,
     instruments: Optional[Sequence[PassInstrument]] = None,
+    include_simple_tasks: bool = False,
 ) -> List[ExtractedTask]:
     """Extract tuning tasks from a relay program.
 
@@ -164,6 +165,8 @@ def extract_tasks(
         The list of disabled passes
     instruments : Optional[Sequence[PassInstrument]]
         The list of pass instrument implementations.
+    include_simple_tasks : bool
+        TODO
 
     Returns
     -------
@@ -197,6 +200,17 @@ def extract_tasks(
                 instruments=instruments,
             ):
                 return list(_extract_task(mod, target, params, module_equality))
+    if not include_simple_tasks:
+        # ret = [task for task in ret if task.flops >= 100]
+        temp = []
+        for task in ret:
+            from tvm.tir.analysis import estimate_tir_flops
+            # assert len(task.dispatched) == 1
+            flops = estimate_tir_flops(task.dispatched[0])
+            if flops >= 100:
+                temp.append(task)
+        ret = temp
+    return ret
 
 
 def extracted_tasks_to_tune_contexts(
