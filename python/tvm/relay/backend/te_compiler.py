@@ -137,6 +137,11 @@ def get_valid_implementations(op, attrs, inputs, out_type, target):
     return ret
 
 
+def _get_forced_impl_name():
+    ctx = tvm.transform.PassContext.current()
+    return ctx.config.get("relay.backend.force_op_impl_name", None)
+
+
 def select_implementation(op, attrs, inputs, out_type, target, use_autotvm=True):
     """Select the best implementation from the op strategy.
 
@@ -177,6 +182,32 @@ def select_implementation(op, attrs, inputs, out_type, target, use_autotvm=True)
     all_impls = get_valid_implementations(op, attrs, inputs, out_type, target)
     if len(all_impls) == 0:
         raise RuntimeError(f"No valid {op} implementations for {target}")
+
+    for impl in all_impls:
+        print("impl.name", impl.name)
+
+    forced_impl_name = tvm.transform.PassContext.current().config.get(
+        "relay.backend.force_op_impl_name", None
+    )
+
+    if forced_impl_name is not None:
+        forced_impl_name = str(forced_impl_name)
+
+        for impl in all_impls:
+            if impl.name == forced_impl_name:
+                outs = impl.compute(attrs, inputs, out_type)
+                logger.info(
+                    "Force selected implementation %s for op %s",
+                    impl.name,
+                    op.name,
+                )
+                return impl, outs
+
+        valid_names = [impl.name for impl in all_impls]
+        raise RuntimeError(
+            f"Forced implementation {forced_impl_name!r} is not valid for op {op.name}. "
+            f"Valid implementations: {valid_names}"
+        )
     best_plevel_impl = max(all_impls, key=lambda x: x.plevel)
 
     # Disable autotvm if auto_scheduler is enabled.
@@ -328,6 +359,61 @@ def lower_call(call, inputs, target, otype=None):
     if reenable_tracing:
         env.tracing = True
     return LoweredOutput(outputs, best_impl)
+
+
+@tvm._ffi.register_func("relay.backend.lower_call_all_valid")
+def lower_call_all_valid(call, inputs, target, otype=None):
+    """TODO."""
+    assert isinstance(call.op, tvm.ir.Op)
+    op = call.op
+
+    if otype is not None:
+        ret_type = otype
+    else:
+        # Prepare the call_node->checked_type(). For the call node inputs, we ensure that
+        # the shape is Int32. Following code ensures the same for the output as well.
+        # TODO(@icemelon9): Support recursive tuple
+        ret_type = call.checked_type
+        if isinstance(ret_type, _ty.TensorType):
+            ret_type = _ty.TensorType(get_shape(ret_type.shape), ret_type.dtype)
+        elif isinstance(ret_type, _ty.TupleType):
+            new_fields = []
+            for field in ret_type.fields:
+                if isinstance(field, _ty.TensorType):
+                    new_fields.append(_ty.TensorType(get_shape(field.shape), field.dtype))
+                else:
+                    new_fields.append(field)
+            ret_type = _ty.TupleType(new_fields)
+
+    is_dyn = _ty.is_dynamic(call.checked_type)
+    for arg in call.args:
+        is_dyn = is_dyn or _ty.is_dynamic(arg.checked_type)
+
+    # check if in the AutoTVM tracing mode, and disable if op is not in wanted list
+    env = autotvm.task.TaskExtractEnv.current
+    reenable_tracing = False
+    if env is not None and env.tracing:
+        if env.wanted_relay_ops is not None and op not in env.wanted_relay_ops:
+            env.tracing = False
+            reenable_tracing = True
+
+    if not is_dyn:
+        all_impls = get_valid_implementations(op, call.attrs, inputs, ret_type, target)
+    else:
+        all_impls = get_valid_implementations(op, call.attrs, inputs, ret_type, target, use_autotvm=False)
+    if len(all_impls) == 0:
+        raise RuntimeError(f"No valid {op} implementations for {target}")
+
+    ret = []
+    for impl in all_impls:
+        outs = impl.compute(call.attrs, inputs, ret_type)
+        ret.append(LoweredOutput(outs, impl))
+
+    # re-enable AutoTVM tracing
+    if reenable_tracing:
+        env.tracing = True
+
+    return ret
 
 
 @tvm._ffi.register_object("relay.TECompiler")
