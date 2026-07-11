@@ -259,7 +259,10 @@ def extracted_tasks_to_tune_contexts(
 
     def split_tasks_per_space(tasks, task_weights, mask_mode: str, database="json", module_equality="ignore-ndarray"):
         print("split_tasks_per_space", tasks, task_weights, mask_mode)
-        assert mask_mode in ["split", "union", "all"]
+        # TODO: handle no append!
+        if mask_mode is None or mask_mode == "none":
+            return tasks, task_weights
+        assert mask_mode in ["split", "union", "all", "none"]
         # if mask_mode == "split":
         # if mask_mode == "union":
         # if mask_mode == "all":
@@ -269,21 +272,21 @@ def extracted_tasks_to_tune_contexts(
             weight = task_weights[i]
 
             # space_generator2space_idxs = None
-            spaces_ = []
             if mask_mode == "union":
                 from .space_generator import SpaceGeneratorUnion
 
                 if isinstance(task.space_generator, SpaceGeneratorUnion):
 
                     spaces_ = []
+                    space_groups = []
                     for k, space_generator in enumerate(task.space_generator.space_generators):
-                        spaces__ = task.space_generator.generate_design_space(task.mod)
+                        spaces__ = space_generator.generate_design_space(task.mod)
                         space_idxs = []
                         for m, space in enumerate(spaces__):
                             space_idx = len(spaces_)
                             spaces_.append(space)
                             space_idxs.append(space_idx)
-                    space_groups = space_idxs
+                        space_groups.append(space_idxs)
                     print("space_groups", space_groups)
                 else:
                     spaces_ = task.space_generator.generate_design_space(task.mod)
