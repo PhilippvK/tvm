@@ -21,6 +21,14 @@
 namespace tvm {
 namespace meta_schedule {
 
+namespace {
+
+/*! \brief Prevent RandomComputeLocation from moving or inlining a block. */
+constexpr const char* kNoRandomComputeLocation =
+    "meta_schedule.no_random_compute_location";
+
+}  // namespace
+
 class RandomComputeLocationNode : public ScheduleRuleNode {
  public:
   // Inherited from ScheduleRuleNode
@@ -51,7 +59,11 @@ class RandomComputeLocationNode : public ScheduleRuleNode {
 
     // Step 3. Transform the producer block if compute-location sampling is needed.
     if (producers.defined()) {
-      res = RandomlyComputeAt(res, producers[0]);
+      // The producer may itself represent a physical packing operation that must
+      // remain materialized.  Do not bypass CheckConditions here.
+      if (CheckConditions(res, producers[0])) {
+        res = RandomlyComputeAt(res, producers[0]);
+      }
     }
 
     return {res};
@@ -64,9 +76,18 @@ class RandomComputeLocationNode : public ScheduleRuleNode {
   }
 
  private:
-  bool CheckConditions(const tir::Schedule sch, const tir::BlockRV& block_rv) const {
+  bool CheckConditions(const tir::Schedule& sch, const tir::BlockRV& block_rv) const {
     tir::StmtSRef block_sref = sch->GetSRef(block_rv);
     TVM_SREF_TO_BLOCK(block_sref);
+
+    // Cond 0. Some blocks implement a required physical layout, such as the
+    // explicit A/B/C packing used by the IME GEMM compute.  SampleComputeLocation
+    // may select the compute-inline sentinel, which would eliminate such buffers
+    // and make the tensor intrinsic no longer structurally match.
+    if (tir::HasAnn(block_sref, kNoRandomComputeLocation, true)) {
+      return false;
+    }
+
 
     // Cond 1. The block is not the root block.
     if (block_sref->parent == nullptr) {
