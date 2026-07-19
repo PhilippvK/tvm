@@ -40,6 +40,7 @@ def rich_print_tuning_statistics(scheduler):
     table = Table(title="Meta-Schedule Tuning")
     for col in [
         "ID",
+        "Extras",
         "Name",
         "Group",
         "FLOP",
@@ -83,6 +84,7 @@ def rich_print_tuning_statistics(scheduler):
 
         table.add_row(
             str(int(row["id"])),
+            str(row["extras"]),
             str(row["name"]),
             str(row["group"]),
             f"{flop:.0f}",

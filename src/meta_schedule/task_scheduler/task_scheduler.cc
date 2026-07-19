@@ -503,8 +503,9 @@ TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerTaskStats")
 
         out.push_back({
             {"id", Integer(i)},
-            {"name", task->ctx->task_name.value()},
-            {"group", task->ctx->group.value()},
+            {"extras", task->ctx->extras.defined() ? task->ctx->extras.value() : ""},
+            {"name", task->ctx->task_name.defined() ? task->ctx->task_name.value() : ""},
+            {"group", task->ctx->group.defined() ? task->ctx->group.value() : ""},
             {"flop", FloatImm(DataType::Float(64), task->flop)},
             {"weight", FloatImm(DataType::Float(64), task->task_weight)},
             {"best_latency_ms", FloatImm(DataType::Float(64), best_ms)},

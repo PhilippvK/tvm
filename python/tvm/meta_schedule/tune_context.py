@@ -79,6 +79,7 @@ class TuneContext(Object):
     logger : logging.Logger
         The logger for the tuning task.
     group : TODO
+    extras : TODO
     rand_state : int = -1
         The random state.
         Need to be in integer in [1, 2^31-1], -1 means using random number.
@@ -94,6 +95,7 @@ class TuneContext(Object):
     search_strategy: Optional["SearchStrategy"]
     task_name: str
     group: str
+    extras: str
     logger: Optional[Logger]
     rand_state: int
     num_threads: int
@@ -109,6 +111,7 @@ class TuneContext(Object):
         search_strategy: Union["SearchStrategy.SearchStrategyType", None] = None,
         task_name: str = "main",
         group: str = "",
+        extras: str = "",
         rand_state: int = -1,
         num_threads: Union[int, Literal["physical", "logical"]] = "physical",
         logger: Optional[Logger] = None,
@@ -153,6 +156,7 @@ class TuneContext(Object):
             search_strategy,
             task_name,
             group,
+            extras,
             num_threads,
             rand_state,
             get_logging_func(logger),
