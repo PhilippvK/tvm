@@ -353,6 +353,7 @@ def extracted_tasks_to_tune_contexts(
                     search_strategy=task.search_strategy,
                     task_name=new_task_name,
                     group=group,
+                    extras=task.extras,
                     # logger=new_logger,
                     # rand_state=new_rand_state,
                     design_spaces_mask=mask,
@@ -386,13 +387,22 @@ def extracted_tasks_to_tune_contexts(
 
     tasks: List[TuneContext] = []
     task_weights: List[float] = []
+    i = 0
     for task, logger, rand_state in zip(
         extracted_tasks,
         get_loggers_from_work_dir(work_dir, [t.task_name for t in extracted_tasks]),
         fork_seed(seed, n=len(extracted_tasks)),
     ):
-        # TODO: multi-dispatch?
-        multi_dispatch = True
+        extras_str = None
+        if task_infos is not None:
+            assert len(task_infos) == len(extracted_tasks)
+            task_info = task_infos[i]
+            print("task_info", task_info)
+            mod_idx, *mod_info = task_info
+            data_layout, kernel_layout = mod_info
+            extras = []
+            extras_str = "_".join(map(str, filter(lambda x: x is not None, extras)))
+        print("extras_str", extras_str)
         dispatched = task.dispatched
         assert len(dispatched) >= 1
         if not multi_dispatch:
@@ -415,6 +425,7 @@ def extracted_tasks_to_tune_contexts(
                     search_strategy=strategy,
                     task_name=task_name,
                     group=group,
+                    extras=extras_str,
                     logger=logger,
                     rand_state=rand_state,
                     num_threads=num_tuning_cores,
