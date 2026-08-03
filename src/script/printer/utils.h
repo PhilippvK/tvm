@@ -79,7 +79,8 @@ inline std::string Docsify(const ObjectRef& obj, const IRDocsifier& d, const Fra
   }
   std::ostringstream os;
   if (!d->metadata.empty()) {
-    if (d->cfg->show_meta) {
+    // if (d->cfg->show_meta) {
+    if (1) {
       os << "metadata = tvm.ir.load_json(\"\"\""
          << support::StrEscape(
                 SaveJSON(Map<String, ObjectRef>(d->metadata.begin(), d->metadata.end())), false,
