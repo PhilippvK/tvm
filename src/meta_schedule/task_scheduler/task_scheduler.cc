@@ -104,10 +104,12 @@ void SendToRunner(TaskRecordNode* self, const Runner& runner) {
 }
 
 void TaskCleanUp(TaskRecordNode* self, int task_id, const Array<RunnerResult>& results) {
+  // LOG(INFO) << "TaskCleanUp";
   ICHECK_EQ(self->builder_results.value().size(), results.size());
   ICHECK_EQ(self->runner_futures.value().size(), results.size());
   int n = results.size();
   std::string name = self->ctx->task_name.value();
+  // LOG(INFO) << "name=" << name;
   const PackedFunc& logger = self->ctx->logger;
   for (int i = 0; i < n; ++i) {
     const BuilderResult& builder_result = self->builder_results.value()[i];
@@ -154,6 +156,7 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
                              int num_trials_per_iter, Builder builder, Runner runner,
                              Array<MeasureCallback> measure_callbacks, Optional<Database> database,
                              Optional<CostModel> cost_model, Array<Integer> design_spaces_mask) {
+                             // Optional<CostModel> cost_model, Array<Array<tir::Schedule>> task_pool_schs, Array<Array<Integer>> task_pool_idxs) {
   if (this->tune_func_.defined()) {
     this->tune_func_.value()(
         GetRef<TaskScheduler>(this),
@@ -172,6 +175,8 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
   }
   CHECK_EQ(ctxs.size(), task_weights.size()) << "ValueError: `task_weights` must have the same "
                                                 "length as `ctxs`";
+  // CHECK_EQ(ctxs.size(), task_pool_schs.size());
+  // CHECK_EQ(task_pool_idxs.size(), task_pool_schs.size());
   int n_tasks = this->remaining_tasks_ = ctxs.size();
   this->measure_callbacks_ = measure_callbacks;
   this->database_ = database;
@@ -181,6 +186,11 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
   for (int i = 0; i < n_tasks; ++i) {
     const TuneContext& ctx = ctxs[i];
     double weight = task_weights[i]->value;
+    // Array<tir::Schedule> pool_schs = task_pool_schs[i];
+    // Array<Integer> pool_idxs = task_pool_idxs[i];
+    // CHECK_EQ(pool_idxs.size(), pool_schs.size());
+    // bool use_pool = pool_schs.size() > 0;
+    // LOG(INFO) << "use_pool2=" << use_pool;
     TVM_PY_LOG(INFO, this->logger) << "Initializing Task #" << i << ": " << ctx->task_name;
     TVM_PY_LOG(INFO, ctx->logger) << "Initializing Task #" << i << ": " << ctx->task_name;
     this->tasks_.push_back(TaskRecord(ctx, weight));
@@ -204,14 +214,24 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
                                               database, cost_model);
     }
     // TODO: PY LOG
+    LOG(INFO) << "ctx->design_spaces_mask.size()=" << ctx->design_spaces_mask.size();
     if (ctx->design_spaces_mask.size() > 0) {
         ICHECK_EQ(design_spaces_mask.size(), 0);
         ctx->search_strategy.value()->MaskDesignSpaces(ctx->design_spaces_mask);
     }
+    LOG(INFO) << "design_spaces_mask.size()=" << design_spaces_mask.size();
     if (design_spaces_mask.size() > 0) {
         ICHECK_EQ(ctx->design_spaces_mask.size(), 0);
         ctx->search_strategy.value()->MaskDesignSpaces(design_spaces_mask);
     }
+    // ctx->search_strategy.value()->UpdatePool();
+    // std::vector<std::pair<tir::Schedule, int>> pool;
+    // pool.reserve(pool_schs.size());
+    // for (size_t i = 0; i < pool_schs.size(); ++i) {
+    //   int idx = pool_idxs.empty() ? -1 : pool_idxs[i].IntValue();
+    //   pool.emplace_back(pool_schs[i], idx);
+    // }
+    // ctx->search_strategy.value()->state_->pool_ = std::move(pool);
   }
 
   int num_trials_already = 0;
@@ -427,13 +447,16 @@ void PyTaskSchedulerNode::Tune(Array<TuneContext> tasks, Array<FloatImm> task_we
                                int num_trials_per_iter, Builder builder, Runner runner,
                                Array<MeasureCallback> measure_callbacks,
                                Optional<Database> database, Optional<CostModel> cost_model, Array<Integer> design_spaces_mask) {
+                               // Optional<Database> database, Optional<CostModel> cost_model, Array<Array<tir::Schedule>> task_pool_schs, Array<Array<Integer>> task_pool_idxs) {
   if (f_tune == nullptr) {
     TaskSchedulerNode::Tune(tasks, task_weights, max_trials_global, max_trials_per_task,
                             num_trials_per_iter, builder, runner, measure_callbacks, database,
                             cost_model, design_spaces_mask);
+                            // cost_model, task_pool_schs, task_pool_idxs);
   } else {
     f_tune(tasks, task_weights, max_trials_global, max_trials_per_task, num_trials_per_iter,
            builder, runner, measure_callbacks, database, cost_model, design_spaces_mask);
+           // builder, runner, measure_callbacks, database, cost_model, task_pool_schs, task_pool_idxs);
   }
 }
 
@@ -492,15 +515,21 @@ TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerSetPrintTuningStatisticsFunc")
 TVM_REGISTER_GLOBAL("meta_schedule.TaskSchedulerTaskStats")
     .set_body_typed([](TaskScheduler self) -> Array<Map<String, ObjectRef>> {
       Array<Map<String, ObjectRef>> out;
+      // LOG(INFO) << "TaskSchedulerTaskStats";
 
+      // LOG(INFO) << "self->tasks_.size()=" << self->tasks_.size();
       for (int i = 0, n = self->tasks_.size(); i < n; ++i) {
+        // LOG(INFO) << "i=" << i;
         TaskRecordNode* task = self->tasks_[i].get();
 
         double best_ms = 1e9;
+        // LOG(INFO) << "task->latency_ms.empty()=" << task->latency_ms.empty();
         if (!task->latency_ms.empty()) {
           best_ms = *std::min_element(task->latency_ms.begin(), task->latency_ms.end());
         }
+        // LOG(INFO) << "best_ms=" << best_ms;
 
+        // TODO: handle none for group and extras
         out.push_back({
             {"id", Integer(i)},
             {"extras", task->ctx->extras.defined() ? task->ctx->extras.value() : ""},
