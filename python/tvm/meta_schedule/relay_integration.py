@@ -132,6 +132,7 @@ def extract_tasks(
     disabled_pass: Optional[Union[List[str], Set[str], Tuple[str]]] = None,
     instruments: Optional[Sequence[PassInstrument]] = None,
     include_simple_tasks: bool = False,
+    multi_dispatch: bool = False,
 ) -> List[ExtractedTask]:
     """Extract tuning tasks from a relay program.
 
@@ -167,6 +168,8 @@ def extract_tasks(
         The list of pass instrument implementations.
     include_simple_tasks : bool
         TODO
+    multi_dispatch : bool
+        TODO
 
     Returns
     -------
@@ -199,7 +202,6 @@ def extract_tasks(
                 disabled_pass=disabled_pass,
                 instruments=instruments,
             ):
-                multi_dispatch = True
                 ret = list(_extract_task(mod, target, params, module_equality, multi_dispatch))
                 assert len(ret) > 0
     if not include_simple_tasks:
@@ -225,6 +227,7 @@ def extracted_tasks_to_tune_contexts(
     mask_mode: Optional[str] = None,
     database="json",
     module_equality="ignore-ndarray",
+    multi_dispatch: bool = True,
 ) -> Tuple[List[TuneContext], List[float]]:
     """Convert ExtractedTask to TuneContext.
 
@@ -247,6 +250,8 @@ def extracted_tasks_to_tune_contexts(
     database : Optional[str]
         TODO
     module_equality : Optional[str]
+        TODO
+    multi_dispatch : bool
         TODO
 
     Returns
