@@ -295,10 +295,8 @@ class EvolutionarySearchNode : public SearchStrategyNode {
           ed(num_trials_per_iter),
           num_empty_iters(0),
           measured_workloads_(database->GetModuleEquality()) {
-      // LOG(INFO) << "design_space_schedules.size()=" << design_space_schedules.size();
       design_spaces.reserve(design_space_schedules.size());
       design_spaces_mask.reserve(design_space_schedules.size());
-      // LOG(INFO) << "design_space_schedules.size()=" << design_space_schedules.size();
       for (const Schedule& space : design_space_schedules) {
         design_spaces.push_back(space->trace().value()->Simplified(true));
         design_spaces_mask.push_back(1);
@@ -342,7 +340,6 @@ class EvolutionarySearchNode : public SearchStrategyNode {
       //     measured_workloads_.Add(mod, shash);
       //   }
       // }
-      // LOG(INFO) << "measured_workloads_.Size()=" << measured_workloads_.Size();
       this->cost_model_ = cost_model;
       this->token_ = database->CommitWorkload(mod);
     }
@@ -450,6 +447,8 @@ class EvolutionarySearchNode : public SearchStrategyNode {
   TVM_DECLARE_FINAL_OBJECT_INFO(EvolutionarySearchNode, SearchStrategyNode);
 
   void InitializeWithTuneContext(const TuneContext& ctx) final {
+    // LOG(INFO) << "InitializeWithTuneContext";
+    // LOG(INFO) << "ctx->num_threads=" << ctx->num_threads;
     CHECK(ctx->num_threads > 0) << "ValueError: `TuneContext.num_threads` must be > 0";
     CHECK(ctx->space_generator.defined())
         << "ValueError: `TuneContext.space_generator` must be defined";
@@ -466,6 +465,15 @@ class EvolutionarySearchNode : public SearchStrategyNode {
 
   void PreTuning(int max_trials, int num_trials_per_iter, const Array<Schedule>& design_spaces,
                  const Optional<Database>& database, const Optional<CostModel>& cost_model) final {
+    // LOG(INFO) << "PreTuning";
+    // LOG(INFO) << "max_trials=" << max_trials;
+    // LOG(INFO) << "num_trials_per_iter=" << num_trials_per_iter;
+    // LOG(INFO) << "design_spaces.size()=" << design_spaces.size();
+    // LOG(INFO) << "database=" << database;
+    // LOG(INFO) << "cost_model=" << cost_model;
+    // LOG(INFO) << "max_trials=" << max_trials;
+    // LOG(INFO) << "this->ctx_=" << this->ctx_;
+    // LOG(INFO) << "this->state_=" << (uintptr_t)this->state_;
     ICHECK(!design_spaces.empty());
     CHECK(this->ctx_ != nullptr) << "ValueError: Did you forget to initialize the TuneContext?";
     CHECK(database.defined())
@@ -485,9 +493,12 @@ class EvolutionarySearchNode : public SearchStrategyNode {
   }
 
   void MaskDesignSpaces(const Array<Integer>& design_spaces_mask) final {
-    LOG(INFO) << "MaskDesignSpaces";
+    // LOG(INFO) << "MaskDesignSpaces";
     CHECK(this->state_ != nullptr)
         << "ValueError: `PreTuning` has to be called once fore using `MaskDesignSpaces`.";
+    // LOG(INFO) << "this->state_->design_spaces.size()=" << this->state_->design_spaces.size();
+    // LOG(INFO) << "design_spaces_mask.size()=" << design_spaces_mask.size();
+    // LOG(INFO) << "this->state_->design_spaces_mask.size()=" << this->state_->design_spaces_mask.size();
     CHECK(this->state_->design_spaces.size() == design_spaces_mask.size())
         << "Size missmatch";
     CHECK(this->state_->design_spaces_mask.size() == design_spaces_mask.size())
@@ -502,6 +513,7 @@ class EvolutionarySearchNode : public SearchStrategyNode {
   }
 
   Optional<Array<MeasureCandidate>> GenerateMeasureCandidates() final {
+    // LOG(INFO) << "GenerateMeasureCandidates";
     ICHECK(this->state_ != nullptr);
     return this->state_->GenerateMeasureCandidates();
   }
@@ -592,7 +604,8 @@ std::vector<std::pair<Schedule, int>> EvolutionarySearchNode::State::SampleInitP
   // std::mutex decision_counts_mutex;
   IRModuleSet exists(database_->GetModuleEquality());
   exists = this->measured_workloads_;
-  while (static_cast<int>(out_schs.size()) < (auto_num ? 1000000 : self->init_min_unmeasured) &&
+  // while (static_cast<int>(out_schs.size()) < (auto_num ? 1000000 : self->init_min_unmeasured) &&
+  while (static_cast<int>(out_schs.size()) < (auto_num ? 100000 : self->init_min_unmeasured) &&
          fail_count < self->max_fail_count) {
     // LOG(INFO) << "while";
     std::vector<std::pair<Schedule, int>> results(num, std::pair<Schedule, int>{nullptr, -1});
@@ -605,13 +618,13 @@ std::vector<std::pair<Schedule, int>> EvolutionarySearchNode::State::SampleInitP
       ICHECK(!result.first.defined());
       bool use_pool = this->pool_.size();
       if (use_pool) {
-          LOG(INFO) << "use_pool=" << use_pool;
+          // LOG(INFO) << "use_pool=" << use_pool;
           int pool_index = tir::SampleInt(rand_state, 0, this->pool_.size());
-          LOG(INFO) << "pool_index=" << pool_index;
+          // LOG(INFO) << "pool_index=" << pool_index;
           std::pair<Schedule, int> temp = this->pool_[pool_index];
           result.first = temp.first;
           result.second = temp.second;
-          LOG(INFO) << "result.second=" << result.second;
+          // LOG(INFO) << "result.second=" << result.second;
       } else {
           int enabled_design_space_index = tir::SampleInt(rand_state, 0, enabled_design_space_idxs.size());
           // LOG(INFO) << "enabled_design_space_index=" << enabled_design_space_index;
@@ -697,8 +710,7 @@ std::vector<std::pair<Schedule, int>> EvolutionarySearchNode::State::SampleInitP
       }
     }
     fail_count += !found_new;
-    LOG(INFO) << "added=" << added;
-    LOG(INFO) << "skipped=" << skipped;
+    LOG(INFO) << "added/skipped=" << added << "/" << skipped;
     // LOG(INFO) << "fail_count=" << fail_count;
     // LOG(INFO) << "static_cast<int>(out_schs.size())=" << static_cast<int>(out_schs.size());
     // TVM_PY_LOG(INFO, self->ctx_->logger) << "Sample-Init-Population summary:\n"
@@ -774,7 +786,7 @@ std::vector<std::pair<Schedule, int>> EvolutionarySearchNode::State::EvolveWithC
     {
       // LOG(INFO) << "EvoSearch/Evolve/Mutation";
       if (self->population_size < 0) {
-        LOG(INFO) << "skip mutate";
+        // LOG(INFO) << "skip mutate";
       } else {
         auto _ = Profiler::TimedScope("EvoSearch/Evolve/Mutation");
         ThreadedTraceApply pp(self->postprocs_);
@@ -822,10 +834,10 @@ std::vector<std::pair<Schedule, int>> EvolutionarySearchNode::State::EvolveWithC
                                       f_find_candidate);
 
         population.swap(next_population);
-        // TVM_PY_LOG(INFO, self->ctx_->logger) << "Evolve iter #" << iter << " done. Summary:\n"
-        //                                           << pp.SummarizeFailures();
-        LOG(INFO) << "Evolve iter #" << iter << " done. Summary:\n"
+        TVM_PY_LOG(INFO, self->ctx_->logger) << "Evolve iter #" << iter << " done. Summary:\n"
                                                   << pp.SummarizeFailures();
+        // LOG(INFO) << "Evolve iter #" << iter << " done. Summary:\n"
+        //                                           << pp.SummarizeFailures();
       }
     }
   }
@@ -928,8 +940,9 @@ std::vector<std::pair<Schedule, int>> EvolutionarySearchNode::State::PickWithEps
 }
 
 Optional<Array<MeasureCandidate>> EvolutionarySearchNode::State::GenerateMeasureCandidates() {
-  LOG(INFO) << "GenerateMeasureCandidates";
+  // LOG(INFO) << "State::GenerateMeasureCandidates";
   if (st >= max_trials) {
+    LOG(INFO) << "st >= max_trials";
     return NullOpt;
   }
   int sample_num = num_trials_per_iter;
@@ -939,13 +952,13 @@ Optional<Array<MeasureCandidate>> EvolutionarySearchNode::State::GenerateMeasure
   }
   ICHECK_LT(st, ed);
   int pop = self->population_size;
-  LOG(INFO) << "pop=" << pop;
+  // LOG(INFO) << "pop=" << pop;
   std::vector<std::pair<Schedule, int>> inits;
 
   TVM_PY_LOG(INFO, self->ctx_->logger) << "Generating candidates......";
   // LOG(INFO) << "Generating candidates......";
   std::vector<std::pair<Schedule, int>> measured;
-  LOG(INFO) << "pop=" << pop;
+  // LOG(INFO) << "pop=" << pop;
   if (pop >= 0) {
       inits.reserve(pop);
       measured = PickBestFromDatabase(pop * self->init_measured_ratio);
