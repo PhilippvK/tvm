@@ -202,11 +202,13 @@ def extract_tasks(
             ):
                 ret = list(_extract_task(mod, target, params, module_equality, multi_dispatch))
                 assert len(ret) > 0
+    # include_simple_tasks = True  # TEMP
     if not include_simple_tasks:
         # ret = [task for task in ret if task.flops >= 100]
         temp = []
         for task in ret:
             from tvm.tir.analysis import estimate_tir_flops
+
             # assert len(task.dispatched) == 1
             flops = estimate_tir_flops(task.dispatched[0])
             if flops >= 100:
@@ -358,6 +360,7 @@ def extracted_tasks_to_tune_contexts(
                 else:
                     assert database == "memory"
                     database = Database.create(database, module_equality=module_equality)
+                # print("task.extras2", task.extras)
                 ctx_kwargs = dict(
                     mod=task.mod,
                     target=task.target,
