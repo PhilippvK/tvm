@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 """Auto-tuning Task Scheduler"""
+
 from typing import Callable, List, Optional, Union
 
 # isort: off
@@ -49,7 +50,6 @@ def get_run_ms_median(runner_result: RunnerResult):
         return v[n // 2] * 1000.0
 
 
-
 @register_object("meta_schedule.TaskRecord")
 class TaskRecord(Object):
     """The running record of a task."""
@@ -76,6 +76,7 @@ class TaskRecord(Object):
     #         ctx,
     #         task_weight,
     #     )
+
 
 class TaskRecord2(Object):
     """The running record of a task."""
@@ -113,6 +114,7 @@ class TaskRecord2(Object):
         if self.ctx.space_generator is not None:
             self.ctx.space_generator._initialize_with_tune_context(self.ctx)
         from tvm.tir.analysis import estimate_tir_flops
+
         self.flops = estimate_tir_flops(self.ctx.mod)
 
     def send_to_builder(self, builder):
@@ -138,8 +140,8 @@ class TaskRecord2(Object):
             if builder_result.error_msg is not None:
                 n_build_errors += 1
                 continue
-            inputs.append(RunnerInput(builder_result.artifact_path, target.kind.name, candidate.args_info));
-        futures = runner.run(inputs);
+            inputs.append(RunnerInput(builder_result.artifact_path, target.kind.name, candidate.args_info))
+        futures = runner.run(inputs)
         if n_build_errors == 0:
             self.runner_futures = futures
             return
@@ -147,12 +149,14 @@ class TaskRecord2(Object):
         j = 0
         for i in range(n):
             # TODO: use enumerate
-            builder_result = builder_results[i];
+            builder_result = builder_results[i]
+
             # TODO: check if pickable?
             def f_result():
                 timestamp = None
                 # TODO: timestamp
                 return RunnerResult(None, builder_result.error_msg, timestamp)
+
             if builder_result.error_msg is not None:
                 results.append(RunnerFuture(f_done=lambda: True, f_result=f_result))
             else:
@@ -188,14 +192,12 @@ class TaskRecord2(Object):
             else:
                 # TODO: logging
                 best_ms = min(self.latency_ms)
-                print(f"[Task #{task_id}: {name}] Trial #{trials}: GFLOPs: {self.flop / run_ms / 1e6}. Time: {run_ms * 1e3}. Best GFLOPs: {self.flop / best_ms / 1e6}")
+                print(
+                    f"[Task #{task_id}: {name}] Trial #{trials}: GFLOPs: {self.flop / run_ms / 1e6}. Time: {run_ms * 1e3}. Best GFLOPs: {self.flop / best_ms / 1e6}"
+                )
         self.measure_candidates = None
         self.builder_results = None
         self.runner_futures = None
-
-
-
-
 
 
 @register_object("meta_schedule.TaskScheduler")
@@ -378,8 +380,7 @@ class PyTaskScheduler:
         "methods": ["next_task_id", "join_running_task", "tune"],
     }
 
-    def __init__(self):
-        ...
+    def __init__(self): ...
 
     def tune(
         self,
