@@ -15,9 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 """Dense schedule for ARM CPU"""
+
 from tvm import autotvm
 from .mprofile.dsp.dense import dense_dsp_schedule, dense_dsp_compute
 from .dense_gemm import dense_gemm_compute, dense_gemm_schedule
+from .dense_gemm import dense_ime_packed_compute
 
 
 @autotvm.register_topi_compute("dense_dsp.arm_cpu")
@@ -36,6 +38,13 @@ def schedule_dense_dsp(cfg, outs):
 def dense_gemm(cfg, data, weight, bias, out_dtype, transpose_a=False, transpose_b=True):
     """Compute dense using GeMM."""
     return dense_gemm_compute(cfg, data, weight, bias, out_dtype, transpose_a, transpose_b)
+
+
+@autotvm.register_topi_compute("dense_ime_packed.arm_cpu")
+def dense_ime_packed(cfg, data, weight, bias, out_dtype, MI=4, NI=4, KI=8):
+    """TODO."""
+    # return dense_ime_packed_compute(cfg, data, weight, bias, out_dtype, MI, NI, KI)
+    return dense_ime_packed_compute(cfg, data, weight, bias, out_dtype)
 
 
 @autotvm.register_topi_schedule("dense_gemm.arm_cpu")

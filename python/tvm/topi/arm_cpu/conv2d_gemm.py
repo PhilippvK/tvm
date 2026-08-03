@@ -17,6 +17,7 @@
 # pylint: disable=invalid-name, unused-variable, too-many-locals
 # pylint: disable=unused-argument, redefined-builtin
 """GEMM Convolution schedule on ARM"""
+
 import tvm
 from tvm.target import Target
 from tvm import te
@@ -31,6 +32,410 @@ from .tensor_intrin import (
     gemm_acc_nx16_int8_int8_int32,
     gemm_acc_2x2_int8_int8_int32,
 )
+
+# START
+
+from typing import Optional, Sequence, Tuple
+
+import tvm
+from tvm import te, tir
+from tvm.topi.utils import get_const_tuple
+
+
+def _pair(value) -> Tuple[int, int]:
+    if isinstance(value, int):
+        return value, value
+    assert len(value) == 2
+    return int(value[0]), int(value[1])
+
+
+def _quad_padding(padding) -> Tuple[int, int, int, int]:
+    """Return top, left, bottom, right padding."""
+    if isinstance(padding, int):
+        return padding, padding, padding, padding
+
+    if len(padding) == 2:
+        pad_h, pad_w = padding
+        return int(pad_h), int(pad_w), int(pad_h), int(pad_w)
+
+    assert len(padding) == 4
+    pad_top, pad_left, pad_bottom, pad_right = padding
+    return (
+        int(pad_top),
+        int(pad_left),
+        int(pad_bottom),
+        int(pad_right),
+    )
+
+
+def _choose_conv_ki(
+    K: int,
+    K_MAX: int,
+    K_STEP: int,
+) -> int:
+    print("_choose_conv_ki", K, K_MAX, K_STEP)
+    """Choose the largest legal KI not exceeding K_MAX.
+
+    KI must:
+      - divide the complete reduction extent K;
+      - be a multiple of the IME K step;
+      - not exceed K_MAX.
+
+    For K=576:
+      K_MAX=576 -> KI=576
+      K_MAX=512 -> KI=288
+      K_MAX=256 -> KI=192
+      K_MAX=128 -> KI=96
+    """
+    assert K > 0
+    assert K_MAX >= K_STEP
+    assert K % K_STEP == 0
+
+    upper = min(K, K_MAX)
+    upper -= upper % K_STEP
+    print("upper", upper)
+
+    for ki in range(upper, K_STEP - 1, -K_STEP):
+        if K % ki == 0:
+            print("ki", ki)
+            return ki
+
+    raise ValueError(f"Could not find KI dividing K={K}, " f"with KI <= {K_MAX} and KI % {K_STEP} == 0")
+
+
+# def _spatial_pair(value, layout="NHWC", name="value"):
+#     """Normalize a scalar, 2-D pair, or layout-aware 4-D tuple to (h, w)."""
+#     if isinstance(value, (int, tir.IntImm)):
+#         value = int(value)
+#         return value, value
+#
+#     value = tuple(int(x) for x in value)
+#
+#     if len(value) == 2:
+#         return value
+#
+#     if len(value) == 4:
+#         if layout == "NHWC":
+#             # [N, H, W, C]
+#             n, h, w, c = value
+#             if n != 1 or c != 1:
+#                 raise ValueError(f"{name}={value} is invalid for NHWC; " "batch and channel components must be 1")
+#             return h, w
+#
+#         if layout == "NCHW":
+#             # [N, C, H, W]
+#             n, c, h, w = value
+#             if n != 1 or c != 1:
+#                 raise ValueError(f"{name}={value} is invalid for NCHW; " "batch and channel components must be 1")
+#             return h, w
+#
+#     raise ValueError(
+#         f"Unsupported {name}={value} for layout={layout!r}; "
+#         "expected a scalar, a 2-element spatial tuple, or a 4-element layout tuple"
+#     )
+
+
+def conv2d_nhwc_hwoi_ime_packed_compute(
+    cfg,
+    data: te.Tensor,
+    weight: te.Tensor,
+    # bias: Optional[te.Tensor] = None,
+    strides: Sequence[int] = (1, 1),
+    padding: Sequence[int] = (0, 0, 0, 0),
+    dilation: Sequence[int] = (1, 1),
+    out_dtype: str = "int32",
+    MI: int = 8,
+    NI: int = 8,
+    # K_MAX: int = 576,
+    K_MAX: int = 1024,
+    K_STEP: int = 8,
+    name: str = "conv2d_nhwc_hwoi_ime",
+):
+    print(
+        "IME conv2d args:",
+        "strides=",
+        strides,
+        "padding=",
+        padding,
+        "dilation=",
+        dilation,
+        "stride_len=",
+        len(strides) if hasattr(strides, "__len__") else None,
+    )
+    """IME-compatible packed NHWC/HWOI int8 convolution.
+
+    Input:
+      data:   [batch, input_height, input_width, input_channels]
+      weight: [kernel_height, kernel_width, output_channels, input_channels]
+      bias:   [output_channels], optional
+
+    Output:
+      [batch, output_height, output_width, output_channels]
+
+    Logical GEMM:
+      M = batch * output_height * output_width
+      N = output_channels
+      K = kernel_height * kernel_width * input_channels
+
+    Physical packed layout:
+      A_pack[MO, KO, KB, MT, 4, K_STEP]
+      B_pack[NO, KO, KB, NT, 4, K_STEP]
+      C_pack[MO, NO, MT, NT, 4, 4]
+
+    One microkernel sees:
+      A[KB, MT, 4, K_STEP]
+      B[KB, NT, 4, K_STEP]
+      C[MT, NT, 4, 4]
+
+    where:
+      MT = MI // 4
+      NT = NI // 4
+      KB = KI // K_STEP
+    """
+    assert data.dtype == "int8"
+    assert weight.dtype == "int8"
+    assert out_dtype == "int32"
+
+    assert MI in (4, 8)
+    assert NI in (4, 8)
+    assert MI % 4 == 0
+    assert NI % 4 == 0
+    assert K_STEP == 8
+
+    batch, input_h, input_w, input_c = get_const_tuple(data.shape)
+    kernel_h, kernel_w, output_c, weight_input_c = get_const_tuple(weight.shape)
+
+    assert input_c == weight_input_c
+    assert output_c % NI == 0, (
+        f"OC={output_c} must be divisible by NI={NI}; " "add output-channel padding for tail support"
+    )
+
+    stride_h, stride_w = _pair(strides)
+    dilation_h, dilation_w = _pair(dilation)
+    pad_top, pad_left, pad_bottom, pad_right = _quad_padding(padding)
+    # stride_h, stride_w = _spatial_pair(
+    #     strides,
+    #     layout="NHWC",
+    #     name="strides",
+    # )
+    # dilation_h, dilation_w = _spatial_pair(
+    #     dilation,
+    #     layout="NHWC",
+    #     name="dilation",
+    # )
+    # pad_top, pad_left, pad_bottom, pad_right = _normalize_padding(padding)
+
+    dilated_kernel_h = (kernel_h - 1) * dilation_h + 1
+    dilated_kernel_w = (kernel_w - 1) * dilation_w + 1
+
+    output_h = (input_h + pad_top + pad_bottom - dilated_kernel_h) // stride_h + 1
+    output_w = (input_w + pad_left + pad_right - dilated_kernel_w) // stride_w + 1
+
+    M = batch * output_h * output_w
+    N = output_c
+    K = kernel_h * kernel_w * input_c
+
+    assert M % MI == 0, (
+        f"M=N_batch*OH*OW={M} must be divisible by MI={MI}; " "add output-position padding for tail support"
+    )
+    assert K % K_STEP == 0, f"K=KH*KW*IC={K} must be divisible by K_STEP={K_STEP}"
+
+    KI = _choose_conv_ki(K, K_MAX, K_STEP)
+
+    MO = M // MI
+    NO = N // NI
+    KO = K // KI
+
+    MT = MI // 4
+    NT = NI // 4
+    KB = KI // K_STEP
+
+    pack_attrs = {
+        "ime_explicit_pack": True,
+        "meta_schedule.no_random_compute_location": True,
+    }
+
+    def unpack_m(m):
+        """Map flattened GEMM M to batch/output-height/output-width."""
+        batch_index = m // (output_h * output_w)
+        output_index = m % (output_h * output_w)
+        output_y = output_index // output_w
+        output_x = output_index % output_w
+        return batch_index, output_y, output_x
+
+    def unpack_k(k):
+        """Map flattened GEMM K to kernel-height/kernel-width/input-channel."""
+        input_channel = k % input_c
+        kernel_index = k // input_c
+        kernel_x = kernel_index % kernel_w
+        kernel_y = kernel_index // kernel_w
+        return kernel_y, kernel_x, input_channel
+
+    # Fused im2col and IME packing.
+    #
+    # For one microkernel tile:
+    #   A_tile[KB, MT, 4, 8]
+    #
+    # Flattened order inside one tile is:
+    #   kb -> mt -> mi4 -> kk
+    def compute_a_pack(mo, ko, kb, mt, mi4, kk):
+        m = mo * MI + mt * 4 + mi4
+        k = ko * KI + kb * K_STEP + kk
+
+        batch_index, output_y, output_x = unpack_m(m)
+        kernel_y, kernel_x, input_channel = unpack_k(k)
+
+        input_y = output_y * stride_h + kernel_y * dilation_h - pad_top
+        input_x = output_x * stride_w + kernel_x * dilation_w - pad_left
+
+        in_bounds = tir.all(
+            input_y >= 0,
+            input_y < input_h,
+            input_x >= 0,
+            input_x < input_w,
+        )
+
+        return tir.if_then_else(
+            in_bounds,
+            data[batch_index, input_y, input_x, input_channel],
+            tir.const(0, data.dtype),
+        )
+
+    A_pack = te.compute(
+        (MO, KO, KB, MT, 4, K_STEP),
+        compute_a_pack,
+        name="A_pack",
+        attrs=pack_attrs,
+    )
+
+    # Weight packing for HWOI:
+    #   weight[kh, kw, output_channel, input_channel]
+    #
+    # For one microkernel tile:
+    #   B_tile[KB, NT, 4, 8]
+    def compute_b_pack(no, ko, kb, nt, ni4, kk):
+        output_channel = no * NI + nt * 4 + ni4
+        k = ko * KI + kb * K_STEP + kk
+
+        kernel_y, kernel_x, input_channel = unpack_k(k)
+
+        return weight[
+            kernel_y,
+            kernel_x,
+            output_channel,
+            input_channel,
+        ]
+
+    B_pack = te.compute(
+        (NO, KO, KB, NT, 4, K_STEP),
+        compute_b_pack,
+        name="B_pack",
+        attrs=pack_attrs,
+    )
+
+    reduction_attrs = {
+        "ime_layout": "microtile_major_4x4_k8",
+        "ime_m_tile": MI,
+        "ime_n_tile": NI,
+        "ime_k_tile": KI,
+        "ime_k_step": K_STEP,
+        "ime_m_micro_tile": 4,
+        "ime_n_micro_tile": 4,
+        "ime_m_micro_tiles": MT,
+        "ime_n_micro_tiles": NT,
+        "ime_k_micro_tiles": KB,
+        "ime_k_max": K_MAX,
+        # "meta_schedule.no_random_compute_location": True,
+        # TODO: test
+        "layout_free_placeholders": [B_pack],
+    }
+
+    # Keep KO outside the tensorized microkernel.  One ukernel consumes KI
+    # reduction elements, represented by KB x K_STEP.
+    rkb = te.reduce_axis((0, KB), name="rkb")
+    rkk = te.reduce_axis((0, K_STEP), name="rkk")
+
+    if KO == 1:
+        C_pack = te.compute(
+            (MO, NO, MT, NT, 4, 4),
+            lambda mo, no, mt, nt, mi4, ni4: te.sum(
+                A_pack[
+                    mo,
+                    0,
+                    rkb,
+                    mt,
+                    mi4,
+                    rkk,
+                ].astype(out_dtype)
+                * B_pack[
+                    no,
+                    0,
+                    rkb,
+                    nt,
+                    ni4,
+                    rkk,
+                ].astype(out_dtype),
+                axis=[rkb, rkk],
+            ),
+            name="C_pack",
+            attrs=reduction_attrs,
+        )
+    else:
+        rko = te.reduce_axis((0, KO), name="rko")
+
+        C_pack = te.compute(
+            (MO, NO, MT, NT, 4, 4),
+            lambda mo, no, mt, nt, mi4, ni4: te.sum(
+                A_pack[
+                    mo,
+                    rko,
+                    rkb,
+                    mt,
+                    mi4,
+                    rkk,
+                ].astype(out_dtype)
+                * B_pack[
+                    no,
+                    rko,
+                    rkb,
+                    nt,
+                    ni4,
+                    rkk,
+                ].astype(out_dtype),
+                axis=[rko, rkb, rkk],
+            ),
+            name="C_pack",
+            attrs=reduction_attrs,
+        )
+
+    # Convert packed GEMM output back to NHWC.
+    def unpack_output(batch_index, output_y, output_x, output_channel):
+        m = batch_index * output_h * output_w + output_y * output_w + output_x
+
+        value = C_pack[
+            m // MI,
+            output_channel // NI,
+            (m % MI) // 4,
+            (output_channel % NI) // 4,
+            m % 4,
+            output_channel % 4,
+        ]
+
+        # if bias is not None:
+        #     value = value + bias[output_channel].astype(out_dtype)
+
+        return value
+
+    output = te.compute(
+        (batch, output_h, output_w, output_c),
+        unpack_output,
+        name=name,
+    )
+
+    return output
+
+
+# END
 
 
 def configure_knobs(cfg, M, K, target):
