@@ -229,6 +229,7 @@ def extracted_tasks_to_tune_contexts(
     module_equality="ignore-ndarray",
     multi_dispatch: bool = True,
     repeat_tasks: int = 1,
+    task_infos: Optional[List] = None,
 ) -> Tuple[List[TuneContext], List[float]]:
     """Convert ExtractedTask to TuneContext.
 
@@ -255,6 +256,8 @@ def extracted_tasks_to_tune_contexts(
     multi_dispatch : bool
         TODO
     repeat_tasks : int
+        TODO
+    task_infos : list
         TODO
 
     Returns
