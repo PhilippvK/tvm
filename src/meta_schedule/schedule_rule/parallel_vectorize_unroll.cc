@@ -45,6 +45,8 @@ class ParallelizeVectorizeUnrollNode : public ScheduleRuleNode {
     if (this->max_jobs_per_core != -1) {
       Target target = context->target.value();
       this->max_parallel_extent_ = GetTargetNumCores(target) * max_jobs_per_core;
+      // LOG(INFO) << "GetTargetNumCores(target)=" << GetTargetNumCores(target);
+      // LOG(INFO) << "this->max_parallel_extent_=" << this->max_parallel_extent_;
     }
   }
 
