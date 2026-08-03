@@ -37,6 +37,7 @@ class RemoveLayoutRewriteBlock : public StmtMutator {
   static std::tuple<PrimFunc, Map<Buffer, Buffer>, std::unordered_map<const VarNode*, IndexMap>,
                     std::unordered_map<const VarNode*, Array<PrimExpr>>>
   Rewrite(PrimFunc f) {
+    // LOG(INFO) << "RemoveLayoutRewriteBlock::Rewrite";
     RemoveLayoutRewriteBlock rewriter;
 
     PrimFuncNode* n = f.CopyOnWrite();
@@ -242,6 +243,8 @@ class CollectAllocateConstBufferVars : public StmtVisitor {
 class WeightLayoutRewriteBlockRemover : public StmtMutator {
  public:
   static PrimFunc Remove(PrimFunc f, bool skip_ndarray_rewrite) {
+    // LOG(INFO) << "WeightLayoutRewriteBlockRemover::Remove";
+    // LOG(INFO) << "skip_ndarray_rewrite=" << skip_ndarray_rewrite;
     CollectAllocateConstBufferVars collector;
     collector(f->body);
 
@@ -279,6 +282,8 @@ class WeightLayoutRewriteBlockRemover : public StmtMutator {
 namespace transform {
 
 Pass RemoveWeightLayoutRewriteBlock(bool skip_ndarray_rewrite) {
+  // LOG(INFO) << "RemoveWeightLayoutRewriteBlock Pass";
+  // LOG(INFO) << "skip_ndarray_rewrite=" << skip_ndarray_rewrite;
   auto pass_func = [skip_ndarray_rewrite](PrimFunc f, IRModule m, PassContext ctx) {
     return WeightLayoutRewriteBlockRemover::Remove(std::move(f), skip_ndarray_rewrite);
   };
