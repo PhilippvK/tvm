@@ -200,13 +200,13 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
         raise RuntimeError("Current target does not support `v` extension.")
 
     vlen = llvm_get_vector_width(target)
-    print("vlen", vlen)
+    # print("vlen", vlen)
     if vlen == 0:
         # Can't infer vlen
         return {}
     # get maximum reduction lanes (without grouping)
     n_lanes = get_max_elems(vlen, lmul=1, sew=32)
-    print("n_lanes", n_lanes)
+    # print("n_lanes", n_lanes)
 
     kernels_inventory = {}
 
@@ -222,18 +222,18 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
         # print("for", d_dtype, w_dtype, o_dtype, time.time())
         # max elements to grouped registers
         max_elems = get_max_elems(vlen, lmul=8, sew=DataType(d_dtype).bits)
-        print("max_elems", max_elems)
+        # print("max_elems", max_elems)
         # data widening halves available vector registers
         if DataType(o_dtype).bits > DataType(d_dtype).bits:
             max_elems //= 2
-        print("max_elems", max_elems)
+        # print("max_elems", max_elems)
         # compute optimal LMUL for full load
         lmul = max_elems // (vlen // DataType(d_dtype).bits)
-        print("lmul", lmul)
+        # print("lmul", lmul)
 
         n_elems = max_elems
         while n_elems >= 4:
-            print("while", n_elems, time.time())
+            # print("while", n_elems, time.time())
             iters += 1
 
             dt = DataType(d_dtype)
@@ -243,7 +243,7 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
             kernel_name += f"_{n_elems}{d_dtype[0]}{dt.bits}"
             kernel_name += f"_{n_lanes}x{n_elems}{w_dtype[0]}{wt.bits}"
             kernel_name += f"_{n_lanes}{o_dtype[0]}{ot.bits}"
-            print("kernel_name", kernel_name)
+            # print("kernel_name", kernel_name)
             kernels_inventory[kernel_name] = tvm.tir.IntImm("int64", n_elems)
 
             if not inventory_only:
