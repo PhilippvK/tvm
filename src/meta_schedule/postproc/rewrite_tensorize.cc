@@ -44,6 +44,11 @@ void CollectTensorizationJobs(
               sch->Tensorize(block, intrin_name.value());
             } catch (const std::exception& e) {
               LOG(WARNING) << "Tensorize failed with error " << e.what();
+              LOG(INFO) << "Mod:";
+              LOG(INFO) << sch->mod();
+              LOG(INFO) << "Trace:";
+              LOG(INFO) << sch->trace().value();
+              throw;
             }
           });
         } else if (block_name.find("init") && vectorize_init_loop) {
