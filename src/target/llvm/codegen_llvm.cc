@@ -423,6 +423,7 @@ void CodeGenLLVM::Optimize() {
   llvm::TargetMachine* tm = llvm_target_->GetOrCreateTargetMachine();
 
   bool debug_logging = false;
+  // bool debug_logging = true;
   bool verify_each = false;
 
   llvm::PipelineTuningOptions pto = llvm::PipelineTuningOptions();
@@ -481,6 +482,14 @@ void CodeGenLLVM::Optimize() {
 #else
   si.registerCallbacks(pic, &fam);
 #endif
+  // std::error_code ecode;
+  // static int iii = 0;
+  // std::stringstream ss;
+  // ss << "/tmp/temp" << iii << ".ll";
+  // LOG(INFO) << "FILE=" << ss.str();
+  // iii += 1;
+  // llvm::raw_fd_ostream dest(ss.str(), ecode, llvm::sys::fs::OF_None);
+  // module_->print(dest, nullptr);
   llvm::ModulePassManager mpass;
   if (verify_each) {
     mpass.addPass(llvm::VerifierPass());
@@ -548,6 +557,8 @@ void CodeGenLLVM::Optimize() {
 #endif
   builder.LoopVectorize = true;
   builder.SLPVectorize = true;
+  // builder.LoopVectorize = false;
+  // builder.SLPVectorize = false;
   this->InitPassManagerBuilder(&builder);
 
 #if TVM_LLVM_VERSION >= 50
