@@ -184,6 +184,8 @@ class MutateParallelNode : public MutatorNode {
   void InitializeWithTuneContext(const TuneContext& context) final {
     Target target = context->target.value();
     this->max_parallel_extent_ = GetTargetNumCores(target) * this->max_jobs_per_core;
+    // LOG(INFO) << "GetTargetNumCores(target)=" << GetTargetNumCores(target);
+    // LOG(INFO) << "this->max_parallel_extent_=" << this->max_parallel_extent_;
     this->json_mod_ = SaveJSON(context->mod.value());
   }
   // Inherit from `MutatorNode`
