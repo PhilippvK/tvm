@@ -1,15 +1,12 @@
 import logging
 import argparse
-import tempfile
-import tarfile
 from datetime import datetime
 from collections import defaultdict
-from pathlib import Path
 from tvm import meta_schedule as ms
 from tvm.tir.analysis import estimate_tir_flops
 
 from .db_utils import load_ms_db_wrapper
-from .filter_db import drop_duplicate_candidates_helper
+# from .filter_db import drop_duplicate_candidates_helper
 
 
 def view_ms_db(in_db, allow_empty: bool = False):
@@ -56,6 +53,16 @@ def view_ms_db(in_db, allow_empty: bool = False):
         target_str = str(target)
         # print("target", target, dir(target), type(target))
         workload = rec.workload
+        # from tvm import tir
+        # sch = tir.Schedule(workload.mod)
+        # print("sch", sch, dir(sch))
+        # print("sch.mod", sch.mod)
+        # rec.trace.apply_to_schedule(
+        #     sch,
+        #     remove_postproc=False,
+        # )
+        # print("sch", sch, dir(sch))
+        # print("sch.mod", sch.mod)
         # print("workload", workload, dir(workload))
         if workload not in workloads:
             workloads.append(workload)
