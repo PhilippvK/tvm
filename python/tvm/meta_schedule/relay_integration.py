@@ -328,15 +328,18 @@ def extracted_tasks_to_tune_contexts(
                 # group = f"T{i}_M{j}"
                 group = task.group
                 if group:
-                    group = task.group
+                    # group = task.group  # append?
+                    group = f"{task.group}_M{j}"  # append?
                 else:
-                    group = f"T{i}"
+                    # group = f"T{i}"
+                    group = f"T{i}_M{j}"
                 # new_task_name = f"{task.task_name}_{group}"
                 new_task_name = f"{task.task_name}_M{j}"
                 all_task_names.append(new_task_name)
                 # new_rand_state = fork_seed(seed, n=1)[0]
                 # print("new_task_name", new_task_name)
-                work_dir_ = f"{work_dir}/{group}_M{j}"
+                # work_dir_ = f"{work_dir}/{group}_M{j}"
+                work_dir_ = f"{work_dir}/{group}"
                 from pathlib import Path
 
                 Path(work_dir_).mkdir(exist_ok=True)
@@ -418,12 +421,23 @@ def extracted_tasks_to_tune_contexts(
         for d, disp in enumerate(dispatched):
             if multi_dispatch:
                 task_name = f"{task.task_name}_D{d}"
-                task_idx = len(tasks)
-                group = f"T{task_idx}"
             else:
                 task_name = task.task_name
+            task_idx = len(tasks)
+            group = task.group
+            if multi_dispatch:
+                if group:
+                    # group = f"{group}_T{task_idx}"
+                    group = f"{group}_D{d}"
+                else:
+                    # group = f"T{task_idx}"
+                    group = f"T{task_idx}_D{d}"
+            else:
+                if not group:
+                    # group = f"T{task_idx}"
+                    group = f"T{task_idx}"
 
-            print("disp", disp)
+            # print("disp", disp)
 
             tasks.append(
                 TuneContext(
