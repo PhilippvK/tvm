@@ -228,6 +228,7 @@ def extracted_tasks_to_tune_contexts(
     database="json",
     module_equality="ignore-ndarray",
     multi_dispatch: bool = True,
+    repeat_tasks: int = 1,
 ) -> Tuple[List[TuneContext], List[float]]:
     """Convert ExtractedTask to TuneContext.
 
@@ -252,6 +253,8 @@ def extracted_tasks_to_tune_contexts(
     module_equality : Optional[str]
         TODO
     multi_dispatch : bool
+        TODO
+    repeat_tasks : int
         TODO
 
     Returns
@@ -446,6 +449,81 @@ def extracted_tasks_to_tune_contexts(
         print("tasks", tasks)
         print("task_weights", task_weights)
         # input("!!!")
+
+    def repeat_tasks_helper(tasks, task_weights, num: int = 1, database="json", module_equality="ignore-ndarray"):
+        print("repeat_tasks_helper", tasks, task_weights, num)
+        all_ctx_kwargs = []
+        all_task_names = []
+        for i, task in enumerate(tasks):
+            weight = task_weights[i]
+            for n in range(num):
+                group = task.group
+                if group:
+                    group = f"{task.group}_R{n}"
+                else:
+                    group = f"R{n}"
+                # new_task_name = f"{task.task_name}_{group}"
+                new_task_name = f"{task.task_name}_R{n}"
+                all_task_names.append(new_task_name)
+                # new_rand_state = fork_seed(seed, n=1)[0]
+                # print("new_task_name", new_task_name)
+                # work_dir_ = f"{work_dir}/{group}_R{n}"
+                work_dir_ = f"{work_dir}/{group}"
+                from pathlib import Path
+
+                Path(work_dir_).mkdir(exist_ok=True)
+                if database is None:
+                    database = "memory"
+                if isinstance(database, Database):
+                    if isinstance(database, JSONDatabase):
+                        database = "json"
+                    else:
+                        assert isinstance(database, MemoryDatabase)
+                        database = "memory"
+                assert isinstance(database, str)
+                if database == "json":
+                    database = Database.create(database, work_dir=work_dir_, module_equality=module_equality)
+                else:
+                    assert database == "memory"
+                    database = Database.create(database, module_equality=module_equality)
+                print("task.extras1", task.extras)
+                ctx_kwargs = dict(
+                    mod=task.mod,
+                    target=task.target,
+                    space_generator=task.space_generator,
+                    search_strategy=task.search_strategy,
+                    task_name=new_task_name,
+                    group=group,
+                    extras=task.extras,
+                    # logger=new_logger,
+                    # rand_state=new_rand_state,
+                    design_spaces_mask=task.design_spaces_mask,
+                    database=database,
+                )
+                all_ctx_kwargs.append(ctx_kwargs)
+        ret_tasks = []
+        ret_weights = []
+        print("all_ctx_kwargs", all_ctx_kwargs)
+        print("all_task_names", all_task_names)
+        print("all_task_names", all_task_names)
+        for ctx_kwargs, logger, rand_state in zip(
+            all_ctx_kwargs,
+            get_loggers_from_work_dir(work_dir, all_task_names),
+            fork_seed(seed, n=len(all_task_names)),
+        ):
+            ctx_kwargs["logger"] = logger
+            ctx_kwargs["rand_state"] = rand_state
+            new_task = TuneContext(**ctx_kwargs)
+            new_task = new_task.clone()
+            ret_tasks.append(new_task)
+            ret_weights.append(weight)
+        return ret_tasks, ret_weights
+
+    if repeat_tasks != 1:
+        assert repeat_tasks > 1
+        tasks, task_weights = repeat_tasks_helper(
+            tasks, task_weights, num=repeat_tasks, database=database, module_equality=module_equality
+        )
     return tasks, task_weights
 
 
