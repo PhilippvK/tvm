@@ -454,6 +454,7 @@ def extracted_tasks_to_tune_contexts(
                 ).clone()
             )
             task_weights.append(task.weight)
+        i += 1
     if mask_mode is not None:
         tasks_per_space, task_weights_per_space = split_tasks_per_space(
             tasks, task_weights, mask_mode=mask_mode, database=database, module_equality=module_equality
