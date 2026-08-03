@@ -191,24 +191,47 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
         elif layout == "NHWC":
             data_width_padding = _get_padding_width(padding)
             if (
-                target.features.has_dsp
+                # target.features.has_dsp
+                # TODO: check all conditions
+                # "ime_gemm" in target.libs
+                True
                 and dilation_w == dilation_h == 1
                 and kernel_layout == "OHWI"
                 # Check SIMD alignment
-                and _is_simd_aligned(data.dtype, data.shape[2:], padding=(data_width_padding, 0))
-                and _is_simd_aligned(kernel.dtype, kernel.shape[2:])
+                # and _is_simd_aligned(data.dtype, data.shape[2:], padding=(data_width_padding, 0))
+                # and _is_simd_aligned(kernel.dtype, kernel.shape[2:])
             ):
                 strategy.add_implementation(
-                    wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_ohwi_dsp, need_out_layout=True),
-                    wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_ohwi_dsp),
-                    name="conv2d_nhwc_ohwi_dsp.arm_cpu",
+                    # wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_ohwi_dsp, need_out_layout=True),
+                    wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_ohwi, need_out_layout=True),
+                    # wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_ohwi_dsp),
+                    wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_ohwi),
+                    # name="conv2d_nhwc_ohwi_dsp.arm_cpu",
+                    name="conv2d_nhwc_ohwi.arm_cpu",
+                    # plevel=100,
+                    plevel=1,
                 )
-            elif target.features.has_dsp and kernel_layout == "HWOI":
+            # elif target.features.has_dsp and kernel_layout == "HWOI":
+            elif True and kernel_layout == "HWOI":
+                # TODO: make generic
                 strategy.add_implementation(
                     wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_dsp),
                     wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_dsp),
                     name="conv2d_nhwc_dsp.arm_cpu",
                 )
+                print("target.libs", target.libs)
+                if "ime_gemm" in target.libs:
+                    # TODO: check if applicable/supported
+                    # TODO: check is packing required
+                    print("ADDED", "conv2d_nhwc_hwoi_ime_packed.arm_cpu")
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_hwoi_ime_packed),
+                        naive_schedule,
+                        name="conv2d_nhwc_hwoi_ime_packed.arm_cpu",
+                        plevel=100,
+                        # plevel=5,
+                    )
+                # input("!!!2")
             elif kernel_layout == "HWIO":
                 is_aarch64 = target.features.is_aarch64
                 has_dot_prod = target.features.has_dotprod
@@ -718,6 +741,28 @@ def schedule_dense_arm_cpu(attrs, inputs, out_type, target):
             name="dense_gemm.arm_cpu",
             plevel=11,
         )
+    # TODO: check for legal shape and only if gemm/ime enabled!
+    print("target.libs", target.libs)
+    if "ime_gemm" in target.libs:
+        if data.dtype in ["int8"] and weight.dtype in ["int8"] and out_type.dtype in ["int32"]:  # TODO
+            # TODO: check if applicable/supported
+            # TODO: check is packing required
+            print("ADDED", "dense_ime_packed.arm_cpu")
+            strategy.add_implementation(
+                # wrap_compute_dense(topi.arm_cpu.dense_gemm_ime),
+                wrap_compute_dense(
+                    topi.arm_cpu.dense_ime_packed,
+                    # need_auto_scheduler_layout=need_auto_scheduler_layout,
+                    # need_meta_schedule_layout=need_meta_schedule_layout,
+                ),
+                # wrap_topi_schedule(topi.arm_cpu.schedule_dense_gemm_ime),
+                naive_schedule,
+                name="dense_ime_packed.arm_cpu",
+                # plevel=12,
+                # plevel=5,
+                plevel=100,
+            )
+    # input("!!!2")
     # Fallback to x86 schedules as there is currently no arm_cpu schedule for dense
     strategy.add_implementation(
         wrap_compute_dense(topi.x86.dense_nopack),
@@ -725,6 +770,7 @@ def schedule_dense_arm_cpu(attrs, inputs, out_type, target):
         name="dense_nopack.x86",
         plevel=5,
     )
+    # TODO
     strategy.add_implementation(
         wrap_compute_dense(topi.x86.dense_pack),
         wrap_topi_schedule(topi.x86.schedule_dense_pack),
