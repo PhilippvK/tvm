@@ -331,6 +331,7 @@ struct ThreadedTraceApply {
                               /*rand_state=*/ForkSeed(rand_state),
                               /*debug_mode=*/0,
                               /*error_render_level=*/tir::ScheduleErrorRenderLevel::kNone);
+                              ///*error_render_level=*/tir::ScheduleErrorRenderLevel::kDetail);
 
     // std::string trace_str = meta_schedule::JSONDumps(trace->AsJSON(false));
     // LOG(INFO) << "trace_str=" << trace_str;
@@ -438,7 +439,12 @@ inline int GetTargetNumCores(const Target& target) {
  * \return The median of the running time in millisecond
  */
 inline double GetRunMsMedian(const RunnerResult& runner_result) {
+  // LOG(INFO) << "GetRunMsMedian";
   Array<FloatImm> run_secs = runner_result->run_secs.value();
+  // for (size_t i = 0; i < run_secs.size(); i++) {
+  //   LOG(INFO) << "run_secs[" << i << "]=" << run_secs[i]->value;
+
+  // }
   ICHECK(!run_secs.empty());
   std::vector<double> v;
   v.reserve(run_secs.size());
