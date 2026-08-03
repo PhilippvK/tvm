@@ -188,9 +188,7 @@ def extract_tasks(
         executor,
         runtime,
     )
-    if target.kind.name != "cuda" and isinstance(
-        autotvm.DispatchContext.current, autotvm.FallbackContext
-    ):
+    if target.kind.name != "cuda" and isinstance(autotvm.DispatchContext.current, autotvm.FallbackContext):
         tophub_context = autotvm.tophub.context(target)
     else:
         tophub_context = autotvm.utils.EmptyContext()
@@ -744,9 +742,7 @@ def compile_relay(
                 instruments=instruments,
             ):
                 if backend == "graph":
-                    return relay.build(
-                        mod, target=target, params=params, executor=executor, runtime=runtime
-                    )
+                    return relay.build(mod, target=target, params=params, executor=executor, runtime=runtime)
                 elif backend == "vm":
                     return relay.vm.compile(mod, target=target, params=params)
                 else:
