@@ -41,6 +41,9 @@ Workload::Workload(IRModule mod, Workload::THashCode shash) {
 ObjectRef WorkloadNode::AsJSON() const {
   // Convert `this->mod` to JSON
   std::string json_mod = tvm::SaveJSON(this->mod);
+  // LOG(INFO) << "json_mod_=" << json_mod;
+  // IRModule mod2 = Downcast<IRModule>(LoadJSON(json_mod));
+  // LOG(INFO) << "mod2=" << mod2;
   // Dump the JSON string to base64
   std::string b64_mod = Base64Encode(json_mod);
   // Output
@@ -59,6 +62,7 @@ Workload Workload::FromJSON(const ObjectRef& json_obj) {
     {
       String b64_mod = Downcast<String>(json_array->at(1));
       std::string json_mod = Base64Decode(b64_mod);
+      // LOG(INFO) << "json_mod=" << json_mod;
       mod = Downcast<IRModule>(LoadJSON(json_mod));
       std::stringstream(str_shash) >> shash;
     }
@@ -215,11 +219,14 @@ DatabaseNode::~DatabaseNode() = default;
 
 Optional<TuningRecord> DatabaseNode::QueryTuningRecord(const IRModule& mod, const Target& target,
                                                        const String& workload_name) {
+  // LOG(INFO) << "DatabaseNode::QueryTuningRecord";
   if (!this->HasWorkload(mod)) {
+    // LOG(INFO) << "missing workload";
     return NullOpt;
   }
   Array<TuningRecord> records = this->GetTopK(this->CommitWorkload(mod), 1);
   if (records.empty()) {
+    // LOG(INFO) << "records empty";
     return NullOpt;
   }
   ICHECK_EQ(records.size(), 1);
