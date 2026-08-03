@@ -93,11 +93,20 @@ class JSONDatabaseNode : public DatabaseNode {
 
  public:
   bool HasWorkload(const IRModule& mod) {
-    return workloads2idx_.find(Workload(mod, GetModuleEquality().Hash(mod))) !=
+    // LOG(INFO) << "HasWorkload";
+    // LOG(INFO) << "mod=" << mod;
+    // LOG(INFO) << "GetModuleEquality().GetName()=" << GetModuleEquality().GetName();
+    // LOG(INFO) << "GetModuleEquality().Hash(mod)=" << GetModuleEquality().Hash(mod);
+    auto ret  = workloads2idx_.find(Workload(mod, GetModuleEquality().Hash(mod))) !=
            workloads2idx_.end();
+    // LOG(INFO) << "ret=" << ret;
+    return ret;
   }
 
   Workload CommitWorkload(const IRModule& mod) {
+    // LOG(INFO) << "CommitWorkload";
+    // LOG(INFO) << "mod=" << mod;
+    // LOG(INFO) << "GetModuleEquality().Hash(mod)=" << GetModuleEquality().Hash(mod);
     // Try to insert `mod` into `workloads_`
     auto [it, inserted] =
         this->workloads2idx_.emplace(Workload(mod, GetModuleEquality().Hash(mod)), -1);
@@ -156,6 +165,7 @@ class JSONDatabaseNode : public DatabaseNode {
 
 Database Database::JSONDatabase(String path_workload, String path_tuning_record, bool allow_missing,
                                 String mod_eq_name) {
+  // LOG(INFO) << "Database::JSONDatabase";
   int num_threads = std::thread::hardware_concurrency();
   ObjectPtr<JSONDatabaseNode> n = make_object<JSONDatabaseNode>(mod_eq_name);
   // Load `n->workloads2idx_` from `path_workload`
@@ -166,7 +176,11 @@ Database Database::JSONDatabase(String path_workload, String path_tuning_record,
     n->workloads2idx_.reserve(n_objs);
     workloads.reserve(n_objs);
     for (int i = 0; i < n_objs; ++i) {
+      // LOG(INFO) << "i=" << i;
       Workload workload = Workload::FromJSON(json_objs[i]);
+      // LOG(INFO) << "workload->mod=" << workload->mod;
+      // LOG(INFO) << "n->GetModuleEquality().Hash(workload->mod)=" << n->GetModuleEquality().Hash(workload->mod);
+      // LOG(INFO) << "workload->shash=" << workload->shash;
       auto recalc_hash = n->GetModuleEquality().Hash(workload->mod);
       // Todo(tvm-team): re-enable the shash check when we get environment
       // independent structural hash values.
