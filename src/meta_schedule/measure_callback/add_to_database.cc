@@ -27,6 +27,7 @@ class AddToDatabaseNode : public MeasureCallbackNode {
              const Array<MeasureCandidate>& measure_candidates,
              const Array<BuilderResult>& builder_results,
              const Array<RunnerResult>& runner_results) final {
+    // LOG(INFO) << "AddToDatabaseNode::Apply";
     auto _ = Profiler::TimedScope("MeasureCallback/AddToDatabase");
     TuneContext task = task_scheduler->tasks_[task_id]->ctx;
     Target target = task->target.value();
@@ -39,6 +40,8 @@ class AddToDatabaseNode : public MeasureCallbackNode {
     if (task_scheduler->database_.defined()) {
       workload2 = task_scheduler->database_.value()->CommitWorkload(task->mod.value());
     }
+    // LOG(INFO) << "task->mod.value()=" << task->mod.value();
+    // LOG(INFO) << "workload2=" << workload2;
     if (!workload.defined() && !workload2.defined()) {
       LOG(INFO) << "No database found (skipping)";
       return;
@@ -56,6 +59,8 @@ class AddToDatabaseNode : public MeasureCallbackNode {
       if (result->timestamp.defined()) {
           timestamp = result->timestamp.value();
       }
+      // LOG(INFO) << "i=" << i;
+      // LOG(INFO) << "candidate->sch->trace().value()=" << candidate->sch->trace().value();
       auto rec = TuningRecord(
           /*trace=*/candidate->sch->trace().value(),
           /*workload=*/workload.defined() ? workload.value() : workload2.value(),
