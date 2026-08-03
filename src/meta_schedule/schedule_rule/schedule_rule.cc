@@ -381,7 +381,8 @@ Array<ScheduleRule> ScheduleRule::DefaultRISCV(const int vlen) {
   rules.push_back(ScheduleRule::ParallelizeVectorizeUnroll(
       /*max_jobs_per_core=*/16,
       /*max_vectorize_extent=*/64,
-      /*unroll_max_steps=*/Array<runtime::Int>{0, 16, 54, 512},
+      // /*unroll_max_steps=*/Array<runtime::Int>{0, 16, 54, 512},
+      /*unroll_max_steps=*/Array<runtime::Int>{0, 16, 64, 512},
       /*unroll_explicit=*/true));
   rules.push_back(ScheduleRule::RandomComputeLocation());
 
