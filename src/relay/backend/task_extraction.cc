@@ -55,7 +55,7 @@ class OpCounter : public ExprVisitor {
 
 Array<meta_schedule::ExtractedTask> ExtractTask(IRModule mod, Target target,
                                                 Map<String, runtime::NDArray> params,
-                                                String mod_eq_name) {
+                                                String mod_eq_name, bool multi_dispatch) {
   using meta_schedule::ExtractedTask;
   using meta_schedule::ModuleEqual;
   using meta_schedule::ModuleHash;
@@ -73,7 +73,9 @@ Array<meta_schedule::ExtractedTask> ExtractTask(IRModule mod, Target target,
   std::unordered_map<IRModule, ExtractedTask, ModuleHash, ModuleEqual> cache(
       /*bucket_count*/ 0, ModuleHash(*mod_eq), ModuleEqual(*mod_eq));
 
-  std::vector<std::tuple<std::string, Function, IRModule>> lower_results;
+  // std::vector<std::tuple<std::string, Function, std::vector<IRModule>>> lower_results;
+  // std::vector<std::tuple<std::string, Function, IRModule>> lower_results;
+  std::vector<std::tuple<std::string, Function, Array<IRModule>>> lower_results;
 
   NameSupply constant_name_supply;
 
@@ -83,12 +85,67 @@ Array<meta_schedule::ExtractedTask> ExtractTask(IRModule mod, Target target,
       if (!relay_func->HasNonzeroAttr(attr::kPrimitive)) {
         return;
       }
+      bool emitted = false;
+      if (multi_dispatch) {
+        Array<IRModule> tir_mods;
+        Array<String> used_impls;
+        std::string fused_name_for_task;
+        bool have_name = false;
+        // TODO: impl names by func? -> how?
+        // Array<String> impl_names = {"dense.generic", "dense_nopack.x86", "dense_pack.x86"};
+        // Array<String> impl_names = {"dense.generic"};
+        // Array<String> impl_names = {"dense_nopack.x86"};
+        // Array<String> impl_names = {"dense_pack.x86"};
+        // Array<String> impl_names = {"dense_gemm_i8i8i32.arm_cpu"};
+        // Array<String> impl_names = {"dense.generic", "dense_nopack.x86", "dense_ime_packed.arm_cpu", "conv2d_nhwc_dsp.arm_cpu"};
+        // Array<String> impl_names = {"conv2d_nhwc_hwoi_ime_packed.arm_cpu"};
+        Array<String> impl_names = {"dense.generic", "dense_nopack.x86", "dense_pack.x86", "dense_ime_packed.arm_cpu", "conv2d_nhwc_dsp.arm_cpu", "conv2d_nhwc_hwoi_ime_packed.arm_cpu"};
+        // std::vector<IRModule> tir_mods;
+        for (String impl_name : impl_names) {
+          // auto ctx = transform::PassContext::Create();
+          auto ctx = transform::PassContext::Current();
+          ctx->config.Set("relay.backend.force_op_impl_name", impl_name);
+          // TODO: unset?
 
-      auto [f, fused_name] = tec::LowerToPrimFunc(relay_func, target, constant_name_supply);
-      if (f) {
-        IRModule tir_mod = PrimFuncToIRModule(f.value());
-        lower_results.push_back(std::make_tuple(fused_name, relay_func, tir_mod));
+          With<transform::PassContext> scope(ctx);
+
+          bool ignore_err = true;  // TODO: expose?
+          try {
+            auto [f, fused_name] = tec::LowerToPrimFunc(relay_func, target, constant_name_supply);
+            if (!f) {
+              continue;
+            }
+            if (!have_name) {
+              fused_name_for_task = fused_name;
+              have_name = true;
+            }
+            IRModule tir_mod = PrimFuncToIRModule(f.value());
+            tir_mods.push_back(tir_mod);
+            used_impls.push_back(impl_name);
+          } catch (const dmlc::Error& e) {
+            LOG(WARNING) << "Skipping impl " << impl_name << ": " << e.what();
+            if (!ignore_err) {
+                throw;
+            }
+          }
+        }
+        if (!tir_mods.empty()) {
+          lower_results.push_back({fused_name_for_task, relay_func, tir_mods});
+          emitted = true;
+        }
       }
+      if (!emitted) {
+        auto [f, fused_name] = tec::LowerToPrimFunc(relay_func, target, constant_name_supply);
+        if (f) {
+          IRModule tir_mod = PrimFuncToIRModule(f.value());
+          // std::vector<IRModule> tir_mods;
+          // tir_mods.push_back(tir_mod);
+          // lower_results.push_back(std::make_tuple(fused_name, relay_func, tir_mods));
+          // lower_results.push_back(std::make_tuple(fused_name, relay_func, tir_mod));
+          lower_results.push_back({fused_name, relay_func, {tir_mod}});
+        }
+      }
+
     }
   });
 
@@ -114,8 +171,16 @@ Array<meta_schedule::ExtractedTask> ExtractTask(IRModule mod, Target target,
   }
 
   for (auto i : indices) {
-    const auto& [fused_name, relay_func, tir_mod] = lower_results[i];
-    auto it = cache.find(tir_mod);
+    // const auto& [fused_name, relay_func, tir_mod] = lower_results[i];
+    const auto& [fused_name, relay_func, tir_mods] = lower_results[i];
+
+    ICHECK_GT(tir_mods.size(), 0);
+
+    // Prototype cache key: first dispatched candidate.
+    IRModule cache_key = tir_mods[0];
+
+    // auto it = cache.find(tir_mod);
+    auto it = cache.find(cache_key);
     if (it != cache.end()) {
       it->second->weight += 1;
       continue;
@@ -123,9 +188,11 @@ Array<meta_schedule::ExtractedTask> ExtractTask(IRModule mod, Target target,
     // Note that the cache is key-ed on the tir mod, rather than the relay mod
     IRModule relay_mod({{GlobalVar(fused_name), relay_func}});
     String group = "";
-    ExtractedTask task(fused_name, group, relay_mod, target, {tir_mod}, 1);
+    // ExtractedTask task(fused_name, group, relay_mod, target, {tir_mod}, 1);
+    ExtractedTask task(fused_name, group, relay_mod, target, {tir_mods}, 1);
     tasks.push_back(task);
-    cache.emplace(tir_mod, task);
+    // cache.emplace(tir_mod, task);
+    cache.emplace(cache_key, task);
   }
 
   // Tasks are extracted via post order visit, return the reversed list.
