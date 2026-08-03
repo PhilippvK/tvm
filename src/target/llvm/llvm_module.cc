@@ -322,6 +322,7 @@ String LLVMModuleNode::GetSource(const String& format) {
 }
 
 void LLVMModuleNode::Init(const IRModule& mod, const Target& target) {
+  // LOG(INFO) << "mod=" << mod;
   llvm_instance_ = std::make_unique<LLVMInstance>();
   With<LLVMTarget> llvm_target(*llvm_instance_, target);
   llvm::TargetMachine* tm = llvm_target->GetOrCreateTargetMachine();

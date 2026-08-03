@@ -608,6 +608,7 @@ std::string LLVMTargetInfo::str() const {
     os << " -jit=" << jit_engine_;
   }
 
+  // LOG(INFO) << "LLVM STR:" << os.str();
   return os.str();
 }
 
