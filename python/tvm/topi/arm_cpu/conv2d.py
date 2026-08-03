@@ -41,7 +41,13 @@ from .conv2d_gemm import (
     schedule_conv2d_gemm_interleaved,
     schedule_conv2d_gemm_native,
 )
+from .conv2d_gemm import conv2d_nhwc_hwoi_ime_packed_compute
 from .mprofile.dsp.conv2d import conv2d_nhwc_dsp_compute, conv2d_nhwc_dsp_schedule
+
+
+# NEW
+from typing import Tuple, Union
+from tvm.topi.nn.pad import pad
 
 
 @autotvm.register_topi_compute("conv2d_nchw_spatial_pack.arm_cpu")
@@ -513,6 +519,12 @@ def conv2d_nhwc_dsp(cfg, data, kernel, strides, padding, dilation, out_dtype):
     return conv2d_nhwc_dsp_compute(cfg, data, kernel, strides, padding, dilation, out_dtype)
 
 
+@autotvm.register_topi_compute("conv2d_nhwc_ime_packed.arm_cpu")
+def conv2d_nhwc_hwoi_ime_packed(cfg, data, kernel, strides, padding, dilation, out_dtype):
+    """Compute conv2d_nhwc_hwoi with IME instructions."""
+    return conv2d_nhwc_hwoi_ime_packed_compute(cfg, data, kernel, strides, padding, dilation, out_dtype)
+
+
 @autotvm.register_topi_schedule("conv2d_nhwc_dsp.arm_cpu")
 def schedule_conv2d_nhwc_dsp(cfg, outs):
     """Create schedule for conv2d_nhwc_dsp"""
@@ -954,3 +966,125 @@ def schedule_conv2d_NHWC_hybrid_TIR(sch: tvm.tir.Schedule):
     sch.parallel(n_h_fused)
 
     return sch
+
+
+@autotvm.register_topi_schedule("conv2d_nhwc_hwoi.arm_cpu")
+def schedule_conv2d_nhwc_hwoi(cfg, outs):
+    """TODO"""
+    return conv2d_nhwc_hwoi_schedule(cfg, outs)
+
+
+def conv2d_nhwc_ohwi_schedule(cfg, outs):
+    """TODO"""
+    sched = te.create_schedule([x.op for x in outs])
+
+    def _callback(op):
+        if "conv2d_nhwc" not in op.tag:
+            return
+
+    traverse_inline(sched, outs[-1].op, _callback)
+    return sched
+
+
+def _unpack_2d_argument(argument: Union[int, Tuple]) -> Tuple:
+    if isinstance(argument, int):
+        return (argument, argument)
+    assert len(argument) == 2
+    return argument
+
+
+def _check_no_dilation(dilation: Union[int, Tuple]) -> None:
+    """Takes a dilation argument as an integer or tuple, and makes sure both dimensions are 1.
+    Dilation prevents us from using DSP instructions, so this schedule can't work (aside from the
+    niche case where dilation_h == stride_h and dilation_w == stride_w, which is rare enough we
+    probably don't need to support it)."""
+
+    dilation_h, dilation_w = _unpack_2d_argument(dilation)
+    assert dilation_h == dilation_w == 1
+
+
+def _unpack_padding(padding: Tuple) -> Tuple:
+    assert isinstance(padding, tuple)
+    if len(padding) == 2:
+        (pad_up, pad_down), (pad_left, pad_right) = padding
+    else:
+        pad_up, pad_left, pad_down, pad_right = padding
+    return pad_up, pad_left, pad_down, pad_right
+
+
+def _pad_if_needed(data: te.tensor.Tensor, layout: str, padding: Tuple) -> te.tensor.Tensor:
+    """Performs padding on a te.tensor.Tensor object if necessary. If padding = (0, 0, 0, 0), the
+    input tensor is returned unmodified. We only care about tuples here - "VALID" and "SAME" padding
+    will be converted by the importer TFLite importer if present."""
+
+    pad_up, pad_left, pad_down, pad_right = padding
+    if not any(padding):
+        return data
+
+    # We want to pad the "H" and "W" columns, and their position depends on the layout
+    pad_before, pad_after = [0, 0, 0, 0], [0, 0, 0, 0]
+    pad_before[layout.index("H")] = pad_up
+    pad_before[layout.index("W")] = pad_left
+    pad_after[layout.index("H")] = pad_down
+    pad_after[layout.index("W")] = pad_right
+    return pad(data, pad_before, pad_after, name="padded_data")
+
+
+def _compute_output_dim(
+    data_dim: int, kernel_dim: int, pad_before: int, pad_after: int, stride: int
+) -> int:
+    """Computes an output dimension of a convolution, given the data dimension, kernel dimension,
+    padding, and stride along that axis. Note that when stride > 1, this division will often not
+    be perfectly even."""
+    return (data_dim + pad_before + pad_after - kernel_dim) // stride + 1
+
+
+def conv2d_nhwc_ohwi_compute(
+    _cfg, data, kernel, strides, padding, dilation, out_layout, out_dtype
+):
+    """TODO"""
+
+    stride_h, stride_w = _unpack_2d_argument(strides)
+    pad_up, pad_left, pad_down, pad_right = _unpack_padding(padding)
+    _check_no_dilation(dilation)
+    # TODO: support dilation
+
+    batch_size, data_h, data_w, in_channels = data.shape
+    output_channels, kernel_h, kernel_w, _ = kernel.shape
+    assert kernel.shape[3] == in_channels
+
+    output_h = _compute_output_dim(data_h, kernel_h, pad_up, pad_down, stride_h)
+    output_w = _compute_output_dim(data_w, kernel_w, pad_left, pad_right, stride_w)
+
+    kh_i = te.reduce_axis((0, kernel_h), name="kh_i")
+    kw_i = te.reduce_axis((0, kernel_w), name="kw_i")
+    kc_i = te.reduce_axis((0, in_channels), name="rc")
+
+    padded_data = _pad_if_needed(data, "NHWC", (pad_up, pad_left, pad_down, pad_right))
+    conv = te.compute(
+        (batch_size, output_h, output_w, output_channels),
+        lambda n, y, x, c: te.sum(
+            padded_data[
+                n, y * stride_h + kh_i, x * stride_w + kw_i * 1, kc_i
+            ].astype(out_dtype)
+            * kernel[c, kh_i, kw_i, kc_i].astype(out_dtype),
+            axis=[kh_i, kw_i, kc_i],
+        ),
+        name="conv2d",
+        tag="conv2d_nhwc_ohwi",
+    )
+    return conv
+
+
+@autotvm.register_topi_compute("conv2d_nhwc_ohwi.arm_cpu")
+def conv2d_nhwc_ohwi(cfg, data, kernel, strides, padding, dilation, out_layout, out_dtype):
+    """TODO"""
+    return conv2d_nhwc_ohwi_compute(
+        cfg, data, kernel, strides, padding, dilation, out_layout, out_dtype
+    )
+
+
+@autotvm.register_topi_schedule("conv2d_nhwc_ohwi.arm_cpu")
+def schedule_conv2d_nhwc_ohwi(cfg, outs):
+    """TODO"""
+    return conv2d_nhwc_ohwi_schedule(cfg, outs)
