@@ -753,6 +753,14 @@ class QLinearAveragePool(Pool):
         # and then requantize afer (according to documentation below)
         # https://github.com/microsoft/onnxruntime/blob/master/docs/ContribOperators.md#com.microsoft.QLinearAveragePool
         float_node = _qnn.op.dequantize(data, x_scale, x_zero_point)
+        # QLinearAveragePool is an ORT contrib op and has an additional
+        # channels_last attribute which Relay avg_pool2d does not accept.
+        channels_last = attr.pop("channels_last", 0)
+        if channels_last:
+            raise tvm.error.OpAttributeInvalid(
+                "QLinearAveragePool with channels_last=1 is not supported"
+            )
+
         out = attr_cvt([float_node], attr, params)
         return _qnn.op.quantize(out, y_scale, y_zero_point, out_dtype=input_dtype)
 
