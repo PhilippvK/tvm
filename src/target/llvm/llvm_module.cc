@@ -26,6 +26,7 @@
 #include "llvm_module.h"
 
 #include <dmlc/io.h>
+#include <unistd.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
@@ -514,7 +515,55 @@ void LLVMModuleNode::InitORCJIT() {
     return std::make_unique<llvm::orc::TMOwningSimpleCompiler>(std::move(tm));
   };
 
-#if TVM_LLVM_VERSION >= 130
+#if 1
+// const auto linkerBuilder =
+//   [](llvm::orc::ExecutionSession &session,
+//      llvm::jitlink::JITLinkMemoryManager &memMgr)
+//   -> llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>> {
+//
+//     return std::make_unique<llvm::orc::ObjectLinkingLayer>(
+//         session,
+//         memMgr);
+//   };
+const auto linkerBuilder =
+  [](llvm::orc::ExecutionSession &session)
+  -> llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>> {
+
+    auto memMgr =
+        llvm::cantFail(llvm::jitlink::InProcessMemoryManager::Create());
+
+    return std::make_unique<llvm::orc::ObjectLinkingLayer>(
+        session,
+        std::move(memMgr));
+  };
+// const auto linkerBuilder =
+//   [](llvm::orc::ExecutionSession &session,
+//      llvm::jitlink::JITLinkMemoryManager &) {
+//
+//     // static auto mem_mgr = llvm::jitlink::InProcessMemoryManager::Create().takeExpected();
+//     auto mem_mgr = llvm::cantFail(llvm::jitlink::InProcessMemoryManager::Create());
+//
+//
+//     return llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>>(
+//         std::make_unique<llvm::orc::ObjectLinkingLayer>(session, *mem_mgr));
+//   };
+// const auto linkerBuilder = [&](llvm::orc::ExecutionSession& session, const llvm::Triple&) {
+//   return std::make_unique<llvm::orc::ObjectLinkingLayer>(
+//     session,
+//     llvm::jitlink::InProcessMemoryManager());
+//   // return std::make_unique<llvm::orc::ObjectLinkingLayer>(session);
+// };
+// const auto linkerBuilder =
+//   [](llvm::orc::ExecutionSession &session,
+//      llvm::jitlink::JITLinkMemoryManager &)
+//   -> llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>> {
+//
+//     uint64_t page_size = 4096;
+//     return std::make_unique<llvm::orc::ObjectLinkingLayer>(
+//         session,
+//         llvm::jitlink::InProcessMemoryManager(page_size));
+//   };
+#elif TVM_LLVM_VERSION >= 130
   // linker
   const auto linkerBuilder =
 #if TVM_LLVM_VERSION >= 210

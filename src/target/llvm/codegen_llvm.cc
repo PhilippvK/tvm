@@ -1097,7 +1097,13 @@ llvm::Function* CodeGenLLVM::GetIntrinsicDecl(llvm::Intrinsic::ID id, llvm::Type
   llvm::Intrinsic::getIntrinsicInfoTableEntries(id, infos);
   llvm::SmallVector<llvm::Type*, 4> overload_types;
 
-#if TVM_LLVM_VERSION >= 90
+#if 1
+  return llvm::Intrinsic::getOrInsertDeclaration(
+      module,
+      id,
+      ret_type,
+      arg_types);
+#elif TVM_LLVM_VERSION >= 90
   auto try_match = [&](llvm::FunctionType* f_ty, bool var_arg) {
     overload_types.clear();
     llvm::ArrayRef<llvm::Intrinsic::IITDescriptor> ref(infos);

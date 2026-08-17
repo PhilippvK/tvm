@@ -915,14 +915,16 @@ const Array<String> LLVMTargetInfo::GetAllLLVMTargetArches() const {
       CreateLLVMTargetMachine(llvm_instance, triple_, "", "");
   const auto MCInfo = target_machine->getMCSubtargetInfo();
 
-  if (!MCInfo) {
-    return cpu_arches;
-  }
+  // TODO: check if fine
+  // if (!MCInfo) {
+  //   return cpu_arches;
+  // }
   // get all arches
   llvm::ArrayRef<llvm::SubtargetSubTypeKV> llvm_arches =
 #if TVM_LLVM_VERSION < 170
       llvm::archViewer(*(const llvm::MCSubtargetInfo*)MCInfo);
 #else
+      // MCInfo.getAllProcessorDescriptions();
       MCInfo->getAllProcessorDescriptions();
 #endif
   for (const auto& arch : llvm_arches) {
@@ -948,11 +950,13 @@ const Map<String, String> LLVMTargetInfo::GetAllLLVMCpuFeatures() const {
 #if TVM_LLVM_VERSION < 180
       llvm::featViewer(*(const llvm::MCSubtargetInfo*)MCInfo);
 #else
+      // MCInfo.getAllProcessorFeatures();
       MCInfo->getAllProcessorFeatures();
 #endif
   // TVM doesn't have an FFI friendly Set, so use a Map instead for now
   Map<String, String> cpu_features;
   for (const auto& feat : llvm_features) {
+    // if (MCInfo.checkFeatures("+" + std::string(feat.Key))) {
     if (MCInfo->checkFeatures("+" + std::string(feat.Key))) {
       cpu_features.Set(feat.Key, "");
     }
