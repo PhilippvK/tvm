@@ -35,29 +35,29 @@ def analyze_ms_db(in_db):
         target_str = str(target)
         # print("target", target, dir(target), type(target))
         workload = rec.workload
-        print("workload", workload, dir(workload))
+        # print("workload", workload, dir(workload))
         if workload not in workloads:
             workloads.append(workload)
             # workload2args[workload] = args_info
             # flops = estimate_tir_flops(workload.mod)
             # workload2flops[workload] = flops
         # workload2recs[workload].append(rec)
-        print("workload.mod", workload.mod, dir(workload.mod))
-        lowered_mod = tvm.lower(workload.mod)
-        print("lowered_mod", lowered_mod)
+        # print("workload.mod", workload.mod, dir(workload.mod))
+        # lowered_mod = tvm.lower(workload.mod)
+        # print("lowered_mod", lowered_mod)
         sch = tir.Schedule(workload.mod)
-        print("sch", sch, dir(sch))
-        print("sch.mod", sch.mod)
+        # print("sch", sch, dir(sch))
+        # print("sch.mod", sch.mod)
         rec.trace.apply_to_schedule(
             sch,
             remove_postproc=False,
         )
-        print("sch", sch, dir(sch))
-        print("sch.mod", sch.mod)
-        lowered_mod = tvm.lower(sch.mod)
-        print("lowered_mod", lowered_mod)
+        # print("sch", sch, dir(sch))
+        # print("sch.mod", sch.mod)
+        # lowered_mod = tvm.lower(sch.mod)
+        # print("lowered_mod", lowered_mod)
         # TODO: refactor mod analysis to other func/file
-        input("!")
+        # input("!")
         if target_str not in targets:
             targets.append(target_str)
         # target2recs[target_str].append(rec)
