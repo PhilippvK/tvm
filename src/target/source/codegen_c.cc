@@ -24,6 +24,7 @@
 
 #include <tvm/arith/analyzer.h>
 #include <tvm/ir/name_supply.h>
+#include <tvm/tir/transform.h>
 
 #include <cctype>
 #include <iomanip>
@@ -1258,8 +1259,17 @@ void CodeGenC::EmitSerialFor(const ForNode* op) {
 
 void CodeGenC::VisitStmt_(const ForNode* op) {
   if (op->kind == ForKind::kParallel) {
-    // LOG(INFO) << "ForNode: kParallel";
-    EmitRestrictedParallelLaunch(op);
+    tvm::transform::PassContext pass_ctx = tvm::transform::PassContext::Current();
+    constexpr const char* kAotPreserveParallelForOption = "tir.aot_preserve_parallel_for";
+    bool opt_preserve_parallel_for = true;
+    if (pass_ctx->GetConfig<Bool>(kAotPreserveParallelForOption) != nullptr) {
+      opt_preserve_parallel_for = pass_ctx->GetConfig<Bool>(kAotPreserveParallelForOption, Bool(false)).value();
+    }
+    if (opt_preserve_parallel_for) {
+      EmitRestrictedParallelLaunch(op);
+    } else {
+      EmitSerialFor(op);
+    }
     return;
   }
 
