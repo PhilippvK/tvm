@@ -6,9 +6,15 @@ from pathlib import Path
 from tvm import meta_schedule as ms
 from tvm.meta_schedule.database.s3_json_database import S3JSONDatabase
 from tvm.tir.tensor_intrin.riscv_cpu import *
+try:
+    from wca.tensor_intrin import register_wca_dot_intrinsics
+except ImportError:
+    register_wca_dot_intrinsics = None
 
 
 def load_ms_db_dir(in_db_dir, module_equality: str = "structural"):
+    if register_wca_dot_intrinsics is not None:
+        register_wca_dot_intrinsics(max_channels=None, channel_count=None, multilane=False, inventory_only=False)  # TODO
     in_db_path = Path(in_db_dir)
     path_workload = in_db_path / "database_workload.json"
     path_tuning_record = in_db_path / "database_tuning_record.json"
