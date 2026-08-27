@@ -615,6 +615,20 @@ def compile_model(
                         mod_name=mod_name,
                         workspace_pools=workspace_pools,
                     )
+        else:
+            logger.debug("building relay graph (no tuning records provided)")
+            assert ms_db is not None
+            with ms_db:
+                graph_module = build(
+                    mod,
+                    tvm_target=tvm_target,
+                    executor=executor,
+                    runtime=runtime,
+                    params=params,
+                    use_vm=use_vm,
+                    mod_name=mod_name,
+                    workspace_pools=workspace_pools,
+                )
     dso_modules = graph_module.get_lib()._collect_dso_modules()
 
     # Generate output dump files with sources
