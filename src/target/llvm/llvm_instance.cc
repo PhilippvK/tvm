@@ -916,10 +916,9 @@ const Array<String> LLVMTargetInfo::GetAllLLVMTargetArches() const {
       CreateLLVMTargetMachine(llvm_instance, triple_, "", "");
   const auto MCInfo = target_machine->getMCSubtargetInfo();
 
-  // TODO: check if fine
-  // if (!MCInfo) {
-  //   return cpu_arches;
-  // }
+  if (!MCInfo) {
+    return cpu_arches;
+  }
   // get all arches
   llvm::ArrayRef<llvm::SubtargetSubTypeKV> llvm_arches =
 #if TVM_LLVM_VERSION < 170

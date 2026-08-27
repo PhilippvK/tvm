@@ -516,55 +516,6 @@ void LLVMModuleNode::InitORCJIT() {
     return std::make_unique<llvm::orc::TMOwningSimpleCompiler>(std::move(tm));
   };
 
-#if 1
-// const auto linkerBuilder =
-//   [](llvm::orc::ExecutionSession &session,
-//      llvm::jitlink::JITLinkMemoryManager &memMgr)
-//   -> llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>> {
-//
-//     return std::make_unique<llvm::orc::ObjectLinkingLayer>(
-//         session,
-//         memMgr);
-//   };
-const auto linkerBuilder =
-  [](llvm::orc::ExecutionSession &session)
-  -> llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>> {
-
-    auto memMgr =
-        llvm::cantFail(llvm::jitlink::InProcessMemoryManager::Create());
-
-    return std::make_unique<llvm::orc::ObjectLinkingLayer>(
-        session,
-        std::move(memMgr));
-  };
-// const auto linkerBuilder =
-//   [](llvm::orc::ExecutionSession &session,
-//      llvm::jitlink::JITLinkMemoryManager &) {
-//
-//     // static auto mem_mgr = llvm::jitlink::InProcessMemoryManager::Create().takeExpected();
-//     auto mem_mgr = llvm::cantFail(llvm::jitlink::InProcessMemoryManager::Create());
-//
-//
-//     return llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>>(
-//         std::make_unique<llvm::orc::ObjectLinkingLayer>(session, *mem_mgr));
-//   };
-// const auto linkerBuilder = [&](llvm::orc::ExecutionSession& session, const llvm::Triple&) {
-//   return std::make_unique<llvm::orc::ObjectLinkingLayer>(
-//     session,
-//     llvm::jitlink::InProcessMemoryManager());
-//   // return std::make_unique<llvm::orc::ObjectLinkingLayer>(session);
-// };
-// const auto linkerBuilder =
-//   [](llvm::orc::ExecutionSession &session,
-//      llvm::jitlink::JITLinkMemoryManager &)
-//   -> llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>> {
-//
-//     uint64_t page_size = 4096;
-//     return std::make_unique<llvm::orc::ObjectLinkingLayer>(
-//         session,
-//         llvm::jitlink::InProcessMemoryManager(page_size));
-//   };
-#elif TVM_LLVM_VERSION >= 130
   // linker
   const auto linkerBuilder =
 #if TVM_LLVM_VERSION >= 210
@@ -575,7 +526,13 @@ const auto linkerBuilder =
           const llvm::Triple& triple) -> std::unique_ptr<llvm::orc::ObjectLayer> {
 #endif
 #if _WIN32
+#if TVM_LLVM_VERSION >= 210
+    auto GetMemMgr = [](const llvm::MemoryBuffer&) {
+      return std::make_unique<llvm::SectionMemoryManager>();
+    };
+#else
     auto GetMemMgr = []() { return std::make_unique<llvm::SectionMemoryManager>(); };
+#endif
     auto ObjLinkingLayer =
         std::make_unique<llvm::orc::RTDyldObjectLinkingLayer>(session, std::move(GetMemMgr));
 #else
@@ -595,7 +552,6 @@ const auto linkerBuilder =
     return ObjLinkingLayer;
 #endif
   };  // NOLINT(readability/braces)
-#endif
 
   // create LLJIT
   orcjit_ee_ = llvm::cantFail(llvm::orc::LLJITBuilder()
