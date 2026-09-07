@@ -80,11 +80,12 @@ def _generate_codegen_args(parser, codegen_name):
 
                     if codegen["pass_default"] is False:
                         default_value = None
+                    help_str = f"target codegen {codegen_name} {field.description}{INTERNAL_TO_HELP[tvm_type]}"
 
                     target_group.add_argument(
                         f"--target-{codegen_name}-{target_option}",
                         type=python_type,
-                        help=field.description,
+                        help=help_str,
                         default=default_value,
                     )
 
@@ -129,9 +130,7 @@ def _reconstruct_codegen_args(args, codegen_name):
             for tvm_type in INTERNAL_TO_NATIVE_TYPE:
                 if field.type_info.startswith(tvm_type):
                     target_option = field.name
-                    var_name = (
-                        f"target_{codegen_name.replace('-', '_')}_{target_option.replace('-', '_')}"
-                    )
+                    var_name = f"target_{codegen_name.replace('-', '_')}_{target_option.replace('-', '_')}"
                     option_value = getattr(args, var_name)
                     if option_value is not None:
                         codegen_options[target_option] = option_value
@@ -165,16 +164,13 @@ def validate_targets(parse_targets, additional_target_options=None):
 
     if targets[-1] not in tvm_target_kinds:
         tvm_target_names = ", ".join(tvm_target_kinds)
-        raise TVMCException(
-            f"The last target needs to be a TVM target. Choices: {tvm_target_names}"
-        )
+        raise TVMCException(f"The last target needs to be a TVM target. Choices: {tvm_target_names}")
 
     tvm_targets = [t for t in targets if t in _valid_target_kinds()]
     if len(tvm_targets) > 2:
         verbose_tvm_targets = ", ".join(tvm_targets)
         raise TVMCException(
-            "Only two of the following targets can be used at a time. "
-            f"Found: {verbose_tvm_targets}."
+            "Only two of the following targets can be used at a time. " f"Found: {verbose_tvm_targets}."
         )
 
     if additional_target_options is not None:
@@ -182,8 +178,7 @@ def validate_targets(parse_targets, additional_target_options=None):
             if not any([target for target in parse_targets if target["name"] == target_name]):
                 first_option = list(additional_target_options[target_name].keys())[0]
                 raise TVMCException(
-                    f"Passed --target-{target_name}-{first_option}"
-                    f" but did not specify {target_name} target"
+                    f"Passed --target-{target_name}-{first_option}" f" but did not specify {target_name} target"
                 )
 
 
@@ -329,9 +324,7 @@ def parse_target(target):
 
             opts[opt_name] = opt_value
 
-        codegens.append(
-            {"name": name, "opts": opts, "raw": raw_target, "is_tvm_target": is_tvm_target}
-        )
+        codegens.append({"name": name, "opts": opts, "raw": raw_target, "is_tvm_target": is_tvm_target})
 
     return codegens
 
@@ -401,9 +394,7 @@ def target_from_cli(target, additional_target_options=None):
 
         validate_targets(parsed_targets, additional_target_options)
         tvm_targets = [
-            _combine_target_options(t, additional_target_options)
-            for t in parsed_targets
-            if t["is_tvm_target"]
+            _combine_target_options(t, additional_target_options) for t in parsed_targets if t["is_tvm_target"]
         ]
 
         # Validated target strings have 1 or 2 tvm targets, otherwise
@@ -417,9 +408,7 @@ def target_from_cli(target, additional_target_options=None):
             target_host = _recombobulate_target(tvm_targets[1])
 
         extra_targets = [
-            _combine_target_options(t, additional_target_options)
-            for t in parsed_targets
-            if not t["is_tvm_target"]
+            _combine_target_options(t, additional_target_options) for t in parsed_targets if not t["is_tvm_target"]
         ]
 
     return tvm.target.Target(target, host=target_host), extra_targets

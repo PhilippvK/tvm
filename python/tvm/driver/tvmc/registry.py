@@ -28,6 +28,7 @@ INTERNAL_TO_NATIVE_TYPE = {
     "runtime.BoxBool": lambda x: bool(int(x)) if x.isdigit() and len(x) == 1 else (x.lower() in ["true", "t", "on", "yes", "y"]),
     "runtime.BoxFloat": float,
     "runtime.BoxInt": int,
+    "IntImm": int,
     "Array": str,
 }
 INTERNAL_TO_HELP = {
@@ -35,6 +36,7 @@ INTERNAL_TO_HELP = {
     "runtime.BoxBool": " bool",
     "runtime.BoxInt": " int",
     "runtime.BoxFloat": " float",
+    "IntImm": " int",
     "Array": " options",
 }
 
