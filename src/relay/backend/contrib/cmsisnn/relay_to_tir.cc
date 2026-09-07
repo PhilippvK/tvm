@@ -407,8 +407,14 @@ class RelayToTIRVisitor : public MixedModeMutator {
     }
     call_ext_args.push_back(output);
 
-    int context_buffer_size = 0;
+    Target target = CreateTarget(transform::PassContext::Current());
+    int context_buffer_size = FullyConnectedBufferSize(dtype_bits == 16, target, out_channels);
     PrimExpr context_buffer_var = tir::StringImm("NULL");
+    if (context_buffer_size) {
+      std::string context_buffer_name = "context_buffer_" + std::to_string(context_buffer_id_++);
+      context_buffer_var = tir::Var(
+          context_buffer_name, PointerType(PrimType(DataType::Int(8)), "global.workspace"));
+    }
     tvm::Array<PrimExpr> context_buffer_args = {context_buffer_var, ToArg(context_buffer_size)};
 
     scalar_args = tvm::runtime::Concat(context_buffer_args, scalar_args);

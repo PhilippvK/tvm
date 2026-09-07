@@ -115,6 +115,9 @@ int DepthwiseConv2dBufferSizeInt16(Target target, int32_t input_n, int32_t input
  */
 int AvgPoolBufferSize(Target target, int32_t input_c);
 
+// Match the s8 fully-connected scratch requirement (one int32 per output channel on MVE).
+int FullyConnectedBufferSize(bool is_int16, Target target, int32_t output_c);
+
 }  // namespace cmsisnn
 }  // namespace contrib
 }  // namespace relay

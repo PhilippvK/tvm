@@ -144,6 +144,11 @@ int DepthwiseConv2dBufferSizeInt16(Target target, int32_t input_n, int32_t input
   return 0;
 }
 
+int FullyConnectedBufferSize(bool is_int16, Target target, int32_t output_c) {
+  bool has_mve = target->GetFeature<Bool>("has_mve").value_or(Bool(false));
+  return !is_int16 && has_mve ? output_c * static_cast<int32_t>(sizeof(int32_t)) : 0;
+}
+
 int AvgPoolBufferSize(Target target, int32_t input_c) {
   bool has_mve = target->GetFeature<Bool>("has_mve").value_or(Bool(false));
   bool has_dsp = target->GetFeature<Bool>("has_dsp").value_or(Bool(false));
