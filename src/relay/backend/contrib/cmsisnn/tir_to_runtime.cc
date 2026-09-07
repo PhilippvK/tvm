@@ -531,7 +531,7 @@ class CodeGenCMSISNN : public codegen::CodeGenCHost {
   void EmitErrorCheck() {
     auto emit_error = [&](std::string error) {
       if (this->debug_last_error) {
-        stream << "TVMAPISetLastError(\"" << error << "\"); ";
+        stream << "TVMAPISetLastError(\"" << error << "\");\n";
       }
     };
 
