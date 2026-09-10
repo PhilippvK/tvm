@@ -542,34 +542,122 @@ class EvolutionarySearchNode : public SearchStrategyNode {
   }
 };
 
-std::vector<std::pair<Schedule, int>> EvolutionarySearchNode::State::PickBestFromDatabase(int num) {
+// std::vector<std::pair<Schedule, int>> EvolutionarySearchNode::State::PickBestFromDatabase(int num) {
+//   auto _ = Profiler::TimedScope("EvoSearch/PickBestFromDatabase");
+//   // TODO: alternatively get random?
+//   std::vector<tir::Trace> measured_traces;
+//   measured_traces.reserve(num);
+//   Array<TuningRecord> top_records = this->database_->GetTopK(this->token_, num);
+//   for (TuningRecord record : top_records) {
+//     measured_traces.push_back(record->trace);
+//   }
+//   int actual_num = measured_traces.size();
+//   ThreadedTraceApply pp(self->postprocs_);
+//   std::vector<std::pair<Schedule, int>> results(actual_num, std::pair<Schedule, int>{Schedule{nullptr}, -1});
+//   auto f_proc_measured = [this, &measured_traces, &results, &pp](int thread_id,
+//                                                                  int trace_id) -> void {
+//     PerThreadData& data = this->per_thread_data_.at(thread_id);
+//     TRandState* rand_state = &data.rand_state;
+//     const IRModule& mod = data.mod;
+//     tir::Trace trace = measured_traces.at(trace_id);
+//     std::pair<Schedule, int>& result = results.at(trace_id);
+//     ICHECK(!result.first.defined());
+//     if (Optional<Schedule> sch = pp.Apply(mod, trace, rand_state)) {
+//       result.first = sch.value();
+//       result.second = space_idx;
+//     } else {
+//       LOG(FATAL) << "ValueError: Cannot postprocess the trace:\n" << trace;
+//       throw;
+//     }
+//   };
+//   support::parallel_for_dynamic(0, actual_num, self->ctx_->num_threads, f_proc_measured);
+//   return results;
+// }
+std::vector<std::pair<Schedule, int>>
+EvolutionarySearchNode::State::PickBestFromDatabase(int num) {
   auto _ = Profiler::TimedScope("EvoSearch/PickBestFromDatabase");
-  // TODO: alternatively get random?
-  std::vector<tir::Trace> measured_traces;
-  measured_traces.reserve(num);
-  Array<TuningRecord> top_records = this->database_->GetTopK(this->token_, num);
-  for (TuningRecord record : top_records) {
-    measured_traces.push_back(record->trace);
-  }
-  int actual_num = measured_traces.size();
-  ThreadedTraceApply pp(self->postprocs_);
-  std::vector<std::pair<Schedule, int>> results(actual_num, std::pair<Schedule, int>{Schedule{nullptr}, -1});
-  auto f_proc_measured = [this, &measured_traces, &results, &pp](int thread_id,
-                                                                 int trace_id) -> void {
-    PerThreadData& data = this->per_thread_data_.at(thread_id);
-    TRandState* rand_state = &data.rand_state;
-    const IRModule& mod = data.mod;
-    tir::Trace trace = measured_traces.at(trace_id);
-    std::pair<Schedule, int>& result = results.at(trace_id);
-    ICHECK(!result.first.defined());
-    if (Optional<Schedule> sch = pp.Apply(mod, trace, rand_state)) {
-      result.first = sch.value();
-    } else {
-      LOG(FATAL) << "ValueError: Cannot postprocess the trace:\n" << trace;
-      throw;
-    }
+
+  struct MeasuredTrace {
+    tir::Trace trace;
+    int space_idx;
   };
-  support::parallel_for_dynamic(0, actual_num, self->ctx_->num_threads, f_proc_measured);
+
+  std::vector<MeasuredTrace> measured_traces;
+  measured_traces.reserve(num);
+
+  Array<TuningRecord> top_records =
+      this->database_->GetTopK(this->token_, num);
+
+  for (const TuningRecord& record : top_records) {
+    // LOG(INFO) << "record->space_idx=" << record->space_idx;
+    measured_traces.push_back(
+        MeasuredTrace{
+            record->trace,
+            record->space_idx,
+        });
+  }
+
+  int actual_num =
+      static_cast<int>(measured_traces.size());
+
+  ThreadedTraceApply pp(self->postprocs_);
+
+  std::vector<std::pair<Schedule, int>> results(
+      actual_num,
+      std::pair<Schedule, int>{
+          Schedule{nullptr},
+          -1,
+      });
+
+  auto f_proc_measured =
+      [this, &measured_traces, &results, &pp](
+          int thread_id,
+          int trace_id) -> void {
+        PerThreadData& data =
+            this->per_thread_data_.at(thread_id);
+
+        TRandState* rand_state =
+            &data.rand_state;
+
+        const IRModule& mod =
+            data.mod;
+
+        const MeasuredTrace& measured =
+            measured_traces.at(trace_id);
+
+        tir::Trace trace =
+            measured.trace;
+
+        int space_idx =
+            measured.space_idx;
+
+        std::pair<Schedule, int>& result =
+            results.at(trace_id);
+
+        ICHECK(!result.first.defined());
+
+        if (Optional<Schedule> sch =
+                pp.Apply(
+                    mod,
+                    trace,
+                    rand_state)) {
+          result.first = sch.value();
+          result.second = space_idx;
+        } else {
+          LOG(FATAL)
+              << "ValueError: Cannot postprocess "
+                 "the trace:\n"
+              << trace;
+          throw;
+        }
+      };
+
+  support::parallel_for_dynamic(
+      0,
+      actual_num,
+      self->ctx_->num_threads,
+      f_proc_measured);
+
   return results;
 }
 
@@ -876,7 +964,11 @@ std::vector<std::pair<Schedule, int>> EvolutionarySearchNode::State::PickWithEps
   auto _ = Profiler::TimedScope("EvoSearch/PickWithEpsGreedy");
   // LOG(INFO) << "PickWithEpsGreedy";
   // LOG(INFO) << "num=" << num;
-  int num_rands = num * self->eps_greedy;
+  int num_rands = static_cast<int>(std::ceil(num * self->eps_greedy));
+  if (self->eps_greedy > 0.0) {
+    num_rands = std::max(1, num_rands);
+  }
+  num_rands = std::min(num_rands, num);
   // LOG(INFO) << "num_rands=" << num_rands;
   int num_bests = num - num_rands;
   // LOG(INFO) << "num_bests=" << num_bests;
