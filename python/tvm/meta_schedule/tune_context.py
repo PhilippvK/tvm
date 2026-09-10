@@ -165,6 +165,12 @@ class TuneContext(Object):
         )
         _ffi_api.TuneContextInitialize(self)  # type: ignore # pylint: disable=no-member
 
+    def set_design_spaces_mask(self, mask):
+        _ffi_api.TuneContextSetDesignSpacesMask(
+            self,
+            [int(x) for x in mask],
+        )
+
     def generate_design_space(self) -> List[Schedule]:
         """Generate design spaces given a module.
 

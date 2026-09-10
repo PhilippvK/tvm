@@ -460,14 +460,20 @@ def extracted_tasks_to_tune_contexts(
             task_weights.append(task.weight)
         i += 1
     if mask_mode is not None:
-        tasks_per_space, task_weights_per_space = split_tasks_per_space(
-            tasks, task_weights, mask_mode=mask_mode, database=database, module_equality=module_equality
-        )
-        tasks = tasks_per_space
-        task_weights = task_weights_per_space
-        print("tasks", tasks)
-        print("task_weights", task_weights)
-        # input("!!!")
+        print("mask_mode", mask_mode)
+        if isinstance(mask_mode, list):
+            print("MANUAL MASK")
+            assert len(tasks) == 1
+            tasks[0].set_design_spaces_mask(mask_mode)
+        else:
+            tasks_per_space, task_weights_per_space = split_tasks_per_space(
+                tasks, task_weights, mask_mode=mask_mode, database=database, module_equality=module_equality
+            )
+            tasks = tasks_per_space
+            task_weights = task_weights_per_space
+            print("tasks", tasks)
+            print("task_weights", task_weights)
+            # input("!!!")
 
     def repeat_tasks_helper(tasks, task_weights, num: int = 1, database="json", module_equality="ignore-ndarray"):
         print("repeat_tasks_helper", tasks, task_weights, num)

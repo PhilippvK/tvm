@@ -81,6 +81,15 @@ TVM_REGISTER_GLOBAL("meta_schedule.TuneContextInitialize")
     .set_body_method<TuneContext>(&TuneContextNode::Initialize);
 TVM_REGISTER_GLOBAL("meta_schedule.TuneContextClone")
     .set_body_method<TuneContext>(&TuneContextNode::Clone);
+// TVM_REGISTER_GLOBAL("meta_schedule.TuneContextSetDesignSpacesMask")
+//     .set_body_typed([](TuneContext ctx, Array<Integer> mask) {
+//       TuneContextNode* n = ctx.CopyOnWrite();
+//       n->design_spaces_mask = std::move(mask);
+//     });
+TVM_REGISTER_GLOBAL("meta_schedule.TuneContextSetDesignSpacesMask")
+    .set_body_typed([](TuneContext self, Array<Integer> mask) {
+      self->design_spaces_mask = std::move(mask);
+    });
 
 }  // namespace meta_schedule
 }  // namespace tvm
