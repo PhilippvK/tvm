@@ -125,7 +125,7 @@ Optional<Trace> MutateUnrollNode::Apply(const Trace& trace, TRandState* rand_sta
   if (!FindUnrollDecision(trace, rand_state, &candidate)) {
     return NullOpt;
   }
-  if (candidate.probs.size() == 0) {
+  if (candidate.probs.size() <= 1) {
     return NullOpt;
   }
   candidate.probs.erase(candidate.probs.begin() + candidate.decision);
