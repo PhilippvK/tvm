@@ -67,7 +67,7 @@ class AddToDatabaseNode : public MeasureCallbackNode {
           /*run_secs=*/run_secs,
           /*target=*/target,
           /*args_info=*/candidate->args_info,
-          /*timestamp=*/timestamp);
+          /*timestamp=*/timestamp, candidate->space_idx);
       if (task->database.defined()) {
         task->database.value()->CommitTuningRecord(rec);
       }

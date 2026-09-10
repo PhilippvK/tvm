@@ -220,7 +220,7 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
     LOG(FATAL) << "ValueError: Unable to parse the JSON object: " << json_obj
                << "\nThe error is: " << e.what();
   }
-  return TuningRecord(trace, workload, run_secs, target, args_info, timestamp);
+  return TuningRecord(trace, workload, run_secs, target, args_info, timestamp, space_idx);
 }
 
 /******** Database ********/
