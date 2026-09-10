@@ -94,6 +94,7 @@ class TempDirectory(object):
             cls._KEEP_FOR_DEBUG = old_keep_for_debug
 
     def __init__(self, custom_path=None, keep_for_debug=None):
+        self.temp_dir = None
         if self.TEMPDIRS is None:
             raise DirectoryCreatedPastAtExit()
 
