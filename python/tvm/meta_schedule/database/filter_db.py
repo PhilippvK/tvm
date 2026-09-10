@@ -5,7 +5,9 @@ import tempfile
 from collections import defaultdict
 from typing import List, Optional, Union
 from pathlib import Path
+import multiprocessing as mp
 import tvm
+from tqdm import tqdm
 from tvm import meta_schedule as ms
 
 from .db_utils import load_ms_db_wrapper, db_to_json_db
@@ -16,7 +18,7 @@ def drop_duplicate_recs_helper(recs):
     hash2recs = defaultdict(list)
     num = 0
     ret = []
-    for rec in recs:
+    for rec in tqdm(recs, desc="Filtering records"):
         rec_json = str(rec.as_json()).encode()
         import hashlib
 
@@ -40,7 +42,7 @@ def drop_duplicate_candidates_helper(recs, lower: bool = False):
     num = 0
     from tvm.meta_schedule.utils import shash2hex
 
-    for rec in recs:
+    for rec in tqdm(recs, desc="Hashing candidates"):
         # print("rec", rec, dir(rec))
         measure_candidate = rec.as_measure_candidate()
         sch = measure_candidate.sch
@@ -70,7 +72,7 @@ def drop_duplicate_candidates_helper(recs, lower: bool = False):
     # TODO: analyze recs per candidate -> view_db?
     # print("num_duplicates", num)
     ret = []  # TODO
-    for shash, recs in hash2recs.items():
+    for shash, recs in tqdm(hash2recs.items(), desc="Filtering candidates"):
         # print("shash", shash)
         # print("recs", recs, len(recs))
         rec_run_secs = [rec.run_secs for rec in recs]
@@ -86,6 +88,92 @@ def drop_duplicate_candidates_helper(recs, lower: bool = False):
     # print("ret", ret, len(ret))
     # print("len(ret)", len(ret))
     # input("$")
+    return ret
+
+
+def _lower_and_hash(task):
+    """Runs entirely inside one worker process."""
+    idx, mod_json = task
+
+    # Import inside worker so each process has its own TVM state.
+    import tvm
+    from tvm.meta_schedule.utils import shash2hex
+
+    # Each worker gets its OWN IRModule instance.
+    mod = tvm.ir.load_json(mod_json)
+
+    lowered_mod = tvm.lower(mod)
+    shash = shash2hex(lowered_mod)
+
+    # Don't return TVM objects across process boundary.
+    return idx, shash
+
+
+def drop_duplicate_candidates_helper_new(
+    recs,
+    lower: bool = False,
+    num_workers: int | None = None,
+    # chunksize: int = 1,
+    chunksize: int = 8,
+):
+    from tvm.meta_schedule.utils import shash2hex
+
+    recs = list(recs)
+
+    if num_workers is None:
+        # num_workers = max(1, (mp.cpu_count() or 1) // 2)
+        num_workers = max(1, (mp.cpu_count() or 1) // 1)
+
+    hashes = [None] * len(recs)
+
+    if lower:
+        # "spawn" is intentional:
+        # do NOT fork an already-initialized TVM process.
+        ctx = mp.get_context("spawn")
+
+        def tasks():
+            for i, rec in enumerate(recs):
+                candidate = rec.as_measure_candidate()
+                mod = candidate.sch.mod
+
+                # Serialize in parent; deserialize independently in worker.
+                yield i, tvm.ir.save_json(mod)
+
+        with ctx.Pool(processes=num_workers) as pool:
+            results = pool.imap_unordered(
+                _lower_and_hash,
+                tasks(),
+                chunksize=chunksize,
+            )
+
+            for idx, shash in tqdm(
+                results,
+                total=len(recs),
+                desc=f"Lowering + hashing ({num_workers} workers)",
+            ):
+                hashes[idx] = shash
+
+    else:
+        for i, rec in enumerate(tqdm(recs, desc="Hashing candidates")):
+            candidate = rec.as_measure_candidate()
+            hashes[i] = shash2hex(candidate.sch.mod)
+
+    # Group ALL records having the same hash.
+    hash2recs = defaultdict(list)
+
+    for rec, shash in zip(recs, hashes):
+        hash2recs[shash].append(rec)
+
+    # Keep fastest measurement for each candidate.
+    ret = []
+
+    for duplicate_recs in hash2recs.values():
+        best_rec = min(
+            duplicate_recs,
+            key=lambda rec: sum(rec.run_secs) / len(rec.run_secs),
+        )
+        ret.append(best_rec)
+
     return ret
 
 
@@ -141,13 +229,17 @@ def filter_ms_db(
     if drop_duplicate_candidates:
         len_before = len(recs)
         recs = drop_duplicate_candidates_helper(recs, lower=False)
+        # recs = drop_duplicate_candidates_helper_new(recs, lower=False)
         len_after = len(recs)
         num_duplicates = len_before - len_after
         drop_hist["duplicate_candidate"] += num_duplicates
         print(f"Dropped {num_duplicates} duplicate candidates")
     if drop_duplicate_lowered_candidates:
         len_before = len(recs)
-        recs = drop_duplicate_candidates_helper(recs, lower=True)
+        if len_before > 1000:
+            recs = drop_duplicate_candidates_helper_new(recs, lower=True)
+        else:
+            recs = drop_duplicate_candidates_helper(recs, lower=True)
         len_after = len(recs)
         num_duplicates = len_before - len_after
         drop_hist["duplicate_lowered_candidate"] += num_duplicates
@@ -310,6 +402,7 @@ def filter_ms_db_wrapper(
     )
     assert out_arg is not None
     in_db = load_ms_db_wrapper(in_arg)
+    print("Loaded!")
     num_recs_before = len(in_db)
     if out_arg.startswith("s3://"):
         raise NotImplementedError("S3 output")
