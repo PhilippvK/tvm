@@ -15,11 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 """Util to invoke clang in the system."""
+
 # pylint: disable=invalid-name
 import subprocess
 
 from tvm._ffi.base import py_str
 import tvm.target
+import shutil
 from . import utils
 
 
@@ -44,15 +46,19 @@ def find_clang(required=True):
     """
     cc_list = []
     major = tvm.target.codegen.llvm_version_major(allow_none=True)
+    # print("major", major)
     if major is not None:
         cc_list += [f"clang-{major}.0"]
         cc_list += [f"clang-{major}"]
     cc_list += ["clang"]
     cc_list += ["clang.exe"]
-    valid_list = [utils.which(x) for x in cc_list]
+    # print("cc_list", cc_list)
+    # valid_list = [utils.which(x) for x in cc_list]
+    valid_list = [shutil.which(x) for x in cc_list]
     valid_list = [x for x in valid_list if x]
     if not valid_list and required:
         raise RuntimeError("cannot find clang, candidates are: " + str(cc_list))
+    # print("valid_list", valid_list)
     return valid_list
 
 
@@ -83,6 +89,7 @@ def create_llvm(inputs, output=None, options=None, cc=None):
     cc = cc if cc else find_clang()[0]
     cmd = [cc]
     cmd += ["-S", "-emit-llvm"]
+    # print("cc", cc)
     temp = utils.tempdir()
     output = output if output else temp.relpath("output.ll")
     inputs = [inputs] if isinstance(inputs, str) else inputs
@@ -100,7 +107,7 @@ def create_llvm(inputs, output=None, options=None, cc=None):
     cmd += ["-o", output]
     cmd += input_files
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    (out, _) = proc.communicate()
+    out, _ = proc.communicate()
     if proc.returncode != 0:
         msg = "Compilation error:\n"
         msg += py_str(out)
