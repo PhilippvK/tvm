@@ -180,7 +180,54 @@ std::vector<State> MultiLevelTilingNode::AddWriteReuse(State state) const {
 }
 
 std::pair<Array<tir::ExprRV>, Array<tir::LoopRV>> MultiLevelTilingNode::SplitLoop(
-    const Schedule& sch, BlockRV block, LoopRV loop, int n_tiles) const {
+    const Schedule& sch, BlockRV block, LoopRV loop, int n_tiles, IterVarType iter_type,
+    int axis_idx) const {
+  // Temporary FLEX hypothesis-testing constant: S0's first two factors have product 16.
+  // Keep both groups sampled with stock primitives so traces remain replayable.
+  constexpr int64_t kOuterProduct = 16;
+  if (iter_type == IterVarType::kDataPar && axis_idx == 0 && n_tiles == 4) {
+    const auto* loop_node = sch->Get(loop).as<tir::ForNode>();
+    if (loop_node != nullptr) {
+      if (const auto* extent_imm = loop_node->extent.as<IntImmNode>()) {
+        int64_t extent = extent_imm->value;
+        if (extent > 0 && extent % kOuterProduct == 0) {
+          Array<tir::LoopRV> groups =
+              sch->Split(loop, {Integer(kOuterProduct), Integer(extent / kOuterProduct)});
+          Array<tir::ExprRV> factors01 = sch->SamplePerfectTile(groups[0], 2, kOuterProduct);
+          Array<tir::LoopRV> loops01 = sch->Split(groups[0], {factors01[0], factors01[1]});
+          Array<tir::ExprRV> factors23 =
+              sch->SamplePerfectTile(groups[1], 2, max_innermost_factor);
+          Array<tir::LoopRV> loops23 = sch->Split(groups[1], {factors23[0], factors23[1]});
+          // TileLoopNest expects factors and loops in outer-to-inner spatial order.
+          return {{factors01[0], factors01[1], factors23[0], factors23[1]},
+                  {loops01[0], loops01[1], loops23[0], loops23[1]}};
+        }
+      }
+    }
+  }
+  // Temporary FLEX hypothesis-testing constants for S1: N0*N1=8, N2=16, N3=1.
+  // The fixed split covers exactly 128 elements; other extents use stock sampling.
+  constexpr int64_t kNOuterProduct = 8;
+  constexpr int64_t kNInnerFactor = 16;
+  constexpr int64_t kNInnermostFactor = 1;
+  if (iter_type == IterVarType::kDataPar && axis_idx == 1 && n_tiles == 4) {
+    const auto* loop_node = sch->Get(loop).as<tir::ForNode>();
+    if (loop_node != nullptr) {
+      if (const auto* extent_imm = loop_node->extent.as<IntImmNode>()) {
+        if (extent_imm->value == kNOuterProduct * kNInnerFactor * kNInnermostFactor) {
+          Array<tir::LoopRV> groups = sch->Split(
+              loop, {Integer(kNOuterProduct), Integer(kNInnerFactor), Integer(kNInnermostFactor)});
+          Array<tir::ExprRV> factors01 = sch->SamplePerfectTile(groups[0], 2, kNOuterProduct);
+          Array<tir::LoopRV> loops01 = sch->Split(groups[0], {factors01[0], factors01[1]});
+          // Return N0,N1,N2,N3 in TileLoopNest order. The trace samples only N0,N1;
+          // verify their product is 8 and read the fixed 16,1 from the group Split.
+          return {{factors01[0], factors01[1], Integer(kNInnerFactor), Integer(kNInnermostFactor)},
+                  {loops01[0], loops01[1], groups[1], groups[2]}};
+        }
+      }
+    }
+  }
+  // Reduction axes (including R0/K) and unmatched spatial axes retain stock sampling.
   Array<tir::ExprRV> factors = sch->SamplePerfectTile(
       /*loop=*/loop,
       /*n=*/n_tiles,
@@ -214,17 +261,24 @@ std::vector<State> MultiLevelTilingNode::TileLoopNest(State state,
   state->tile_factors.resize(tiles.size());
   std::vector<Array<tir::ExprRV>> tile_factors;
   tile_factors.resize(tiles.size());
+  int spatial_axis_idx = 0;
+  int reduction_axis_idx = 0;
   for (int i = 0, n = loops.size(); i < n; ++i) {
     LoopRV loop = loops[i];
     const std::vector<int>* idx = nullptr;
+    IterVarType iter_type = iter_types[i];
+    int axis_idx = -1;
 
-    if (iter_types[i] == IterVarType::kDataPar) {
+    if (iter_type == IterVarType::kDataPar) {
       if (outer_most_spatial_loop_skipped_num > 0) {
         skipped_outer_spatial_loops.push_back(loop);
         outer_most_spatial_loop_skipped_num--;
+        spatial_axis_idx++;
         continue;
       }
       idx = &s_indices_;
+      axis_idx = spatial_axis_idx++;
+
       if (spatial_loop_product != -1) {
         if (const int64_t* extent = tir::GetLoopIntExtent(sch->Get(loop).get())) {
           spatial_loop_product *= *extent;
@@ -232,8 +286,9 @@ std::vector<State> MultiLevelTilingNode::TileLoopNest(State state,
           spatial_loop_product = -1;
         }
       }
-    } else if (iter_types[i] == IterVarType::kCommReduce) {
+    } else if (iter_type == IterVarType::kCommReduce) {
       idx = &r_indices_;
+      axis_idx = reduction_axis_idx++;
     } else {
       continue;
     }
@@ -243,7 +298,7 @@ std::vector<State> MultiLevelTilingNode::TileLoopNest(State state,
     if (n_tiles == 1) {
       tiles[idx->at(0)].push_back(loop);
     } else {
-      auto [factors, splits] = SplitLoop(sch, block_rv, loop, n_tiles);
+      auto [factors, splits] = SplitLoop(sch, block_rv, loop, n_tiles, iter_type, axis_idx);
 
       // Put every tile to its slot
       for (int j = 0; j < n_tiles; ++j) {

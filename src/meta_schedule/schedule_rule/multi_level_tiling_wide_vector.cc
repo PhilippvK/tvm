@@ -26,6 +26,7 @@ namespace tvm {
 namespace meta_schedule {
 
 using tir::BlockRV;
+using tir::IterVarType;
 using tir::LoopRV;
 using tir::Schedule;
 
@@ -49,11 +50,11 @@ class MultiLevelTilingWideVectorNode : public MultiLevelTilingNode {
   }
 
   std::pair<Array<tir::ExprRV>, Array<tir::LoopRV>> SplitLoop(const Schedule& sch, BlockRV block,
-                                                              LoopRV loop, int n_tiles) const;
+                                                              LoopRV loop, int n_tiles, IterVarType iter_type, int axis_idx) const;
 };
 
 std::pair<Array<tir::ExprRV>, Array<tir::LoopRV>> MultiLevelTilingWideVectorNode::SplitLoop(
-    const Schedule& sch, BlockRV block_rv, LoopRV loop_rv, int n_tiles) const {
+    const Schedule& sch, BlockRV block_rv, LoopRV loop_rv, int n_tiles, IterVarType iter_type, int axis_idx) const {
   const tir::ForNode* loop = TVM_SREF_TO_FOR(sch->GetSRef(loop_rv));
   const tir::StmtSRef block_sref = sch->GetSRef(block_rv);
   const tir::BlockNode* block_node = block_sref->StmtAs<tir::BlockNode>();
@@ -86,7 +87,7 @@ std::pair<Array<tir::ExprRV>, Array<tir::LoopRV>> MultiLevelTilingWideVectorNode
 
   if (!arith::Analyzer().CanProve(loop->loop_var == innermost_iter_value)) {
     // If this is not the innermost spatial loop, split the loop in the normal way.
-    return MultiLevelTilingNode::SplitLoop(sch, block_rv, loop_rv, n_tiles);
+    return MultiLevelTilingNode::SplitLoop(sch, block_rv, loop_rv, n_tiles, iter_type, axis_idx);
   } else {
     // We split the innermost spatial loop in a way that always uses the maximum vector length.
     const int64_t* extent_int = tir::GetLoopIntExtent(loop);

@@ -348,12 +348,16 @@ std::vector<State> MultiLevelTilingTensorCoreNode::MMATileLoopNest(TensorCoreSta
   state->tile_factors.resize(tiles.size());
   std::vector<Array<tir::ExprRV>> tile_factors;
   tile_factors.resize(tiles.size());
+  int spatial_axis_idx = 0;
+  int reduction_axis_idx = 0;
   for (int i = 0, n = loops.size(); i < n; ++i) {
     LoopRV loop = loops[i];
     const std::vector<int>* idx = nullptr;
+    int axis_idx = -1;
 
     if (iter_types[i] == IterVarType::kDataPar) {
       idx = &s_indices_;
+      axis_idx = spatial_axis_idx++;
       if (spatial_loop_product != -1) {
         if (const int64_t* extent = tir::GetLoopIntExtent(sch->Get(loop).get())) {
           spatial_loop_product *= *extent;
@@ -363,6 +367,7 @@ std::vector<State> MultiLevelTilingTensorCoreNode::MMATileLoopNest(TensorCoreSta
       }
     } else if (iter_types[i] == IterVarType::kCommReduce) {
       idx = &r_indices_;
+      axis_idx = reduction_axis_idx++;
     } else {
       continue;
     }
@@ -379,7 +384,7 @@ std::vector<State> MultiLevelTilingTensorCoreNode::MMATileLoopNest(TensorCoreSta
                     i == 0 ? 2  // 32 (load A intrin i shape) / 16 (sync intrin i shape) == 2
                            : 4  // 32 (load B intrin j shape) /  8 (sync intrin j shape) == 4
                     )
-              : SplitLoop(sch, block_rv, loop, n_tiles);
+              : SplitLoop(sch, block_rv, loop, n_tiles, iter_types[i], axis_idx);
 
       // Put every tile to its slot
       for (int j = 0; j < n_tiles; ++j) {
