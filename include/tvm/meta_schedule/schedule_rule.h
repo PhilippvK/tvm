@@ -152,6 +152,8 @@ class ScheduleRule : public runtime::ObjectRef {
    * MultiLevelTiling to a block. Its signature must be (Schedule, BlockRV) -> bool.
    * This is useful if there is a need to apply MultiLevelTiling to an operation / block which is
    * ignored  by default. This function should return True for a block that should be tiled.
+   * \param tile_prefix_products Axis key to [prefix length, product].
+   * \param tile_fixed_factors Axis key to flattened [factor index, value] pairs.
    * \return The schedule rule created
    */
   TVM_DLL static ScheduleRule MultiLevelTiling(String structure,                             //
@@ -160,7 +162,9 @@ class ScheduleRule : public runtime::ObjectRef {
                                                Optional<Array<Integer>> vector_load_lens,    //
                                                Optional<Map<String, ObjectRef>> reuse_read,  //
                                                Optional<Map<String, ObjectRef>> reuse_write,
-                                               Optional<runtime::PackedFunc> filter_fn = NullOpt);
+                                               Optional<runtime::PackedFunc> filter_fn = NullOpt,
+                                               Map<String, Array<Integer>> tile_prefix_products = {},
+                                               Map<String, Array<Integer>> tile_fixed_factors = {});
 
   /*!
    * \brief Extension of MultiLevelTiling for auto-tensorization with a single intrinsic.

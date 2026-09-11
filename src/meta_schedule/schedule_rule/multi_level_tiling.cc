@@ -182,52 +182,52 @@ std::vector<State> MultiLevelTilingNode::AddWriteReuse(State state) const {
 std::pair<Array<tir::ExprRV>, Array<tir::LoopRV>> MultiLevelTilingNode::SplitLoop(
     const Schedule& sch, BlockRV block, LoopRV loop, int n_tiles, IterVarType iter_type,
     int axis_idx) const {
-  // Temporary FLEX hypothesis-testing constant: S0's first two factors have product 16.
-  // Keep both groups sampled with stock primitives so traces remain replayable.
-  constexpr int64_t kOuterProduct = 16;
-  if (iter_type == IterVarType::kDataPar && axis_idx == 0 && n_tiles == 4) {
-    const auto* loop_node = sch->Get(loop).as<tir::ForNode>();
-    if (loop_node != nullptr) {
-      if (const auto* extent_imm = loop_node->extent.as<IntImmNode>()) {
-        int64_t extent = extent_imm->value;
-        if (extent > 0 && extent % kOuterProduct == 0) {
-          Array<tir::LoopRV> groups =
-              sch->Split(loop, {Integer(kOuterProduct), Integer(extent / kOuterProduct)});
-          Array<tir::ExprRV> factors01 = sch->SamplePerfectTile(groups[0], 2, kOuterProduct);
-          Array<tir::LoopRV> loops01 = sch->Split(groups[0], {factors01[0], factors01[1]});
-          Array<tir::ExprRV> factors23 =
-              sch->SamplePerfectTile(groups[1], 2, max_innermost_factor);
-          Array<tir::LoopRV> loops23 = sch->Split(groups[1], {factors23[0], factors23[1]});
-          // TileLoopNest expects factors and loops in outer-to-inner spatial order.
-          return {{factors01[0], factors01[1], factors23[0], factors23[1]},
-                  {loops01[0], loops01[1], loops23[0], loops23[1]}};
-        }
+  String axis_key =
+      (iter_type == IterVarType::kDataPar ? "S" : "R") + std::to_string(axis_idx);
+  auto prefix_it = tile_prefix_products.find(axis_key);
+  auto fixed_it = tile_fixed_factors.find(axis_key);
+  if (prefix_it != tile_prefix_products.end()) {
+    const Array<Integer>& cfg = (*prefix_it).second;
+    CHECK_EQ(n_tiles, 4) << "ValueError: tile constraints require four tiles for " << axis_key;
+    const auto* extent_imm = sch->Get(loop)->extent.as<IntImmNode>();
+    CHECK(extent_imm) << "ValueError: tile constraints require a static extent for " << axis_key;
+    int64_t extent = extent_imm->value;
+    int64_t product = cfg[1].IntValue();
+    CHECK_GT(extent, 0);
+    CHECK_EQ(extent % product, 0)
+        << "ValueError: prefix product must divide the extent of " << axis_key;
+    Array<tir::ExprRV> group_factors{Integer(product)};
+    if (fixed_it != tile_fixed_factors.end()) {
+      const Array<Integer>& fixed = (*fixed_it).second;
+      int64_t suffix[2] = {0, 0};
+      for (int i = 0; i < 4; i += 2) {
+        suffix[fixed[i].IntValue() - 2] = fixed[i + 1].IntValue();
       }
+      int64_t remaining = extent / product;
+      CHECK_EQ(remaining % suffix[0], 0)
+          << "ValueError: fixed factors do not match the extent of " << axis_key;
+      CHECK_EQ(remaining / suffix[0], suffix[1])
+          << "ValueError: fixed factors do not match the extent of " << axis_key;
+      CHECK(max_innermost_factor == -1 || suffix[1] <= max_innermost_factor)
+          << "ValueError: fixed innermost factor exceeds max_innermost_factor";
+      group_factors.push_back(Integer(suffix[0]));
+      group_factors.push_back(Integer(suffix[1]));
+    } else {
+      group_factors.push_back(Integer(extent / product));
     }
-  }
-  // Temporary FLEX hypothesis-testing constants for S1: N0*N1=8, N2=16, N3=1.
-  // The fixed split covers exactly 128 elements; other extents use stock sampling.
-  constexpr int64_t kNOuterProduct = 8;
-  constexpr int64_t kNInnerFactor = 16;
-  constexpr int64_t kNInnermostFactor = 1;
-  if (iter_type == IterVarType::kDataPar && axis_idx == 1 && n_tiles == 4) {
-    const auto* loop_node = sch->Get(loop).as<tir::ForNode>();
-    if (loop_node != nullptr) {
-      if (const auto* extent_imm = loop_node->extent.as<IntImmNode>()) {
-        if (extent_imm->value == kNOuterProduct * kNInnerFactor * kNInnermostFactor) {
-          Array<tir::LoopRV> groups = sch->Split(
-              loop, {Integer(kNOuterProduct), Integer(kNInnerFactor), Integer(kNInnermostFactor)});
-          Array<tir::ExprRV> factors01 = sch->SamplePerfectTile(groups[0], 2, kNOuterProduct);
-          Array<tir::LoopRV> loops01 = sch->Split(groups[0], {factors01[0], factors01[1]});
-          // Return N0,N1,N2,N3 in TileLoopNest order. The trace samples only N0,N1;
-          // verify their product is 8 and read the fixed 16,1 from the group Split.
-          return {{factors01[0], factors01[1], Integer(kNInnerFactor), Integer(kNInnermostFactor)},
-                  {loops01[0], loops01[1], groups[1], groups[2]}};
-        }
-      }
+    Array<LoopRV> groups = sch->Split(loop, {group_factors.begin(), group_factors.end()});
+    // The prefix's last factor is not the original axis's innermost factor.
+    Array<tir::ExprRV> lhs = sch->SamplePerfectTile(groups[0], 2, -1);
+    Array<LoopRV> lhs_loops = sch->Split(groups[0], {lhs[0], lhs[1]});
+    if (fixed_it != tile_fixed_factors.end()) {
+      return {{lhs[0], lhs[1], group_factors[1], group_factors[2]},
+              {lhs_loops[0], lhs_loops[1], groups[1], groups[2]}};
     }
+    Array<tir::ExprRV> rhs = sch->SamplePerfectTile(groups[1], 2, max_innermost_factor);
+    Array<LoopRV> rhs_loops = sch->Split(groups[1], {rhs[0], rhs[1]});
+    return {{lhs[0], lhs[1], rhs[0], rhs[1]},
+            {lhs_loops[0], lhs_loops[1], rhs_loops[0], rhs_loops[1]}};
   }
-  // Reduction axes (including R0/K) and unmatched spatial axes retain stock sampling.
   Array<tir::ExprRV> factors = sch->SamplePerfectTile(
       /*loop=*/loop,
       /*n=*/n_tiles,
@@ -451,9 +451,40 @@ ScheduleRule ScheduleRule::MultiLevelTiling(String structure, Optional<Array<Str
                                             Optional<Array<Integer>> vector_load_lens,
                                             Optional<Map<String, ObjectRef>> reuse_read,
                                             Optional<Map<String, ObjectRef>> reuse_write,
-                                            Optional<runtime::PackedFunc> filter_fn) {
+                                            Optional<runtime::PackedFunc> filter_fn,
+                                            Map<String, Array<Integer>> tile_prefix_products,
+                                            Map<String, Array<Integer>> tile_fixed_factors) {
   auto node = MultiLevelTilingInitCommon<MultiLevelTilingNode>(
       structure, tile_binds, max_innermost_factor, vector_load_lens, reuse_read, reuse_write);
+  auto validate_axis = [&](const String& key) {
+    std::string axis = key;
+    CHECK(axis.size() >= 2 && (axis[0] == 'S' || axis[0] == 'R') &&
+          axis.find_first_not_of("0123456789", 1) == std::string::npos &&
+          (axis.size() == 2 || axis[1] != '0'))
+        << "ValueError: invalid tile constraint axis key: " << key;
+    CHECK_EQ(axis[0] == 'S' ? node->s_indices_.size() : node->r_indices_.size(), 4)
+        << "ValueError: tile constraints require four tiles for " << key;
+  };
+  for (const auto& kv : tile_prefix_products) {
+    validate_axis(kv.first);
+    CHECK_EQ(kv.second.size(), 2) << "ValueError: expected [prefix length, product]";
+    CHECK_EQ(kv.second[0].IntValue(), 2) << "ValueError: only prefix length 2 is supported";
+    CHECK_GT(kv.second[1].IntValue(), 0) << "ValueError: prefix product must be positive";
+  }
+  for (const auto& kv : tile_fixed_factors) {
+    validate_axis(kv.first);
+    CHECK(tile_prefix_products.count(kv.first))
+        << "ValueError: fixed factors require a prefix product for " << kv.first;
+    const Array<Integer>& cfg = kv.second;
+    CHECK_EQ(cfg.size(), 4) << "ValueError: fix both suffix factors 2 and 3";
+    CHECK((cfg[0].IntValue() == 2 && cfg[2].IntValue() == 3) ||
+          (cfg[0].IntValue() == 3 && cfg[2].IntValue() == 2))
+        << "ValueError: fix both suffix factors 2 and 3 exactly once";
+    CHECK_GT(cfg[1].IntValue(), 0) << "ValueError: fixed factors must be positive";
+    CHECK_GT(cfg[3].IntValue(), 0) << "ValueError: fixed factors must be positive";
+  }
+  node->tile_prefix_products = std::move(tile_prefix_products);
+  node->tile_fixed_factors = std::move(tile_fixed_factors);
   node->filter_fn_ = filter_fn;
   return ScheduleRule(node);
 }

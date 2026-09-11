@@ -152,31 +152,6 @@ std::vector<State> SubRule(std::vector<State> states, FLambda sub_rule) {
   return results;
 }
 
-// struct TileProductConstraint {
-//   // Factor indices whose product is constrained, e.g. {0, 1}
-//   std::vector<int> indices;
-//
-//   // Allowed products, e.g. {16} or {16, 32}
-//   std::vector<int64_t> allowed_products;
-// };
-//
-// struct TileAxisPreference {
-//   // Optional exact allowed values for individual factor positions.
-//   // Empty vector => unrestricted.
-//   //
-//   // Example for N:
-//   //   factor_values[2] = {16}
-//   //   factor_values[3] = {1}
-//   std::vector<std::vector<int64_t>> factor_values;
-//
-//   // Constraints such as factor[0] * factor[1] == 8.
-//   std::vector<TileProductConstraint> product_constraints;
-//
-//   bool empty() const {
-//     return factor_values.empty() && product_constraints.empty();
-//   }
-// };
-
 /*!
  * \brief The mega rule: multi-level tiling with data reuse
  */
@@ -212,12 +187,6 @@ class MultiLevelTilingNode : public ScheduleRuleNode {
                                                                       tir::IterVarType iter_type,
                                                                       int axis_idx) const;
 
-  // std::vector<std::vector<int64_t>> EnumeratePreferredTiles(
-  //     int64_t extent,
-  //     int n_tiles,
-  //     int max_innermost_factor,
-  //     const TileAxisPreference& pref) const;
-
   // Annotate a block to use cooperative fetching
   void AnnotateCooperativeFetching(tir::Schedule* sch, const tir::BlockRV& block) const;
 
@@ -232,6 +201,10 @@ class MultiLevelTilingNode : public ScheduleRuleNode {
   Array<String> tile_binds;
   /*! \brief The maximum size of the innermost factor */
   int max_innermost_factor;
+  /*! \brief Axis key to [prefix length, product]. */
+  Map<String, Array<Integer>> tile_prefix_products;
+  /*! \brief Axis key to flattened [factor index, value] pairs. */
+  Map<String, Array<Integer>> tile_fixed_factors;
   /*! \brief The length of vector lane in vectorized cooperative fetching */
   std::vector<int> vector_load_lens;
   /*! \brief Data reuse configuration for reading */
@@ -252,18 +225,12 @@ class MultiLevelTilingNode : public ScheduleRuleNode {
   PackedFunc logger;
   /*! \brief The function to overwrite the default condition for applying MultiLevelTiling. */
   Optional<PackedFunc> filter_fn_;
-  // Preferences per spatial/reduction workload axis.
-  //
-  // spatial_tile_preferences_[0] => S0
-  // spatial_tile_preferences_[1] => S1
-  // reduction_tile_preferences_[0] => R0
-  // std::vector<TileAxisPreference> spatial_tile_preferences_;
-  // std::vector<TileAxisPreference> reduction_tile_preferences_;
-
   void VisitAttrs(tvm::AttrVisitor* v) {
     v->Visit("structure", &structure);
     v->Visit("tile_binds", &tile_binds);
     v->Visit("max_innermost_factor", &max_innermost_factor);
+    v->Visit("tile_prefix_products", &tile_prefix_products);
+    v->Visit("tile_fixed_factors", &tile_fixed_factors);
     // `vector_load_lens` is not visited
     // `reuse_read_` is not visited
     // `reuse_write_` is not visited

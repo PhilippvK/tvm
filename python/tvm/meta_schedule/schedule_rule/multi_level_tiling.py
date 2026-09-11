@@ -68,6 +68,15 @@ class MultiLevelTiling(ScheduleRule):
         MultiLevelTiling to a block. This is useful if there is a need to apply MultiLevelTiling
         to an operation / block which is ignored by default. This function should return True
         for a block that should be tiled (based on the block name, for example).
+    tile_prefix_products : Optional[Dict[str, List[int]]]
+        Axis keys S0, S1, R0, etc. map to [prefix length, product]. For example,
+        {"S0": [2, 16]} fixes the product of the first two S0 factors to 16.
+        Currently supports a two-factor prefix with four tiles per axis.
+    tile_fixed_factors : Optional[Dict[str, List[int]]]
+        Axis keys map to flattened [zero-based factor index, value] pairs.
+        Currently requires a prefix constraint and both suffix factors, e.g.
+        {"S1": [2, 16, 3, 1]}. Empty maps restore unrestricted tiling.
+        Invalid configurations or incompatible static extents raise an error.
     """
 
     def __init__(
@@ -79,6 +88,8 @@ class MultiLevelTiling(ScheduleRule):
         reuse_read: Optional[ReuseType] = None,
         reuse_write: Optional[ReuseType] = None,
         filter_fn: Optional[Callable[[Schedule, BlockRV], bool]] = None,
+        tile_prefix_products: Optional[Dict[str, List[int]]] = None,
+        tile_fixed_factors: Optional[Dict[str, List[int]]] = None,
     ) -> None:
         self.__init_handle_by_constructor__(
             _ffi_api.ScheduleRuleMultiLevelTiling,  # type: ignore # pylint: disable=no-member
@@ -89,6 +100,8 @@ class MultiLevelTiling(ScheduleRule):
             reuse_read.as_dict() if reuse_read is not None else None,
             reuse_write.as_dict() if reuse_write is not None else None,
             filter_fn,
+            tile_prefix_products if tile_prefix_products is not None else {},
+            tile_fixed_factors if tile_fixed_factors is not None else {},
         )
 
 
