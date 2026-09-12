@@ -82,6 +82,18 @@ class MicroTransportChannel : public RPCChannel {
     kSessionEstablished = 2,  // session is alive.
   };
 
+  void ThrowIfRemoteAbort() {
+    if (remote_abort_message_.empty()) {
+      return;
+    }
+
+    std::string message = std::move(remote_abort_message_);
+    remote_abort_message_.clear();
+
+    throw std::runtime_error(
+        "MicroDeviceAbortError: remote device aborted: " + message);
+  }
+
   /*!
    * \brief Construct a new MicroTransportChannel.
    * \param fsend A PackedFunc accepting (data_bytes, timeout_usec) and returning the number of
@@ -144,6 +156,8 @@ class MicroTransportChannel : public RPCChannel {
       if (ConsumeReceivedPayload(pf)) {
         return true;
       }
+
+      ThrowIfRemoteAbort();
 
       ::std::string chunk;
       size_t bytes_needed = unframer_.BytesNeeded();
@@ -321,6 +335,8 @@ class MicroTransportChannel : public RPCChannel {
       int unframer_error = unframer_.Write((const uint8_t*)pending_chunk_.data(),
                                            pending_chunk_.size(), &bytes_consumed);
 
+      ThrowIfRemoteAbort();
+
       ICHECK(bytes_consumed <= pending_chunk_.size())
           << "consumed " << bytes_consumed << " want <= " << pending_chunk_.size();
       pending_chunk_ = pending_chunk_.substr(bytes_consumed);
@@ -332,6 +348,8 @@ class MicroTransportChannel : public RPCChannel {
         }
       }
     }
+
+    ThrowIfRemoteAbort();
 
     return false;
   }
@@ -361,7 +379,7 @@ class MicroTransportChannel : public RPCChannel {
         }
         break;
 
-      case MessageType::kLog:
+      case MessageType::kLog: {
         uint8_t message[1024];
         message_size_bytes = buf->ReadAvailable();
         if (message_size_bytes == 0) {
@@ -374,9 +392,27 @@ class MicroTransportChannel : public RPCChannel {
 
         ICHECK_EQ(buf->Read(message, sizeof(message) - 1), message_size_bytes);
         message[message_size_bytes] = 0;
+
+        std::string log_message(
+            reinterpret_cast<const char*>(message),
+            message_size_bytes
+        );
         LOG(INFO) << "remote: " << message;
+
+        // A CRT TVMPlatformAbort means this RPC request will never
+        // produce a normal reply. Remember it so the receive path
+        // can fail immediately instead of waiting for the RPC timeout.
+        if (log_message.find("TVMPlatformAbort:") != std::string::npos) {
+          LOG(INFO) << "[microTVM] detected remote TVMPlatformAbort";
+          remote_abort_message_ = log_message;
+          throw std::runtime_error(
+              "MicroDeviceAbortError: remote device aborted: " + log_message);
+        }
+
         session_.ClearReceiveBuffer();
         return;
+
+      }
 
       case MessageType::kNormal:
         did_receive_message_ = true;
@@ -398,6 +434,7 @@ class MicroTransportChannel : public RPCChannel {
   PackedFunc frecv_;
   FrameBuffer* message_buffer_;
   std::string pending_chunk_;
+  std::string remote_abort_message_;
 };
 
 std::atomic<unsigned int> MicroTransportChannel::random_seed{0};
