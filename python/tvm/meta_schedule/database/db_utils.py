@@ -19,7 +19,7 @@ except ImportError:
     pass
 
 try:
-    from wca.tensor_intrin_esp_pie import *
+    from esp_pie.tensor_intrin_esp_pie import *
 except ImportError:
     pass
 
