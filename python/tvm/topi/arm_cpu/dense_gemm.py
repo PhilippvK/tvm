@@ -130,7 +130,7 @@ def dense_ime_packed_compute(
     }
     b_pack_attrs = {
         **pack_attrs,
-        "layout_free_placeholders": [weight],
+        # "layout_free_placeholders": [weight],
     }
 
     # A_pack layout:
@@ -171,6 +171,16 @@ def dense_ime_packed_compute(
                 name="A_pack",
                 attrs=pack_attrs,
             )
+    elif KO == 1:
+        A_pack = te.compute(
+            (MO, KB, MT, 4, K_STEP),
+            lambda mo, kb, mt, mi4, kk: data[
+                mo * MI + mt * 4 + mi4,
+                kb * K_STEP + kk,
+            ],
+            name="A_pack",
+            attrs=pack_attrs,
+        )
     else:
         A_pack = te.compute(
             (MO, KO, KB, MT, 4, K_STEP),
@@ -212,6 +222,16 @@ def dense_ime_packed_compute(
                 name="B_pack",
                 attrs=b_pack_attrs,
             )
+    elif KO == 1:
+        B_pack = te.compute(
+            (NO, KB, NT, 4, K_STEP),
+            lambda no, kb, nt, ni4, kk: weight[
+                no * NI + nt * 4 + ni4,
+                kb * K_STEP + kk,
+            ],
+            name="B_pack",
+            attrs=b_pack_attrs,
+        )
     else:
         B_pack = te.compute(
             (NO, KO, KB, NT, 4, K_STEP),
@@ -286,7 +306,7 @@ def dense_ime_packed_compute(
                     axis=[rkk],
                 ),
                 name="C_pack",
-                attrs=reduction_attrs,
+                # attrs=reduction_attrs,
             )
         else:
             C_pack = te.compute(
@@ -296,18 +316,26 @@ def dense_ime_packed_compute(
                     axis=[rkk],
                 ),
                 name="C_pack",
-                attrs=reduction_attrs,
+                # attrs=reduction_attrs,
             )
     elif KO == 1:
         rkb = te.reduce_axis((0, KB), "rkb")
+        # C_pack = te.compute(
+        #     (MO, NO, MT, NT, 4, 4),
+        #     lambda mo, no, mt, nt, mi4, ni4: te.sum(
+        #         A_pack[mo, 0, rkb, mt, mi4, rkk].astype(out_dtype) * B_pack[no, 0, rkb, nt, ni4, rkk].astype(out_dtype),
+        #         axis=[rkb, rkk],
+        #     ),
+        #     name="C_pack",
+        #     # attrs=reduction_attrs,
+        # )
         C_pack = te.compute(
             (MO, NO, MT, NT, 4, 4),
             lambda mo, no, mt, nt, mi4, ni4: te.sum(
-                A_pack[mo, 0, rkb, mt, mi4, rkk].astype(out_dtype) * B_pack[no, 0, rkb, nt, ni4, rkk].astype(out_dtype),
+                A_pack[mo, rkb, mt, mi4, rkk].astype(out_dtype) * B_pack[no, rkb, nt, ni4, rkk].astype(out_dtype),
                 axis=[rkb, rkk],
             ),
             name="C_pack",
-            attrs=reduction_attrs,
         )
     elif KB == 1:
         rko = te.reduce_axis((0, KO), "rko")
@@ -318,7 +346,7 @@ def dense_ime_packed_compute(
                 axis=[rko, rkk],
             ),
             name="C_pack",
-            attrs=reduction_attrs,
+            # attrs=reduction_attrs,
         )
     else:
         rko = te.reduce_axis((0, KO), "rko")
@@ -331,7 +359,7 @@ def dense_ime_packed_compute(
                 axis=[rko, rkb, rkk],
             ),
             name="C_pack",
-            attrs=reduction_attrs,
+            # attrs=reduction_attrs,
         )
     if MO == 1 and NO == 1:
         C = te.compute(
@@ -580,9 +608,7 @@ def dense_gemm_compute(cfg, data, weight, bias=None, out_dtype=None, transpose_a
     k = te.reduce_axis((0, K_padded), name="k")
 
     if bool(transpose_b):
-        weight = te.compute(
-            (K_padded, N_padded), lambda x, y: weight[y, x], name="weight_transposed"
-        )
+        weight = te.compute((K_padded, N_padded), lambda x, y: weight[y, x], name="weight_transposed")
 
     if pad_N != 0 or pad_K != 0:
         weight = nn.pad(weight, pad_before=(0, 0), pad_after=n_pad_after, name="weight_padded")
@@ -607,14 +633,9 @@ def dense_gemm_compute(cfg, data, weight, bias=None, out_dtype=None, transpose_a
     # We need to ensure that infer bound pass does not remove the padding
     # which is necessary for the tensorizations to work. So we need to
     # add a dummy reference to the padding area of the result
-    zero = (
-        tvm.tir.const(1, C.dtype) * C[0, N_padded - 1]
-        - tvm.tir.const(1, C.dtype) * C[0, N_padded - 1]
-    )
+    zero = tvm.tir.const(1, C.dtype) * C[0, N_padded - 1] - tvm.tir.const(1, C.dtype) * C[0, N_padded - 1]
 
-    out = te.compute(
-        (M, N), lambda x, y: (C[x, y] + zero).astype(out_dtype), name="dense_gemm_output"
-    )
+    out = te.compute((M, N), lambda x, y: (C[x, y] + zero).astype(out_dtype), name="dense_gemm_output")
 
     return out
 
