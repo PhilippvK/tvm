@@ -17,6 +17,7 @@
 # pylint: disable=invalid-name, unused-variable, too-many-locals
 # pylint: disable=unused-argument, redefined-builtin
 """GeMM dense schedule on AArch64"""
+
 import tvm
 from tvm import te
 from tvm.topi import nn
@@ -24,9 +25,9 @@ from tvm.topi.arm_cpu.arm_utils import get_tiling_A, get_tiling_B_transformed, p
 from ..utils import get_const_tuple, traverse_inline
 from .. import tag
 
-NO_RANDOM_COMPUTE_LOCATION = {
-    "meta_schedule.no_random_compute_location": True,
-}
+# NO_RANDOM_COMPUTE_LOCATION = {
+#     "meta_schedule.no_random_compute_location": True,
+# }
 
 
 def _choose_ki(K: int, K_MAX: int, K_MIN: int) -> int:
@@ -85,6 +86,12 @@ def dense_ime_packed_compute(
     This layout keeps every 4xKx4 subtile contiguous, so the same
     packing can support 4xKx4, 8xKx4, 4xKx8, and 8xKx8 ukernels.
 
+    Constant weights:
+      With Relay link-params enabled, FoldConstantWeightPacking folds B_pack
+      into AllocateConst during lowering, after MetaSchedule trace replay.
+      Dynamic weights retain B_pack. Use the same executor configuration for
+      MetaSchedule task extraction and compilation.
+
     K_MAX:
       maximum K span consumed by one tensorized microkernel.
 
@@ -122,15 +129,16 @@ def dense_ime_packed_compute(
     MT = MI // 4
     NT = NI // 4
     KB = KI // K_STEP
-    print("KB", KB)
-    print("KB", KB)
 
     pack_attrs = {
-        "meta_schedule.no_random_compute_location": True,
+        # "meta_schedule.no_random_compute_location": True,
     }
     b_pack_attrs = {
         **pack_attrs,
-        # "layout_free_placeholders": [weight],
+        # Fold only when Relay/TE has bound this input as an AllocateConst.
+        # The physical microtile layout is fixed by this compute, not a schedule.
+        "tir.weight_packing": True,
+        "meta_schedule.inline_rule": "disable",
     }
 
     # A_pack layout:
@@ -151,7 +159,7 @@ def dense_ime_packed_compute(
     #   a_off = kt * (MT * 32) + mt * 32
     #
     if KO == 1 and KB == 1:
-        if MO == 1:
+        if MO == 1 and NO == 1:
             A_pack = te.compute(
                 (MT, 4, K_STEP),
                 lambda mt, mi4, kk: data[
@@ -202,7 +210,7 @@ def dense_ime_packed_compute(
     #   b_off = kt * (NT * 32) + nt * 32
     #
     if KO == 1 and KB == 1:
-        if MO == 1:
+        if MO == 1 and NO == 1:
             B_pack = te.compute(
                 (NT, 4, K_STEP),
                 lambda nt, ni4, kk: weight[
@@ -361,7 +369,7 @@ def dense_ime_packed_compute(
             name="C_pack",
             # attrs=reduction_attrs,
         )
-    if MO == 1 and NO == 1:
+    if MO == 1 and NO == 1 and KO == 1 and KB == 1:
         C = te.compute(
             (M, N),
             lambda m, n: C_pack[
@@ -589,9 +597,9 @@ def dense_gemm_compute(cfg, data, weight, bias=None, out_dtype=None, transpose_a
         out_dtype = data.dtype
     M, K = get_const_tuple(data.shape)  # batch, in_dim
     if bool(transpose_b):  # out_dim
-        (N, _) = get_const_tuple(weight.shape)
+        N, _ = get_const_tuple(weight.shape)
     else:
-        (_, N) = get_const_tuple(weight.shape)
+        _, N = get_const_tuple(weight.shape)
 
     tile_M, tile_K = get_tiling_A(False, out_dtype)
     tile_N, _ = get_tiling_B_transformed(False, out_dtype, False)

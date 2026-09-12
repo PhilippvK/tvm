@@ -19,9 +19,10 @@
 
 /*!
  * \file remove_weight_layout_rewrite_block.cc
- * \brief Remove weight layout rewrite block before benchmark
+ * \brief Fold constant weight packing and remove layout rewrite blocks
  */
 
+#include <tvm/arith/analyzer.h>
 #include <tvm/tir/index_map.h>
 #include <tvm/tir/op.h>
 #include <tvm/tir/stmt_functor.h>
@@ -36,9 +37,28 @@ class RemoveLayoutRewriteBlock : public StmtMutator {
  public:
   static std::tuple<PrimFunc, Map<Buffer, Buffer>, std::unordered_map<const VarNode*, IndexMap>,
                     std::unordered_map<const VarNode*, Array<PrimExpr>>>
-  Rewrite(PrimFunc f) {
+  Rewrite(PrimFunc f, bool fold_constants_only) {
     // LOG(INFO) << "RemoveLayoutRewriteBlock::Rewrite";
     RemoveLayoutRewriteBlock rewriter;
+    rewriter.fold_constants_only_ = fold_constants_only;
+    PostOrderVisit(f->body, [&rewriter](const ObjectRef& node) {
+      if (const auto* alloc = node.as<AllocateConstNode>()) {
+        rewriter.constants_.insert(alloc->buffer_var.get());
+      }
+      if (const auto* load = node.as<BufferLoadNode>()) {
+        ++rewriter.load_count_[load->buffer->data.get()];
+      }
+      // Pointer escapes and aliases may read the original layout without a
+      // BufferLoad. Conservatively exclude those allocations as well.
+      if (const auto* var = node.as<VarNode>()) {
+        rewriter.load_count_[var] += 2;
+      }
+      if (const auto* block = node.as<BlockNode>()) {
+        for (const auto& match : block->match_buffers) {
+          rewriter.load_count_[match->source->buffer->data.get()] += 2;
+        }
+      }
+    });
 
     PrimFuncNode* n = f.CopyOnWrite();
     n->body = rewriter(std::move(n->body));
@@ -51,7 +71,15 @@ class RemoveLayoutRewriteBlock : public StmtMutator {
     Block block = Downcast<Block>(StmtMutator::VisitStmt_(op));
 
     auto it = block->annotations.find(attr::meta_schedule_layout_rewrite_preproc);
-    if (it == block->annotations.end() || !is_one(Downcast<PrimExpr>((*it).second))) {
+    const auto* packing_store = block->body.as<BufferStoreNode>();
+    const auto* packing_load = packing_store ? packing_store->value.as<BufferLoadNode>() : nullptr;
+    bool constant_packing = fold_constants_only_ &&
+                            block->annotations.count("tir.weight_packing") && packing_load &&
+                            constants_.count(packing_load->buffer->data.get()) &&
+                            load_count_[packing_load->buffer->data.get()] == 1;
+    bool layout_rewrite = !fold_constants_only_ && it != block->annotations.end() &&
+                          is_one(Downcast<PrimExpr>((*it).second));
+    if (!constant_packing && !layout_rewrite) {
       // The block is not a weight layout block
       // Remove allocates if needed
       Array<Buffer> alloc_buffers;
@@ -91,12 +119,26 @@ class RemoveLayoutRewriteBlock : public StmtMutator {
     n->reads = {};
     n->writes = {};
 
-    Array<Var> load_indices;
-    for (auto ind : load->indices) {
-      ICHECK(ind->IsInstance<VarNode>());
-      load_indices.push_back(Downcast<Var>(ind));
+    if (constant_packing) {
+      // TOPI packing is expressed destination-to-source.  Invert the bijection
+      // over the complete destination domain to transform the constant on the host.
+      Array<Var> indices;
+      Array<Range> ranges;
+      for (size_t i = 0; i < store->indices.size(); ++i) {
+        indices.push_back(Downcast<Var>(store->indices[i]));
+        ranges.push_back(Range::FromMinExtent(0, store->buffer->shape[i]));
+      }
+      arith::Analyzer analyzer;
+      buffer_var_to_index_map_[load->buffer->data.get()] =
+          IndexMap(indices, load->indices).Inverse(ranges, &analyzer);
+    } else {
+      Array<Var> load_indices;
+      for (auto ind : load->indices) {
+        ICHECK(ind->IsInstance<VarNode>());
+        load_indices.push_back(Downcast<Var>(ind));
+      }
+      buffer_var_to_index_map_[load->buffer->data.get()] = IndexMap(load_indices, store->indices);
     }
-    buffer_var_to_index_map_[load->buffer->data.get()] = IndexMap(load_indices, store->indices);
 
     buffer_var_to_rewritten_shape_[load->buffer->data.get()] = store->buffer->shape;
 
@@ -104,6 +146,10 @@ class RemoveLayoutRewriteBlock : public StmtMutator {
   }
 
  private:
+  // Replacing an allocation is safe only if its original layout has no other users.
+  std::unordered_map<const VarNode*, int> load_count_;
+  bool fold_constants_only_{false};
+  std::unordered_set<const VarNode*> constants_;
   /*! \brief The buffer map from original layout buffer to rewritten buffer */
   Map<Buffer, Buffer> buf_map_;
   /*! \brief The buffer map from original layout buffer to rewritten buffer */
@@ -160,16 +206,14 @@ class AllocateConstRewrite : public StmtExprMutator {
   Stmt VisitStmt_(const BlockNode* op) final {
     Block block = Downcast<Block>(StmtMutator::VisitStmt_(op));
     auto n = CopyOnWrite(block.get());
-    Array<BufferRegion> new_reads;
-    for (auto read_region : op->reads) {
-      if (auto it = new_load_buf_.find(read_region->buffer->data.get());
-          it != new_load_buf_.end()) {
-        new_reads.push_back(BufferRegion(it->second, read_region->region));
-      } else {
-        new_reads.push_back(read_region);
-      }
-    }
-    n->reads = new_reads;
+    auto rewrite_region = [this](const BufferRegion& region) {
+      return BufferRegion(RewriteBuffer(region->buffer), region->region);
+    };
+    n->reads = block->reads.Map(rewrite_region);
+    n->writes = block->writes.Map(rewrite_region);
+    n->match_buffers = block->match_buffers.Map([&](const MatchBufferRegion& match) {
+      return MatchBufferRegion(match->buffer, rewrite_region(match->source));
+    });
     return Stmt(n);
   }
 
@@ -190,16 +234,28 @@ class AllocateConstRewrite : public StmtExprMutator {
     return StmtMutator::VisitStmt_(alloc);
   }
 
-  PrimExpr VisitExpr_(const BufferLoadNode* op) final {
-    if (auto it = buffer_var_map_.find(op->buffer->data.get()); it != buffer_var_map_.end()) {
-      auto new_buffer =
-          Buffer(GetRef<Var>(it->second), op->buffer->dtype, op->buffer->shape, op->buffer->strides,
-                 op->buffer->elem_offset, it->second->name_hint, op->buffer->data_alignment,
-                 op->buffer->offset_factor, op->buffer->buffer_type);
-      new_load_buf_[op->buffer->data.get()] = new_buffer;
-      return BufferLoad(new_buffer, op->indices, op->predicate);
+  Buffer RewriteBuffer(Buffer buffer) {
+    if (auto it = buffer_var_map_.find(buffer->data.get()); it != buffer_var_map_.end()) {
+      if (auto cached = new_load_buf_.find(buffer.get()); cached != new_load_buf_.end()) {
+        return cached->second;
+      }
+      Buffer result = buffer;
+      result.CopyOnWrite()->data = GetRef<Var>(it->second);
+      new_load_buf_[buffer.get()] = result;
+      return result;
     }
-    return ExprMutator::VisitExpr_(op);
+    return buffer;
+  }
+
+  PrimExpr VisitExpr_(const BufferLoadNode* op) final {
+    return BufferLoad(RewriteBuffer(op->buffer), op->indices, op->predicate);
+  }
+
+  PrimExpr VisitExpr_(const VarNode* op) final {
+    if (auto it = buffer_var_map_.find(op); it != buffer_var_map_.end()) {
+      return GetRef<Var>(it->second);
+    }
+    return GetRef<Var>(op);
   }
 
   runtime::NDArray RewriteNDArray(runtime::NDArray src, const IndexMap& index_map,
@@ -224,8 +280,8 @@ class AllocateConstRewrite : public StmtExprMutator {
   std::unordered_map<const VarNode*, IndexMap> buffer_var_to_index_map_;
   /*! \brief Maps a buffer load to the shape of the corresponding rewritten buffer. */
   std::unordered_map<const VarNode*, Array<PrimExpr>> buffer_var_to_rewritten_shape_;
-  /*! \brief Maps load buffer variables to newly created buffers */
-  std::unordered_map<const VarNode*, Buffer> new_load_buf_;
+  /*! \brief Maps original buffers to newly created buffers */
+  std::unordered_map<const BufferNode*, Buffer> new_load_buf_;
   /*! \brief Whether or not to skip rewriting of NDArray contents */
   bool skip_ndarray_rewrite_;
 };
@@ -242,14 +298,14 @@ class CollectAllocateConstBufferVars : public StmtVisitor {
 
 class WeightLayoutRewriteBlockRemover : public StmtMutator {
  public:
-  static PrimFunc Remove(PrimFunc f, bool skip_ndarray_rewrite) {
+  static PrimFunc Remove(PrimFunc f, bool skip_ndarray_rewrite, bool fold_constants_only = false) {
     // LOG(INFO) << "WeightLayoutRewriteBlockRemover::Remove";
     // LOG(INFO) << "skip_ndarray_rewrite=" << skip_ndarray_rewrite;
     CollectAllocateConstBufferVars collector;
     collector(f->body);
 
     auto [f_, buf_map, buffer_var_to_index_map, buffer_var_to_rewritten_shape] =
-        RemoveLayoutRewriteBlock().Rewrite(f);
+        RemoveLayoutRewriteBlock().Rewrite(f, fold_constants_only);
 
     BufferVarMap buffer_var_map;
     for (const auto& [load_buf, store_buf] : buf_map) {
@@ -289,6 +345,16 @@ Pass RemoveWeightLayoutRewriteBlock(bool skip_ndarray_rewrite) {
   };
   return CreatePrimFuncPass(pass_func, 0, "tir.RemoveWeightLayoutRewriteBlock", {});
 }
+
+Pass FoldConstantWeightPacking() {
+  auto pass_func = [](PrimFunc f, IRModule m, PassContext ctx) {
+    return WeightLayoutRewriteBlockRemover::Remove(std::move(f), false, true);
+  };
+  return CreatePrimFuncPass(pass_func, 0, "tir.FoldConstantWeightPacking", {});
+}
+
+TVM_REGISTER_GLOBAL("tir.transform.FoldConstantWeightPacking")
+    .set_body_typed(FoldConstantWeightPacking);
 
 TVM_REGISTER_GLOBAL("tir.transform.RemoveWeightLayoutRewriteBlock")
     .set_body_typed(RemoveWeightLayoutRewriteBlock);

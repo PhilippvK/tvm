@@ -199,6 +199,8 @@ Array<tvm::transform::Pass> CreatePassList(bool disable_loop_partition) {
   // PHASE 0
   Array<tvm::transform::Pass> pass_list = user_lower_phase0;
 
+  pass_list.push_back(tir::transform::FoldConstantWeightPacking());
+
   // PHASE 1
   pass_list.push_back(tir::transform::InjectPrefetch());
   pass_list.push_back(tir::transform::TextureFlatten());

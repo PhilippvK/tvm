@@ -1127,6 +1127,19 @@ def InjectPTXAsyncCopy():
     return _ffi_api.InjectPTXAsyncCopy()  # type: ignore
 
 
+def FoldConstantWeightPacking():
+    """Fold bijective weight-packing blocks reading embedded constants on the host.
+
+    Blocks marked ``tir.weight_packing`` must copy an entire buffer through a
+    bijective destination-to-source index map, and be the only reader of the
+    source allocation. Dynamic inputs and shared source allocations are unchanged.
+    This pass runs automatically during lowering, after schedule replay. Relay
+    users should enable ``link-params`` consistently for extraction and build so
+    that weight constants remain embedded in the operator PrimFunc.
+    """
+    return _ffi_api.FoldConstantWeightPacking()
+
+
 def RemoveWeightLayoutRewriteBlock(skip_ndarray_rewrite=False):
     """Remove weight layout rewrite block before benchmarking during tuning stage.
 

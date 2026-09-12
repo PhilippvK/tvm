@@ -796,6 +796,12 @@ TVM_DLL Pass InjectPTXAsyncCopy();
  */
 TVM_DLL Pass InjectPTXLDG32(bool enable_ptx_ldg32 = true);
 
+/*! \brief Fold bijective blocks annotated tir.weight_packing reading AllocateConst.
+ * Run after scheduling, before block lowering. Dynamic inputs and source
+ * allocations with multiple readers are left unchanged.
+ */
+TVM_DLL Pass FoldConstantWeightPacking();
+
 /*!
  * \brief Remove the weight layout rewrite block
  * \param skip_ndarray_rewrite If True, exact rewrite of NDArray, according to the given index map,
