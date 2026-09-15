@@ -9,6 +9,309 @@ from tvm import tir
 from .db_utils import load_ms_db_wrapper
 
 
+from tvm import tir
+from tvm.tir import stmt_functor
+
+
+def structure_features(structure):
+    first_r = structure.index("R")
+    return {
+        "num_s": structure.count("S"),
+        "num_r": structure.count("R"),
+        "s_before_first_r": structure[:first_r].count("S"),
+        "s_after_first_r": structure[first_r + 1 :].count("S"),
+    }
+
+
+def trace_before_postproc(trace):
+    for inst in trace.insts:
+        if inst.kind.name == "EnterPostproc":
+            break
+        yield inst
+
+
+def detect_write_reuse(trace):
+    info = {
+        "used": False,
+        "cache_write_count": 0,
+        "placement": [],
+    }
+
+    cache_write_outputs = set()
+
+    for inst in trace_before_postproc(trace):
+        kind = inst.kind.name
+
+        if kind == "CacheWrite":
+            info["used"] = True
+            info["cache_write_count"] += 1
+
+            for out in inst.outputs:
+                cache_write_outputs.add(out)
+
+        elif kind in ("ReverseComputeAt", "ComputeAt"):
+            if len(inst.inputs) > 0:
+                block_rv = inst.inputs[0]
+
+                if block_rv in cache_write_outputs:
+                    info["placement"].append(kind)
+
+    return info
+
+
+def as_int(expr):
+    if isinstance(expr, tir.IntImm):
+        return int(expr)
+    return None
+
+
+def analyze_final_mod(mod):
+    result = {
+        "unroll_loops": [],
+        "vectorized_loops": [],
+        "buffer_loads": [],
+        "buffer_stores": [],
+        "loops": [],
+    }
+
+    for gv, func in mod.functions.items():
+        if not isinstance(func, tir.PrimFunc):
+            continue
+
+        def visit(node):
+            if isinstance(node, tir.For):
+                extent = as_int(node.extent)
+
+                loop_info = {
+                    "var": node.loop_var.name,
+                    "extent": extent,
+                    "kind": str(node.kind),
+                    "annotations": dict(node.annotations),
+                }
+
+                result["loops"].append(loop_info)
+
+                # Explicit vectorized loop
+                if node.kind == tir.ForKind.VECTORIZED:
+                    result["vectorized_loops"].append(loop_info)
+
+                # Unroll-related annotations
+                anns = node.annotations
+
+                if "pragma_unroll_explicit" in anns or "pragma_auto_unroll_max_step" in anns:
+                    result["unroll_loops"].append(loop_info)
+
+            elif isinstance(node, tir.BufferLoad):
+                result["buffer_loads"].append(
+                    {
+                        "buffer": node.buffer.name,
+                        "indices": [str(x) for x in node.indices],
+                    }
+                )
+
+            elif isinstance(node, tir.BufferStore):
+                result["buffer_stores"].append(
+                    {
+                        "buffer": node.buffer.name,
+                        "indices": [str(x) for x in node.indices],
+                        "value": str(node.value),
+                    }
+                )
+
+        stmt_functor.post_order_visit(func.body, visit)
+
+    return result
+
+
+def get_axis_info(sch, block_name, func_name="main"):
+    block_rv = sch.get_block(block_name, func_name=func_name)
+    block = sch.get(block_rv)
+
+    result = []
+
+    spatial_idx = 0
+    reduction_idx = 0
+
+    for iter_var in block.iter_vars:
+        if iter_var.iter_type == tir.IterVar.DataPar:
+            result.append(
+                {
+                    "label": f"S{spatial_idx}",
+                    "axis_type": "S",
+                }
+            )
+            spatial_idx += 1
+
+        elif iter_var.iter_type == tir.IterVar.CommReduce:
+            result.append(
+                {
+                    "label": f"R{reduction_idx}",
+                    "axis_type": "R",
+                }
+            )
+            reduction_idx += 1
+
+        else:
+            result.append(
+                {
+                    "label": f"U{len(result)}",
+                    "axis_type": "U",
+                }
+            )
+
+    return result
+
+
+def get_axis_labels(sch, block_name, func_name="main"):
+    block_rv = sch.get_block(block_name, func_name=func_name)
+    block = sch.get(block_rv)
+
+    labels = []
+    spatial_idx = 0
+    reduction_idx = 0
+
+    for iter_var in block.iter_vars:
+        if iter_var.iter_type == tir.IterVar.DataPar:
+            labels.append(f"S{spatial_idx}")
+            spatial_idx += 1
+        elif iter_var.iter_type == tir.IterVar.CommReduce:
+            labels.append(f"R{reduction_idx}")
+            reduction_idx += 1
+        else:
+            labels.append(f"?{len(labels)}")
+
+    return labels
+
+
+def find_removable_tiling_levels(structure, tiles):
+    """
+    Find tiling-structure positions that are unit across all axes
+    of the corresponding type.
+
+    Example:
+        structure = "SSRSRS"
+        tiles = [
+            {"axis": "S0", "axis_type": "S", "decision": (1, 16, 1, 8)},
+            {"axis": "S1", "axis_type": "S", "decision": (4, 2, 16, 1)},
+            {"axis": "R0", "axis_type": "R", "decision": (128, 1)},
+        ]
+
+    Returns information about removable positions.
+    """
+
+    spatial_tiles = [t["decision"] for t in tiles if t["axis_type"] == "S"]
+    reduction_tiles = [t["decision"] for t in tiles if t["axis_type"] == "R"]
+
+    num_s_levels = structure.count("S")
+    num_r_levels = structure.count("R")
+
+    # Sanity checks
+    for decision in spatial_tiles:
+        assert len(decision) == num_s_levels, (
+            f"Spatial tile {decision} has {len(decision)} factors, "
+            f"but structure {structure} has {num_s_levels} S levels"
+        )
+
+    for decision in reduction_tiles:
+        assert len(decision) == num_r_levels, (
+            f"Reduction tile {decision} has {len(decision)} factors, "
+            f"but structure {structure} has {num_r_levels} R levels"
+        )
+
+    removable = []
+
+    s_idx = 0
+    r_idx = 0
+
+    for structure_pos, kind in enumerate(structure):
+        if kind == "S":
+            factors = [decision[s_idx] for decision in spatial_tiles]
+
+            is_removable = len(factors) > 0 and all(int(x) == 1 for x in factors)
+
+            if is_removable:
+                removable.append(
+                    {
+                        "position": structure_pos,
+                        "kind": "S",
+                        "level": s_idx,
+                        "factors": tuple(int(x) for x in factors),
+                    }
+                )
+
+            s_idx += 1
+
+        elif kind == "R":
+            factors = [decision[r_idx] for decision in reduction_tiles]
+
+            is_removable = len(factors) > 0 and all(int(x) == 1 for x in factors)
+
+            if is_removable:
+                removable.append(
+                    {
+                        "position": structure_pos,
+                        "kind": "R",
+                        "level": r_idx,
+                        "factors": tuple(int(x) for x in factors),
+                    }
+                )
+
+            r_idx += 1
+
+        else:
+            raise ValueError(f"Unsupported tiling structure character: {kind}")
+
+    return removable
+
+
+def remove_tiling_levels(structure, tiles, removable):
+    remove_positions = {x["position"] for x in removable}
+
+    reduced_structure = "".join(c for i, c in enumerate(structure) if i not in remove_positions)
+
+    remove_s_levels = {x["level"] for x in removable if x["kind"] == "S"}
+    remove_r_levels = {x["level"] for x in removable if x["kind"] == "R"}
+
+    reduced_tiles = []
+
+    for tile in tiles:
+        axis_type = tile["axis_type"]
+        decision = tile["decision"]
+
+        if axis_type == "S":
+            remove_levels = remove_s_levels
+        elif axis_type == "R":
+            remove_levels = remove_r_levels
+        else:
+            reduced_tiles.append(dict(tile))
+            continue
+
+        new_decision = tuple(int(x) for i, x in enumerate(decision) if i not in remove_levels)
+
+        new_tile = dict(tile)
+        new_tile["decision"] = new_decision
+        reduced_tiles.append(new_tile)
+
+    return reduced_structure, reduced_tiles
+
+
+def detect_rule_usage_from_trace(trace):
+    kinds = [inst.kind.name for inst in trace_before_postproc(trace)]
+    kind_set = set(kinds)
+    print("kind_set", kind_set)
+
+    return {
+        "AddRFactor": {
+            "used": "RFactor" in kind_set,
+            "matching_insts": [k for k in kinds if k == "RFactor"],
+        },
+        "AutoInline": {
+            "used": bool({"ComputeInline", "ReverseComputeInline"} & kind_set),
+            "matching_insts": [k for k in kinds if k in ("ComputeInline", "ReverseComputeInline")],
+        },
+    }
+
+
 def analyze_ms_db(in_db):
     # print("DB", in_db, dir(in_db))
     recs = in_db.get_all_tuning_records()
@@ -41,15 +344,32 @@ def analyze_ms_db(in_db):
         # print("workload.mod", workload.mod, dir(workload.mod))
         # lowered_mod = tvm.lower(workload.mod)
         # print("lowered_mod", lowered_mod)
-        sch = tir.Schedule(workload.mod)
-        # print("sch", sch, dir(sch))
-        # print("sch.mod", sch.mod)
+        sch_original = tir.Schedule(workload.mod)
+        print("sch.mod before apply", sch_original.mod)
+        sch_pre_postproc = tir.Schedule(workload.mod)
         rec.trace.apply_to_schedule(
-            sch,
+            sch_pre_postproc,
+            remove_postproc=True,
+        )
+        # print("sch", sch, dir(sch))
+        print("sch.mod before postproc", sch_pre_postproc.mod)
+        # TODO: do not hardcode block name!
+        # axis_labels = {
+        #     "T_matmul_NT": get_axis_labels(sch, "T_matmul_NT"),
+        # }
+        axis_info = {
+            "T_matmul_NT": get_axis_info(sch_original, "T_matmul_NT"),
+        }
+
+        # print("axis_labels", axis_labels)
+        print("axis_info", axis_info)
+        sch_final = tir.Schedule(workload.mod)
+        rec.trace.apply_to_schedule(
+            sch_final,
             remove_postproc=False,
         )
         # print("sch", sch, dir(sch))
-        # print("sch.mod", sch.mod)
+        print("sch.mod after apply", sch_final.mod)
         # lowered_mod = tvm.lower(sch.mod)
         # print("lowered_mod", lowered_mod)
         # TODO: refactor mod analysis to other func/file
@@ -57,26 +377,52 @@ def analyze_ms_db(in_db):
         if target_str not in targets:
             targets.append(target_str)
         # target2recs[target_str].append(rec)
-        # print("rec.trace", rec.trace, dir(rec.trace))
+        print("rec.trace", rec.trace, dir(rec.trace))
         # print("rec.trace.insts", rec.trace.insts, dir(rec.trace.insts))
         # print("decisions", rec.trace.decisions)
         output_decisions = {}
-        for k2, v2 in rec.trace.decisions.items():
+        decision_map = {}
+        raw_decision_map = {}
+        for inst, decision in rec.trace.decisions.items():
+            raw_decision_map[inst] = decision
             # print("k2", k2, type(k2), dir(k2))
             # print("v2", v2, type(v2), dir(v2))
-            outputs = k2.outputs
+            outputs = inst.outputs
             # print("outputs", outputs)
             assert len(outputs) > 0
+
+            resolved_decision = decision
+
+            if inst.kind.name == "SampleCategorical":
+                # decision is the index into candidates.
+                #
+                # For:
+                #   candidates=[0, 16, 64, 512]
+                #   decision=3
+                #
+                # resolved_decision = 512
+                candidates = inst.attrs[0]
+                resolved_decision = candidates[int(decision)]
             if len(outputs) == 1:
                 outp = outputs[0]
-                output_decisions[outp] = v2
+                output_decisions[outp] = resolved_decision
             else:
-                assert len(v2) == len(outputs)
+                assert len(decision) == len(outputs)
                 for j, outp in enumerate(outputs):
                     # print("outp", outp, type(outp), dir(outp))
-                    output_decisions[outp] = v2[j]
-        # print("output_decisions", output_decisions)
+                    output_decisions[outp] = decision[j]
+        print("output_decisions", output_decisions)
 
+        # Map LoopRV -> descriptive name
+        # loop_names = {}
+        loop_info = {}
+
+        # Map BlockRV -> descriptive name
+        block_names = {}
+
+        tiles = []
+        candidate_annotations = {}
+        structures = set()
         for i, inst in enumerate(rec.trace.insts):
             # print("i", i)
             # print("inst", inst)
@@ -88,7 +434,66 @@ def analyze_ms_db(in_db):
             # print("inst.kind.name", inst.kind.name, dir(inst.kind.name))
             kind = inst.kind.name
             inst_hist[kind] += 1
-            if kind == "Annotate":
+
+            if kind == "GetBlock":
+                # Usually attrs contains block name + func name.
+                # For your trace this corresponds to:
+                # sch.get_block(name="T_matmul_NT", func_name="main")
+                block_name = str(inst.attrs[0])
+                for out in inst.outputs:
+                    block_names[out] = block_name
+
+            elif kind == "GetLoops":
+                assert len(inst.inputs) == 1
+                block_rv = inst.inputs[0]
+                block_name = block_names.get(block_rv, "<unknown_block>")
+
+                # labels = axis_labels.get(block_name)
+                infos = axis_info.get(block_name)
+
+                for loop_idx, loop_rv in enumerate(inst.outputs):
+                    if infos is not None and loop_idx < len(infos):
+                        info = infos[loop_idx]
+
+                        loop_info[loop_rv] = {
+                            "block": block_name,
+                            "axis": info["label"],
+                            "axis_type": info["axis_type"],
+                        }
+                    else:
+                        loop_info[loop_rv] = {
+                            "block": block_name,
+                            "axis": f"L{loop_idx}",
+                            "axis_type": "U",
+                        }
+
+            elif kind == "SamplePerfectTile":
+                decision = raw_decision_map.get(inst)
+                if decision is None:
+                    continue
+                # tiles.append(tuple(int(x) for x in decision))
+                loop_rv = inst.inputs[0]
+                # loop_name = loop_names.get(loop_rv, str(loop_rv))
+                info = loop_info.get(
+                    loop_rv,
+                    {
+                        "block": "<unknown>",
+                        "axis": str(loop_rv),
+                        "axis_type": "U",
+                    },
+                )
+
+                tile = tuple(x for x in decision)
+
+                tiles.append(
+                    {
+                        "block": info["block"],
+                        "axis": info["axis"],
+                        "axis_type": info["axis_type"],
+                        "decision": tile,
+                    }
+                )
+            elif kind == "Annotate":
                 assert len(inst.attrs) == 1
                 key = inst.attrs[0]
                 # print("key", key, dir(key))
@@ -103,9 +508,67 @@ def analyze_ms_db(in_db):
                     # print("val_new", val)
                     # print("inst", inst)
                     # input("$$$")
+                candidate_annotations[key] = val
                 annotation_val_hist[key][val] += 1
+                if key == "meta_schedule.tiling_structure":
+                    structures.add(val)
 
         # target2workloads[target_str].add(workload)
+        print("structures", structures)
+        feats = {}
+        for structure in structures:
+            feats_ = structure_features(structure)
+            feats[structure] = feats_
+        print("feats", feats)
+
+        write_reuse = detect_write_reuse(rec.trace)
+        print("write_reuse", write_reuse)
+        parallel = candidate_annotations.get("meta_schedule.parallel")
+        print("parallel", parallel)
+        vectorize = candidate_annotations.get("meta_schedule.vectorize")
+        print("vectorize", vectorize)
+        unroll = candidate_annotations.get("meta_schedule.unroll_explicit")
+        print("unroll", unroll)
+        print("tiles", tiles)
+        removable = find_removable_tiling_levels(structure, tiles)
+        print("removable", removable)
+        if len(removable) > 0:
+
+            new_structure, new_tiles = remove_tiling_levels(
+                structure,
+                tiles,
+                removable,
+            )
+
+            print("new_structure", new_structure)
+            print("new_tiles", new_tiles)
+        max_spatial_inner_factor = max(
+            (t["decision"][-1] for t in tiles if t["axis_type"] == "S"),
+            default=None,
+        )
+        print("max_spatial_inner_factor", max_spatial_inner_factor)
+
+        max_reduction_inner_factor = max(
+            (t["decision"][-1] for t in tiles if t["axis_type"] == "R"),
+            default=None,
+        )
+        print("max_reduction_inner_factor", max_reduction_inner_factor)
+
+        result = analyze_final_mod(sch_final.mod)
+        print("res", result)
+        unroll_extents = [x["extent"] for x in result["unroll_loops"] if x["extent"] is not None]
+
+        max_unroll_loop_extent = max(unroll_extents, default=None)
+        print("max_unroll_loop_extent", max_unroll_loop_extent)
+        vector_extents = [x["extent"] for x in result["vectorized_loops"] if x["extent"] is not None]
+
+        max_vectorized_extent = max(vector_extents, default=None)
+        print("max_vectorized_extent", max_vectorized_extent)
+        rule_usage = detect_rule_usage_from_trace(rec.trace)
+        print("rule_usage", rule_usage)
+        print("AddRFactor used:", rule_usage["AddRFactor"]["used"])
+        print("AutoInline used:", rule_usage["AutoInline"]["used"])
+
     print("len(workloads)", len(workloads))
     print("len(targets)", len(targets))
     print("annotation_hist", annotation_hist)
