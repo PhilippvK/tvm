@@ -180,6 +180,7 @@ def drop_duplicate_candidates_helper_new(
 def filter_ms_db(
     in_db: List[ms.database.Database],
     filter_topk: Optional[int] = None,
+    filter_all_topk: Optional[int] = None,
     filter_target_str: Optional[str] = None,
     filter_target_kind: Optional[str] = None,
     filter_target_mcpu: Optional[str] = None,
@@ -209,9 +210,16 @@ def filter_ms_db(
         workloads.add(rec.workload)
     all_topk_recs = set()
     drop_hist = defaultdict(int)
-    if filter_topk:
+    if filter_topk or filter_all_topk:
+        if filter_all_topk:
+            assert filter_topk is None, "filter_topk and filter_all_topk can not be used together"
+            filter_topk = filter_all_topk
         for workload in workloads:
             topk_recs = in_db.get_top_k(workload, filter_topk)
+            if len(topk_recs) == 0:
+                continue
+            if len(topk_recs) > 1 and filter_all_topk is not None:
+                topk_recs = topk_recs[:1]
             all_topk_recs.update(topk_recs)
         num_before = len(recs)
         recs = [rec for rec in recs if rec in all_topk_recs]  # TODO: use filter()
@@ -362,6 +370,7 @@ def filter_ms_db_wrapper(
     module_equality: str = "structural",
     append: bool = False,
     filter_topk: Optional[int] = None,
+    filter_all_topk: Optional[int] = None,
     filter_target_str: Optional[str] = None,
     filter_target_kind: Optional[str] = None,
     filter_target_mcpu: Optional[str] = None,
@@ -382,6 +391,7 @@ def filter_ms_db_wrapper(
 ):
     filter_kwargs = dict(
         filter_topk=filter_topk,
+        filter_all_topk=filter_all_topk,
         filter_target_str=filter_target_str,
         filter_target_kind=filter_target_kind,
         filter_target_mcpu=filter_target_mcpu,
@@ -451,6 +461,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("in_db", type=str, help="input db files/dirs")
     parser.add_argument("--filter-topk", type=int, default=None, help="filter by topk recs (per workload)")
+    parser.add_argument("--filter-all-topk", type=int, default=None, help="filter by all topk recs (per workload)")
     parser.add_argument("--filter-target-str", type=str, default=None, help="filter by full quoted target str")
     parser.add_argument("--filter-target-kind", type=str, default=None, help="filter by target kind")
     parser.add_argument("--filter-target-mcpu", type=str, default=None, help="filter by target mcpu")
@@ -499,6 +510,7 @@ if __name__ == "__main__":
         args.in_db,
         args.output,
         filter_topk=args.filter_topk,
+        filter_all_topk=args.filter_all_topk,
         filter_target_str=args.filter_target_str,
         filter_target_kind=args.filter_target_kind,
         filter_target_mcpu=args.filter_target_mcpu,
