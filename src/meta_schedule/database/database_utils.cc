@@ -26,6 +26,23 @@
 namespace tvm {
 namespace meta_schedule {
 
+
+inline void JSONDumpFloat(double value, std::ostringstream& os) {
+  std::ostringstream value_os;
+  value_os << std::setprecision(20) << value;
+
+  std::string value_str = value_os.str();
+
+  // Preserve float type when JSON is parsed again.
+  if (value_str.find('.') == std::string::npos &&
+      value_str.find('e') == std::string::npos &&
+      value_str.find('E') == std::string::npos) {
+    value_str += ".0";
+  }
+
+  os << value_str;
+}
+
 void JSONDumps(ObjectRef json_obj, std::ostringstream& os) {
   if (!json_obj.defined()) {
     os << "null";
@@ -44,9 +61,11 @@ void JSONDumps(ObjectRef json_obj, std::ostringstream& os) {
   } else if (const auto* runtime_int = json_obj.as<runtime::Int::ContainerType>()) {
     os << runtime_int->value;
   } else if (const auto* float_imm = json_obj.as<FloatImmNode>()) {
-    os << std::setprecision(20) << float_imm->value;
+    // os << std::setprecision(20) << float_imm->value;
+    JSONDumpFloat(float_imm->value, os);
   } else if (const auto* runtime_float = json_obj.as<runtime::Float::ContainerType>()) {
-    os << std::setprecision(20) << runtime_float->value;
+    // os << std::setprecision(20) << runtime_float->value;
+    JSONDumpFloat(runtime_float->value, os);
   } else if (const auto* str = json_obj.as<runtime::StringObj>()) {
     os << '"' << support::StrEscape(str->data, str->size) << '"';
   } else if (const auto* array = json_obj.as<runtime::ArrayNode>()) {
