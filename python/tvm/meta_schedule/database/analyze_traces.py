@@ -1,6 +1,12 @@
 import logging
 import argparse
+from pathlib import Path
+from typing import Union, Optional
 from collections import defaultdict
+
+from tqdm import tqdm
+
+import tvm
 from tvm import meta_schedule as ms
 from tvm import tir
 
@@ -9,7 +15,6 @@ from tvm import tir
 from .db_utils import load_ms_db_wrapper
 
 
-from tvm import tir
 from tvm.tir import stmt_functor
 
 
@@ -298,7 +303,7 @@ def remove_tiling_levels(structure, tiles, removable):
 def detect_rule_usage_from_trace(trace):
     kinds = [inst.kind.name for inst in trace_before_postproc(trace)]
     kind_set = set(kinds)
-    print("kind_set", kind_set)
+    # print("kind_set", kind_set)
 
     return {
         "AddRFactor": {
@@ -327,7 +332,13 @@ def get_trace_block_names(trace):
     return block_names
 
 
-def analyze_ms_db(in_db):
+def analyze_ms_db(
+    in_db,
+    print_mod: bool = False,
+    print_trace: bool = False,
+    print_info: bool = False,
+    dump_dir: Optional[Union[str, Path]] = None,
+):
     # print("DB", in_db, dir(in_db))
     recs = in_db.get_all_tuning_records()
     # print("recs", recs, len(recs))
@@ -337,8 +348,17 @@ def analyze_ms_db(in_db):
     annotation_val_hist = defaultdict(lambda: defaultdict(int))
     inst_hist = defaultdict(int)
     # TODO: handle postproc
+    original_mod_strs = []
+    pre_postproc_mod_strs = []
+    final_mod_strs = []
+    lowered_mod_strs = []
 
-    for rec in recs:
+    progress = True  # TODO: expose
+    # TODO: process_pool
+    for rec in tqdm(recs, disable=not progress):
+        # TEMP
+        # if len(lowered_mod_strs) > 10:
+        #     break
         # print("rec.args_info", rec.args_info)
         # args_info = rec.args_info
         # print("rec.as_json()", rec.as_json())
@@ -361,14 +381,18 @@ def analyze_ms_db(in_db):
         # print("lowered_mod", lowered_mod)
         sch_original = tir.Schedule(workload.mod)
         trace_block_names = get_trace_block_names(rec.trace)
-        print("sch.mod before apply", sch_original.mod)
+        if print_mod:
+            print("sch.mod before apply", sch_original.mod)
+        original_mod_strs.append(str(sch_original.mod))
         sch_pre_postproc = tir.Schedule(workload.mod)
         rec.trace.apply_to_schedule(
             sch_pre_postproc,
             remove_postproc=True,
         )
         # print("sch", sch, dir(sch))
-        print("sch.mod before postproc", sch_pre_postproc.mod)
+        if print_mod:
+            print("sch.mod before postproc", sch_pre_postproc.mod)
+        pre_postproc_mod_strs.append(str(sch_pre_postproc.mod))
         # TODO: do not hardcode block name!
         # axis_labels = {
         #     "T_matmul_NT": get_axis_labels(sch, "T_matmul_NT"),
@@ -388,26 +412,32 @@ def analyze_ms_db(in_db):
                 pass
 
         # print("axis_labels", axis_labels)
-        print("axis_info", axis_info)
+        if print_info:
+            print("axis_info", axis_info)
         sch_final = tir.Schedule(workload.mod)
         rec.trace.apply_to_schedule(
             sch_final,
             remove_postproc=False,
         )
+        final_mod_strs.append(str(sch_final.mod))
         # print("sch", sch, dir(sch))
-        print("sch.mod after apply", sch_final.mod)
-        # lowered_mod = tvm.lower(sch.mod)
-        # print("lowered_mod", lowered_mod)
+        if print_mod:
+            print("sch.mod after apply", sch_final.mod)
+        lowered_mod = tvm.lower(sch_final.mod)
+        if print_mod:
+            print("lowered_mod", lowered_mod)
+        lowered_mod_strs.append(str(lowered_mod))
         # TODO: refactor mod analysis to other func/file
         # input("!")
         if target_str not in targets:
             targets.append(target_str)
         # target2recs[target_str].append(rec)
-        print("rec.trace", rec.trace, dir(rec.trace))
+        if print_trace:
+            print("rec.trace", rec.trace, dir(rec.trace))
         # print("rec.trace.insts", rec.trace.insts, dir(rec.trace.insts))
         # print("decisions", rec.trace.decisions)
         output_decisions = {}
-        decision_map = {}
+        # decision_map = {}
         raw_decision_map = {}
         for inst, decision in rec.trace.decisions.items():
             raw_decision_map[inst] = decision
@@ -437,7 +467,8 @@ def analyze_ms_db(in_db):
                 for j, outp in enumerate(outputs):
                     # print("outp", outp, type(outp), dir(outp))
                     output_decisions[outp] = decision[j]
-        print("output_decisions", output_decisions)
+        if print_info:
+            print("output_decisions", output_decisions)
 
         # Map LoopRV -> descriptive name
         # loop_names = {}
@@ -566,24 +597,25 @@ def analyze_ms_db(in_db):
                     structures.add(val)
 
         # target2workloads[target_str].add(workload)
-        print("structures", structures)
         feats = {}
         for structure in structures:
             feats_ = structure_features(structure)
             feats[structure] = feats_
-        print("feats", feats)
 
         write_reuse = detect_write_reuse(rec.trace)
-        print("write_reuse", write_reuse)
         parallel = candidate_annotations.get("meta_schedule.parallel")
-        print("parallel", parallel)
         vectorize = candidate_annotations.get("meta_schedule.vectorize")
-        print("vectorize", vectorize)
         unroll = candidate_annotations.get("meta_schedule.unroll_explicit")
-        print("unroll", unroll)
-        print("tiles", tiles)
         removable = find_removable_tiling_levels(structure, tiles)
-        print("removable", removable)
+        if print_info:
+            print("structures", structures)
+            print("feats", feats)
+            print("write_reuse", write_reuse)
+            print("parallel", parallel)
+            print("vectorize", vectorize)
+            print("unroll", unroll)
+            print("tiles", tiles)
+            print("removable", removable)
         if len(removable) > 0:
 
             new_structure, new_tiles = remove_tiling_levels(
@@ -592,55 +624,91 @@ def analyze_ms_db(in_db):
                 removable,
             )
 
-            print("new_structure", new_structure)
-            print("new_tiles", new_tiles)
+            if print_info:
+                print("new_structure", new_structure)
+                print("new_tiles", new_tiles)
         max_spatial_inner_factor = max(
             (t["decision"][-1] for t in tiles if t["axis_type"] == "S"),
             default=None,
         )
-        print("max_spatial_inner_factor", max_spatial_inner_factor)
 
         max_reduction_inner_factor = max(
             (t["decision"][-1] for t in tiles if t["axis_type"] == "R"),
             default=None,
         )
-        print("max_reduction_inner_factor", max_reduction_inner_factor)
 
         result = analyze_final_mod(sch_final.mod)
-        print("res", result)
         unroll_extents = [x["extent"] for x in result["unroll_loops"] if x["extent"] is not None]
 
         max_unroll_loop_extent = max(unroll_extents, default=None)
-        print("max_unroll_loop_extent", max_unroll_loop_extent)
         vector_extents = [x["extent"] for x in result["vectorized_loops"] if x["extent"] is not None]
 
         max_vectorized_extent = max(vector_extents, default=None)
-        print("max_vectorized_extent", max_vectorized_extent)
         rule_usage = detect_rule_usage_from_trace(rec.trace)
-        print("rule_usage", rule_usage)
-        print("AddRFactor used:", rule_usage["AddRFactor"]["used"])
-        print("AutoInline used:", rule_usage["AutoInline"]["used"])
+        if print_info:
+            print("max_spatial_inner_factor", max_spatial_inner_factor)
+            print("max_reduction_inner_factor", max_reduction_inner_factor)
+            print("res", result)
+            print("max_unroll_loop_extent", max_unroll_loop_extent)
+            print("max_vectorized_extent", max_vectorized_extent)
+            print("rule_usage", rule_usage)
+            print("AddRFactor used:", rule_usage["AddRFactor"]["used"])
+            print("AutoInline used:", rule_usage["AutoInline"]["used"])
 
     print("len(workloads)", len(workloads))
     print("len(targets)", len(targets))
     print("annotation_hist", annotation_hist)
     print("annotation_val_hist", annotation_val_hist)
     print("inst_hist", inst_hist)
+    # ---
+    # print("original_mod_strs[0]", original_mod_strs[0])
+    # print("original_mod_strs[-1]", original_mod_strs[-1])
+    # print("pre_postproc_mod_strs[0]", pre_postproc_mod_strs[0])
+    # print("pre_postproc_mod_strs[-1]", pre_postproc_mod_strs[-1])
+    # print("final_mod_strs[0]", final_mod_strs[0])
+    # print("final_mod_strs[-1]", final_mod_strs[-1])
+    # print("lowered_mod_strs[0]", lowered_mod_strs[0])
+    # print("lowered_mod_strs[-1]", lowered_mod_strs[-1])
+
+    print("original_mod_strs", len(original_mod_strs), len(set(original_mod_strs)))
+    print("pre_postproc_mod_strs", len(pre_postproc_mod_strs), len(set(pre_postproc_mod_strs)))
+    print("final_mod_strs", len(final_mod_strs), len(set(final_mod_strs)))
+    print("lowered_mod_strs", len(lowered_mod_strs), len(set(lowered_mod_strs)))
+    if dump_dir:
+        dump_dir = Path(dump_dir)
+        dump_dir.mkdir(exist_ok=True)
+        lowered_mods_file = dump_dir / "lowered_mods.json"
+        import json
+
+        with open(lowered_mods_file, "w") as f:
+            json.dump(lowered_mod_strs, f, indent=0)
     return annotation_hist, annotation_val_hist, inst_hist
 
 
-def analyze_ms_db_wrapper(db_arg):
+def analyze_ms_db_wrapper(
+    db_arg,
+    print_mod: bool = False,
+    print_trace: bool = False,
+    print_info: bool = False,
+    dump_dir: Optional[Union[str, Path]] = None,
+):
     db = load_ms_db_wrapper(db_arg)
     # print("db", db)
     assert isinstance(db, ms.Database)
-    _ = analyze_ms_db(db)
+    _ = analyze_ms_db(db, print_mod=print_mod, print_trace=print_trace, print_info=print_info, dump_dir=dump_dir)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("db", type=str, help="input file/dir")
+    parser.add_argument("--dump", type=str, default=None, help="TODO")
+    parser.add_argument("--print-mod", action="store_true", help="TODO")
+    parser.add_argument("--print-trace", action="store_true", help="TODO")
+    parser.add_argument("--print-info", action="store_true", help="TODO")
 
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
 
-    analyze_ms_db_wrapper(args.db)
+    analyze_ms_db_wrapper(
+        args.db, print_mod=args.print_mod, print_trace=args.print_trace, print_info=args.print_info, dump_dir=args.dump
+    )
