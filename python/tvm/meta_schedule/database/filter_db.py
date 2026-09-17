@@ -26,6 +26,7 @@ def drop_duplicate_recs_helper(recs):
         m.update(rec_json)
         rec_hash = m.hexdigest()
         if rec_hash in hash2recs:
+            # TODO: structural equal if hash matches...
             num += 1
             continue
             # print("hash2recs[rec_hash]", hash2recs[rec_hash])
@@ -421,7 +422,9 @@ def filter_ms_db_wrapper(
         out_path = Path(out_arg)
         if out_path.suffix == ".json":  # file
             raise NotImplementedError("JSON output")
-        elif out_path.suffix in [".tar"]:  # archive
+        elif out_path.suffix in [".tar", ".xz", ".gz"]:  # archive
+            if out_path.suffix in [".xz", ".gz"]:
+                raise NotImplementedError
             with tempfile.TemporaryDirectory() as tmpdirname:
                 temp_out_path = Path(tmpdirname)
                 out_db = ms.database.JSONDatabase(
