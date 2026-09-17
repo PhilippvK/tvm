@@ -1,6 +1,6 @@
 import tarfile
 import tempfile
-from typing import Union
+from typing import Union, Optional
 from pathlib import Path
 
 from tvm import meta_schedule as ms
@@ -24,7 +24,16 @@ except ImportError:
     pass
 
 
-def load_ms_db_dir(in_db_dir, module_equality: str = "structural"):
+def add_load_ms_db_args(parser):
+    # TODO: argument group
+    parser.add_argument("in_db", type=str, help="input db files/dirs")
+    parser.add_argument("--limit", type=int, default=None, help="Limit number of loaded records")
+    parser.add_argument("--module-equality", type=str, default="structural", help="module equality")
+
+
+def load_ms_db_dir(
+    in_db_dir, module_equality: str = "structural", allow_empty: bool = False, limit: Optional[int] = None
+):
     if register_wca_dot_intrinsics is not None:
         register_wca_dot_intrinsics(
             max_channels=None, channel_count=None, multilane=False, inventory_only=False
@@ -37,11 +46,16 @@ def load_ms_db_dir(in_db_dir, module_equality: str = "structural"):
         # path_workload=str(path_workload),
         # path_tuning_record=str(path_tuning_record),
         module_equality=module_equality,
+        limit=limit,
     )
+    if len(in_db) == 0 and not allow_empty:
+        raise RuntimeError(f"Loaded Empty MS database: {in_db_dir}")
     return in_db
 
 
-def load_ms_db_s3(in_db_url, module_equality: str = "structural"):
+def load_ms_db_s3(in_db_url, module_equality: str = "structural", limit: Optional[int] = None):
+    if limit:
+        raise NotImplementedError
     in_db = ms.database.s3_json_database.S3JSONDatabase(
         in_db_url,
         # readonly=True,
@@ -50,7 +64,7 @@ def load_ms_db_s3(in_db_url, module_equality: str = "structural"):
     return in_db
 
 
-def load_ms_db_file(in_db_file, module_equality: str = "structural"):
+def load_ms_db_file(in_db_file, module_equality: str = "structural", limit: Optional[int] = None):
     in_db_path = Path(in_db_file)
     assert in_db_path.is_file()
     suffix = in_db_path.suffix
@@ -67,22 +81,34 @@ def load_ms_db_file(in_db_file, module_equality: str = "structural"):
         path_workload=str(path_workload),
         path_tuning_record=str(path_tuning_record),
         module_equality=module_equality,
+        limit=limit,
     )
     return in_db
 
 
-def load_ms_db_archive(in_db_archive, module_equality: str = "structural"):
+def load_ms_db_archive(in_db_archive, module_equality: str = "structural", limit: Optional[int] = None):
     in_db_path = Path(in_db_archive)
     with tempfile.TemporaryDirectory() as tmpdirname:
         if tarfile.is_tarfile(in_db_path):
             temp_in_db_path = Path(tmpdirname) / "in_db"
             with tarfile.open(in_db_path) as f:
                 f.extractall(path=temp_in_db_path)
-            has_workdir = False
-            if (temp_in_db_path / "work_dir").is_dir():
-                has_workdir = True
-                temp_in_db_path = temp_in_db_path / "work_dir"
-            db = load_ms_db_dir(temp_in_db_path)
+
+            json_files = list(temp_in_db_path.glob("*.json"))
+            print("json_files", json_files)
+            subdirs = list(temp_in_db_path.glob("*/"))
+            print("subdirs", subdirs)
+            work_dir = temp_in_db_path / "work_dir"
+            if len(json_files) == 0:
+                if work_dir.is_dir():
+                    subdir = "work_dir"
+                else:
+                    assert len(subdirs) == 1
+                    subdir = subdirs[0]
+                temp_in_db_path = temp_in_db_path / subdir
+            else:
+                assert len(json_files) == 2
+            db = load_ms_db_dir(temp_in_db_path, limit=limit)
             # TODO: check if this works with tempdir? yield?
             # TODO: convert to memory db!
             return db
@@ -91,22 +117,22 @@ def load_ms_db_archive(in_db_archive, module_equality: str = "structural"):
             raise ValueError("Unsupported format")
 
 
-def load_ms_db_wrapper(in_arg, module_equality: str = "structural"):
+def load_ms_db_wrapper(in_arg, module_equality: str = "structural", limit: Optional[int] = None):
     print("Loading MS database:", in_arg)
     if isinstance(in_arg, ms.Database):
         return in_arg
     # print("in_arg", in_arg)
     if str(in_arg).startswith("s3://"):
-        return load_ms_db_s3(in_arg, module_equality=module_equality)
+        return load_ms_db_s3(in_arg, module_equality=module_equality, limit=limit)
     in_path = Path(in_arg)
     assert in_path.exists()
     if in_path.is_dir():
-        return load_ms_db_dir(in_path, module_equality=module_equality)
+        return load_ms_db_dir(in_path, module_equality=module_equality, limit=limit)
     if in_path.is_file():
         if in_path.suffix == ".json":
-            return load_ms_db_file(in_path, module_equality=module_equality)
-        assert in_path.suffix in [".tar"]
-        return load_ms_db_archive(in_path, module_equality=module_equality)
+            return load_ms_db_file(in_path, module_equality=module_equality, limit=limit)
+        assert in_path.suffix in [".tar", ".xz"]
+        return load_ms_db_archive(in_path, module_equality=module_equality, limit=limit)
         # with load_ms_db_archive(in_path, module_equality=module_equality) as db:
         #     yield db
 

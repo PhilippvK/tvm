@@ -10,7 +10,7 @@ import tvm
 from tqdm import tqdm
 from tvm import meta_schedule as ms
 
-from .db_utils import load_ms_db_wrapper, db_to_json_db
+from .db_utils import load_ms_db_wrapper, db_to_json_db, add_load_ms_db_args
 from tvm.tir.tensor_intrin.riscv_cpu import *
 
 
@@ -368,6 +368,7 @@ def filter_ms_db_wrapper(
     in_arg,
     out_arg,
     module_equality: str = "structural",
+    limit: Optional[int] = None,
     append: bool = False,
     filter_topk: Optional[int] = None,
     filter_all_topk: Optional[int] = None,
@@ -411,7 +412,7 @@ def filter_ms_db_wrapper(
         drop_duplicate_lowered_candidates=drop_duplicate_lowered_candidates,
     )
     assert out_arg is not None
-    in_db = load_ms_db_wrapper(in_arg)
+    in_db = load_ms_db_wrapper(in_arg, module_equality=module_equality, limit=limit)
     print("Loaded!")
     num_recs_before = len(in_db)
     if out_arg.startswith("s3://"):
@@ -459,7 +460,7 @@ def filter_ms_db_wrapper(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("in_db", type=str, help="input db files/dirs")
+    add_load_ms_db_args(parser)
     parser.add_argument("--filter-topk", type=int, default=None, help="filter by topk recs (per workload)")
     parser.add_argument("--filter-all-topk", type=int, default=None, help="filter by all topk recs (per workload)")
     parser.add_argument("--filter-target-str", type=str, default=None, help="filter by full quoted target str")
@@ -499,8 +500,7 @@ if __name__ == "__main__":
         action="store_true",
         help="drop duplicate lowered candidates (same module shash after tvm.lower)",
     )
-    # parser.add_argument("--allow-empty", action="store_true", help="Allow empty out_db")  # TODO
-    parser.add_argument("--module-equality", type=str, default="structural", help="module equality")
+    # parser.add_argument("--allow-empty", action="store_true", help="Allow empty out_db")  # TODO: in/out/both?
 
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
@@ -509,6 +509,8 @@ if __name__ == "__main__":
     filter_ms_db_wrapper(
         args.in_db,
         args.output,
+        module_equality=args.module_equality,
+        limit=args.limit,
         filter_topk=args.filter_topk,
         filter_all_topk=args.filter_all_topk,
         filter_target_str=args.filter_target_str,
@@ -528,6 +530,5 @@ if __name__ == "__main__":
         drop_duplicate_recs=args.drop_duplicate_recs,
         drop_duplicate_candidates=args.drop_duplicate_candidates,
         drop_duplicate_lowered_candidates=args.drop_duplicate_lowered_candidates,
-        module_equality=args.module_equality,
         append=args.append,
     )

@@ -33,7 +33,7 @@ namespace tvm {
 namespace meta_schedule {
 
 void JSONFileAppendLine(const String& path, const std::string& line);
-std::vector<ObjectRef> JSONFileReadLines(const String& path, int num_threads, bool allow_missing);
+std::vector<ObjectRef> JSONFileReadLines(const String& path, int num_threads, bool allow_missing, uint64_t limit = 0);
 
 }  // namespace meta_schedule
 }  // namespace tvm
@@ -230,14 +230,14 @@ class JSONDatabaseNode : public DatabaseNode {
 };
 
 Database Database::JSONDatabase(String path_workload, String path_tuning_record,
-                                String path_measurement_record, bool allow_missing) {
+                                String path_measurement_record, bool allow_missing, uint64_t limit) {
   int num_threads = std::thread::hardware_concurrency();
   ObjectPtr<JSONDatabaseNode> n = make_object<JSONDatabaseNode>();
   // Load `n->workloads2idx_` from `path_workload`
   std::vector<meta_schedule::Workload> workloads;
   {
     std::vector<ObjectRef> json_objs =
-        meta_schedule::JSONFileReadLines(path_workload, num_threads, allow_missing);
+        meta_schedule::JSONFileReadLines(path_workload, num_threads, allow_missing, limit);
     int n_objs = json_objs.size();
     n->workloads2idx_.reserve(n_objs);
     workloads.reserve(n_objs);
@@ -250,7 +250,7 @@ Database Database::JSONDatabase(String path_workload, String path_tuning_record,
   // Load `n->tuning_records_` from `path_tuning_record`
   {
     std::vector<ObjectRef> json_objs =
-        meta_schedule::JSONFileReadLines(path_tuning_record, num_threads, allow_missing);
+        meta_schedule::JSONFileReadLines(path_tuning_record, num_threads, allow_missing, limit);
 
     std::vector<int> workload_idxs;
     std::vector<Target> targets;
@@ -283,7 +283,7 @@ Database Database::JSONDatabase(String path_workload, String path_tuning_record,
   // Load `n->measuremet_log` from `path_measurement_record`
   {
     std::vector<ObjectRef> json_objs =
-        meta_schedule::JSONFileReadLines(path_measurement_record, num_threads, allow_missing);
+        meta_schedule::JSONFileReadLines(path_measurement_record, num_threads, allow_missing, limit);
     std::vector<int> workload_idxs;
     std::vector<Target> targets;
     std::vector<Array<FloatImm>> measurements;

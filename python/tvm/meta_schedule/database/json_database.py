@@ -57,6 +57,7 @@ class JSONDatabase(Database):
         work_dir: Optional[str] = None,
         allow_missing: bool = True,
         module_equality: str = "structural",
+        limit: Optional[int] = None,
     ) -> None:
         """Constructor.
 
@@ -83,10 +84,16 @@ class JSONDatabase(Database):
             raise ValueError("`path_workload` is not specified.")
         if path_tuning_record is None:
             raise ValueError("`path_tuning_record` is not specified.")
+        if limit is None:
+            limit = 0
+        assert isinstance(limit, int)
+        assert limit >= 0
+
         self.__init_handle_by_constructor__(
             _ffi_api.DatabaseJSONDatabase,  # type: ignore # pylint: disable=no-member
             path_workload,
             path_tuning_record,
             allow_missing,
             module_equality,
+            limit,
         )

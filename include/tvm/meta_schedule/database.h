@@ -488,7 +488,7 @@ class Database : public runtime::ObjectRef {
    * \param mod_eq_name A string to specify the module equality testing and hashing method.
    */
   TVM_DLL static Database JSONDatabase(String path_workload, String path_tuning_record,
-                                       bool allow_missing, String mod_eq_name = "structural");
+                                       bool allow_missing, String mod_eq_name = "structural", uint64_t limit = 0);
   /*!
    * \brief A database composed of multiple databases, allowing users to guide IR rewriting using
    * combined knowledge of those databases. To each query, it returns the best record among all the

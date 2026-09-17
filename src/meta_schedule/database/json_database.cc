@@ -33,12 +33,16 @@ namespace meta_schedule {
  * \param allow_missing Whether to create new file when the given path is not found.
  * \return An array containing lines read from the json file.
  */
-std::vector<ObjectRef> JSONFileReadLines(const String& path, int num_threads, bool allow_missing) {
+std::vector<ObjectRef> JSONFileReadLines(const String& path, int num_threads, bool allow_missing, uint64_t limit = 0) {
   std::ifstream is(path);
   if (is.good()) {
     std::vector<String> json_strs;
     for (std::string str; std::getline(is, str);) {
       json_strs.push_back(str);
+      if (limit > 0 && json_strs.size() >= static_cast<size_t>(limit)) {
+          LOG(WARNING) << "DB size reached limit (" << limit << ") during JSON parsing.";
+          break;
+      }
     }
     int n = json_strs.size();
     std::vector<ObjectRef> json_objs;
@@ -164,14 +168,14 @@ class JSONDatabaseNode : public DatabaseNode {
 };
 
 Database Database::JSONDatabase(String path_workload, String path_tuning_record, bool allow_missing,
-                                String mod_eq_name) {
+                                String mod_eq_name, uint64_t limit) {
   // LOG(INFO) << "Database::JSONDatabase";
   int num_threads = std::thread::hardware_concurrency();
   ObjectPtr<JSONDatabaseNode> n = make_object<JSONDatabaseNode>(mod_eq_name);
   // Load `n->workloads2idx_` from `path_workload`
   std::vector<Workload> workloads;
   {
-    std::vector<ObjectRef> json_objs = JSONFileReadLines(path_workload, num_threads, allow_missing);
+    std::vector<ObjectRef> json_objs = JSONFileReadLines(path_workload, num_threads, allow_missing, limit);
     int n_objs = json_objs.size();
     n->workloads2idx_.reserve(n_objs);
     workloads.reserve(n_objs);
@@ -196,7 +200,7 @@ Database Database::JSONDatabase(String path_workload, String path_tuning_record,
   // Load `n->tuning_records_` from `path_tuning_record`
   {
     std::vector<ObjectRef> json_objs =
-        JSONFileReadLines(path_tuning_record, num_threads, allow_missing);
+        JSONFileReadLines(path_tuning_record, num_threads, allow_missing, limit);
     std::vector<TuningRecord> records;
     records.resize(json_objs.size(), TuningRecord{nullptr});
     support::parallel_for_dynamic(

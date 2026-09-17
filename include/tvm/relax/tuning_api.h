@@ -387,7 +387,7 @@ class Database : public runtime::ObjectRef {
    * \param allow_missing Whether to create new file when the given path is not found.
    */
   TVM_DLL static Database JSONDatabase(String path_workload, String path_tuning_record,
-                                       String path_measurement_record, bool allow_missing);
+                                       String path_measurement_record, bool allow_missing, uint64_t limit);
   TVM_DEFINE_MUTABLE_NOTNULLABLE_OBJECT_REF_METHODS(Database, runtime::ObjectRef, DatabaseNode);
 };
 
