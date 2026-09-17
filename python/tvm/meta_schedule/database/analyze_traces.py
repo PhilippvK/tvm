@@ -312,6 +312,21 @@ def detect_rule_usage_from_trace(trace):
     }
 
 
+def get_trace_block_names(trace):
+    block_names = []
+
+    for inst in trace.insts:
+        if inst.kind.name == "GetBlock":
+            # GetBlock attrs are typically:
+            #   [block_name, func_name]
+            block_name = str(inst.attrs[0])
+
+            if block_name != "root" and block_name not in block_names:
+                block_names.append(block_name)
+
+    return block_names
+
+
 def analyze_ms_db(in_db):
     # print("DB", in_db, dir(in_db))
     recs = in_db.get_all_tuning_records()
@@ -345,6 +360,7 @@ def analyze_ms_db(in_db):
         # lowered_mod = tvm.lower(workload.mod)
         # print("lowered_mod", lowered_mod)
         sch_original = tir.Schedule(workload.mod)
+        trace_block_names = get_trace_block_names(rec.trace)
         print("sch.mod before apply", sch_original.mod)
         sch_pre_postproc = tir.Schedule(workload.mod)
         rec.trace.apply_to_schedule(
@@ -357,9 +373,19 @@ def analyze_ms_db(in_db):
         # axis_labels = {
         #     "T_matmul_NT": get_axis_labels(sch, "T_matmul_NT"),
         # }
-        axis_info = {
-            "T_matmul_NT": get_axis_info(sch_original, "T_matmul_NT"),
-        }
+        # axis_info = {
+        #     "T_matmul_NT": get_axis_info(sch_original, "T_matmul_NT"),
+        # }
+        axis_info = {}
+        for block_name in trace_block_names:
+            try:
+                axis_info[block_name] = get_axis_info(
+                    sch_original,
+                    block_name,
+                )
+            except tir.ScheduleError:
+                # Some blocks may only exist after transformations.
+                pass
 
         # print("axis_labels", axis_labels)
         print("axis_info", axis_info)
@@ -415,6 +441,7 @@ def analyze_ms_db(in_db):
 
         # Map LoopRV -> descriptive name
         # loop_names = {}
+        block_info = {}
         loop_info = {}
 
         # Map BlockRV -> descriptive name
@@ -441,12 +468,19 @@ def analyze_ms_db(in_db):
                 # sch.get_block(name="T_matmul_NT", func_name="main")
                 block_name = str(inst.attrs[0])
                 for out in inst.outputs:
+                    block_info[out] = {
+                        "block": block_name,
+                        "source_block": block_name,
+                    }
+                for out in inst.outputs:
                     block_names[out] = block_name
 
             elif kind == "GetLoops":
                 assert len(inst.inputs) == 1
                 block_rv = inst.inputs[0]
-                block_name = block_names.get(block_rv, "<unknown_block>")
+                info = block_info.get(block_rv)
+                block_name = info["source_block"] if info else None
+                # block_name = block_names.get(block_rv, "<unknown_block>")
 
                 # labels = axis_labels.get(block_name)
                 infos = axis_info.get(block_name)
@@ -467,6 +501,24 @@ def analyze_ms_db(in_db):
                             "axis_type": "U",
                         }
 
+            elif kind == "Split":
+                src_loop = inst.inputs[0]
+                src_info = loop_info.get(src_loop)
+
+                if src_info is not None:
+                    for out_loop in inst.outputs:
+                        loop_info[out_loop] = dict(src_info)
+            elif kind == "Blockize":
+                target_loop = inst.inputs[0]
+                new_block = inst.outputs[0]
+
+                src = loop_info.get(target_loop)
+
+                if src is not None:
+                    block_info[new_block] = {
+                        "block": "<blockized>",
+                        "source_block": src["block"],
+                    }
             elif kind == "SamplePerfectTile":
                 decision = raw_decision_map.get(inst)
                 if decision is None:
