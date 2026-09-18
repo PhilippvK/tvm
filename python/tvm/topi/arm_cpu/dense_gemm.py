@@ -22,6 +22,7 @@ import tvm
 from tvm import te
 from tvm.topi import nn
 from tvm.topi.arm_cpu.arm_utils import get_tiling_A, get_tiling_B_transformed, pad_dim_to_multiple
+from .arm_utils import is_ime_shape_supported
 from ..utils import get_const_tuple, traverse_inline
 from .. import tag
 
@@ -98,15 +99,6 @@ def dense_ime_packed_compute(
     K_MIN:
       minimum/alignment unit, e.g. 8 for IME dot granularity.
     """
-    assert data.dtype == "int8"
-    assert weight.dtype == "int8"
-    assert out_dtype == "int32"
-
-    assert MI in [4, 8], f"Unsupported MI={MI}"
-    assert NI in [4, 8], f"Unsupported NI={NI}"
-    assert MI % 4 == 0
-    assert NI % 4 == 0
-
     K_STEP = 8
     assert K_MIN == K_STEP or K_MIN % K_STEP == 0
     assert K_MAX % K_STEP == 0
@@ -115,9 +107,10 @@ def dense_ime_packed_compute(
     N, K2 = get_const_tuple(weight.shape)
     assert K == K2
 
-    assert M % MI == 0, f"M={M} must be divisible by MI={MI}"
-    assert N % NI == 0, f"N={N} must be divisible by NI={NI}"
-    assert K % K_MIN == 0, f"K={K} must be divisible by K_MIN={K_MIN}"
+    assert is_ime_shape_supported(data.dtype, weight.dtype, out_dtype, M, N, K, MI, NI, K_MIN), (
+        f"Unsupported IME dense: dtypes={data.dtype}/{weight.dtype}/{out_dtype}, "
+        f"M/N/K={M}/{N}/{K}, MI/NI/K_MIN={MI}/{NI}/{K_MIN}"
+    )
 
     KI = _choose_ki(K, K_MAX, K_MIN)
     assert KI % K_STEP == 0, f"KI={KI} must be divisible by K_STEP={K_STEP}"

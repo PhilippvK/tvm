@@ -260,3 +260,25 @@ def get_conv2d_weights_padding(N, K, tile_N, tile_K):
         pad_K = tile_K_multiplied - K_misalignment
 
     return pad_N, pad_K
+
+
+def is_ime_shape_supported(data_dtype, weight_dtype, out_dtype, m, n, k, mi=8, ni=8, k_step=8):
+    """Whether a packed IME GEMM fits its tiles without padding.
+
+    Takes logical GEMM dimensions and dtype strings, independently of Relay.
+    Symbolic or non-positive dimensions are unsupported. The default tiles are
+    shared by packed dense and NHWC/HWOI convolution; computes using other tile
+    sizes must pass their actual alignment requirements.
+    """
+    return (
+        data_dtype == weight_dtype == "int8"
+        and out_dtype == "int32"
+        and mi in (4, 8)
+        and ni in (4, 8)
+        and k_step > 0
+        and k_step % 8 == 0
+        and all(
+            isinstance(dim, (int, tvm.tir.IntImm)) and int(dim) > 0 and int(dim) % tile == 0
+            for dim, tile in zip((m, n, k), (mi, ni, k_step))
+        )
+    )

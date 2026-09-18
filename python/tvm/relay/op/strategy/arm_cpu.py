@@ -102,15 +102,24 @@ def _is_simd_aligned(dtype, dimensions, padding=None):
     return (dtype == "int8" and size % 4 == 0) or (dtype == "int16" and size % 2 == 0) or (dtype == "int32")
 
 
-def _is_ime_shape_supported(data, weight, out_type, m, n, k):
-    """Check the default IME tiles (MI=NI=K_STEP=8) before registering compute."""
-    return (
-        data.dtype == weight.dtype == "int8"
-        and out_type.dtype == "int32"
-        and all(
-            isinstance(dim, (int, tir.IntImm)) and int(dim) > 0 and int(dim) % 8 == 0
-            for dim in (m, n, k)
-        )
+def _log_ime_fallback(op_name, strategy, inputs, out_type, target):
+    """Report unavailable packed IME implementations when strategy.ime debugging is enabled."""
+    ime_logger = logging.getLogger("strategy.ime")
+    if "ime_gemm" not in target.libs or not ime_logger.isEnabledFor(logging.DEBUG):
+        return
+    names = [impl.name for spec in strategy.specializations for impl in spec.implementations]
+    if any("ime_packed" in name for name in names):
+        return
+    ime_logger.debug(
+        "%s: ime_gemm enabled, but no packed IME implementation is applicable; "
+        "falling back to non-IME implementations %s. "
+        "Input shapes=%s, input dtypes=%s, output shape=%s, output dtype=%s",
+        op_name,
+        names,
+        [tuple(tensor.shape) for tensor in inputs],
+        [tensor.dtype for tensor in inputs],
+        tuple(out_type.shape),
+        out_type.dtype,
     )
 
 
@@ -242,8 +251,8 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
                 print("target.libs", target.libs)
                 batch, oh, ow, oc = out_type.shape
                 kh, kw, _, ic = kernel.shape
-                if "ime_gemm" in target.libs and _is_ime_shape_supported(
-                    data, kernel, out_type, batch * oh * ow, oc, kh * kw * ic
+                if "ime_gemm" in target.libs and topi.arm_cpu.is_ime_shape_supported(
+                    data.dtype, kernel.dtype, out_type.dtype, batch * oh * ow, oc, kh * kw * ic
                 ):
                     # TODO: check is packing required
                     print("ADDED", "conv2d_nhwc_hwoi_ime_packed.arm_cpu")
@@ -457,6 +466,7 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
             )
         else:
             raise RuntimeError(f"Unsupported group_conv2d layout {layout} for arm cpu")
+    _log_ime_fallback("conv2d", strategy, inputs, out_type, target)
     return strategy
 
 
@@ -705,6 +715,7 @@ def schedule_dense_arm_cpu(attrs, inputs, out_type, target):
             wrap_topi_schedule(topi.arm_cpu.schedule_dense_dsp),
             name="dense_dsp.arm_cpu",
         )
+        _log_ime_fallback("dense", strategy, inputs, out_type, target)
         return strategy
 
     # For dynamic matrix-vector multiply we use a hand written kernel.
@@ -719,6 +730,7 @@ def schedule_dense_arm_cpu(attrs, inputs, out_type, target):
             name="dense_dynamic.x86",
             plevel=20,
         )
+        _log_ime_fallback("dense", strategy, inputs, out_type, target)
         return strategy
 
     need_auto_scheduler_layout = is_auto_scheduler_enabled()
@@ -728,8 +740,8 @@ def schedule_dense_arm_cpu(attrs, inputs, out_type, target):
         or need_meta_schedule_layout
         or (
             "ime_gemm" in target.libs
-            and not _is_ime_shape_supported(
-                data, weight, out_type, data.shape[0], weight.shape[0], data.shape[1]
+            and not topi.arm_cpu.is_ime_shape_supported(
+                data.dtype, weight.dtype, out_type.dtype, data.shape[0], weight.shape[0], data.shape[1]
             )
         )
     ):
@@ -776,8 +788,8 @@ def schedule_dense_arm_cpu(attrs, inputs, out_type, target):
     # Register IME only when its default tiles fit without padding.
     print("target.libs", target.libs)
     if "ime_gemm" in target.libs:
-        if _is_ime_shape_supported(
-            data, weight, out_type, data.shape[0], weight.shape[0], data.shape[1]
+        if topi.arm_cpu.is_ime_shape_supported(
+            data.dtype, weight.dtype, out_type.dtype, data.shape[0], weight.shape[0], data.shape[1]
         ):
             # TODO: check is packing required
             print("ADDED", "dense_ime_packed.arm_cpu")
@@ -811,6 +823,7 @@ def schedule_dense_arm_cpu(attrs, inputs, out_type, target):
         plevel=10,
     )
 
+    _log_ime_fallback("dense", strategy, inputs, out_type, target)
     return strategy
 
 

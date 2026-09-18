@@ -195,24 +195,12 @@ def conv2d_nhwc_hwoi_ime_packed_compute(
     With linked constant weights, FoldConstantWeightPacking folds B_pack
     after schedule replay. Dynamic weights retain runtime packing.
     """
-    assert data.dtype == "int8"
-    assert weight.dtype == "int8"
-    assert out_dtype == "int32"
-
-    assert MI in (4, 8)
-    assert NI in (4, 8)
-    assert MI % 4 == 0
-    assert NI % 4 == 0
     assert K_STEP == 8
 
     batch, input_h, input_w, input_c = get_const_tuple(data.shape)
     kernel_h, kernel_w, output_c, weight_input_c = get_const_tuple(weight.shape)
 
     assert input_c == weight_input_c
-    assert output_c % NI == 0, (
-        f"OC={output_c} must be divisible by NI={NI}; " "add output-channel padding for tail support"
-    )
-
     stride_h, stride_w = _pair(strides)
     dilation_h, dilation_w = _pair(dilation)
     pad_top, pad_left, pad_bottom, pad_right = _quad_padding(padding)
@@ -238,10 +226,12 @@ def conv2d_nhwc_hwoi_ime_packed_compute(
     N = output_c
     K = kernel_h * kernel_w * input_c
 
-    assert M % MI == 0, (
-        f"M=N_batch*OH*OW={M} must be divisible by MI={MI}; " "add output-position padding for tail support"
+    assert arm_utils.is_ime_shape_supported(
+        data.dtype, weight.dtype, out_dtype, M, N, K, MI, NI, K_STEP
+    ), (
+        f"Unsupported IME convolution: dtypes={data.dtype}/{weight.dtype}/{out_dtype}, "
+        f"M/N/K={M}/{N}/{K}, MI/NI/K_STEP={MI}/{NI}/{K_STEP}"
     )
-    assert K % K_STEP == 0, f"K=KH*KW*IC={K} must be divisible by K_STEP={K_STEP}"
 
     KI = _choose_conv_ki(K, K_MAX, K_STEP)
 
