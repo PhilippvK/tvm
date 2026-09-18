@@ -38,6 +38,7 @@ struct CMSISNNCompilerConfigNode : public tvm::AttrsNode<CMSISNNCompilerConfigNo
   String mcpu;
   String mattr;
   Bool debug_last_error = Bool(false);
+  Bool experimental_parallel_elementwise = Bool(false);
 
   TVM_DECLARE_ATTRS(CMSISNNCompilerConfigNode, "ext.attrs.CMSISNNCompilerConfigNode") {
     TVM_ATTR_FIELD(mcpu)
@@ -50,6 +51,10 @@ struct CMSISNNCompilerConfigNode : public tvm::AttrsNode<CMSISNNCompilerConfigNo
         .set_default("");
     TVM_ATTR_FIELD(debug_last_error)
         .describe("Whether to enable storing the last error")
+        .set_default(Bool(false));
+    TVM_ATTR_FIELD(experimental_parallel_elementwise)
+        .describe("Experimental two-task CMSIS-NN elementwise add/multiply dispatch; requires a "
+                  "synchronous TVMBackendParallelLaunch implementation for multicore execution")
         .set_default(Bool(false));
   }
 };

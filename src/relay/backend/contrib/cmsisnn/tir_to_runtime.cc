@@ -20,6 +20,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <string>
@@ -39,8 +40,9 @@ namespace cmsisnn {
 class CodeGenCMSISNN : public codegen::CodeGenCHost {
  public:
   void Init(bool output_ssa, bool emit_asserts, bool emit_fwd_func_decl, std::string target_str,
-            bool debug_last_error) {
+            bool debug_last_error, bool experimental_parallel_elementwise) {
     this->debug_last_error = debug_last_error;
+    experimental_parallel_elementwise_ = experimental_parallel_elementwise;
     std::unordered_set<std::string> devices;
     devices.insert("cmsis-nn");
     CodeGenCHost::Init(output_ssa, emit_asserts, emit_fwd_func_decl, target_str, devices);
@@ -49,6 +51,8 @@ class CodeGenCMSISNN : public codegen::CodeGenCHost {
  private:
   /*!  * \brief Enable storing the last error */
   bool debug_last_error;
+  bool experimental_parallel_elementwise_{false};
+  int parallel_elementwise_id_{0};
 
   /*!  * \brief CMSIS-NN context buffer info */
   struct CMSISNNContextBuffer {
@@ -105,6 +109,98 @@ class CodeGenCMSISNN : public codegen::CodeGenCHost {
   };
 
   using codegen::CodeGenCHost::VisitStmt_;
+
+  // Keep this experiment local to CMSIS-NN. The library calls are opaque to TIR,
+  // so dispatch two slices explicitly rather than parallelizing the full call.
+  void VisitStmt_(const EvaluateNode* op) final {
+    const auto* call = op->value.as<CallNode>();
+    if (experimental_parallel_elementwise_ && call &&
+        call->op.same_as(builtin::call_extern())) {
+      const auto* name = call->args[0].as<StringImmNode>();
+      if (name && (name->value == "arm_elementwise_add_s8" ||
+                   name->value == "arm_elementwise_add_s16" ||
+                   name->value == "arm_elementwise_mul_s8" ||
+                   name->value == "arm_elementwise_mul_s16")) {
+        const auto* size = call->args.back().as<IntImmNode>();
+        // CMSIS-NN uses an int32_t block_size. Leave tiny/dynamic calls serial.
+        if (size && size->value >= 2 && size->value <= std::numeric_limits<int32_t>::max()) {
+          EmitParallelElementwise(call, name->value, size->value);
+          return;
+        }
+      }
+    }
+    CodeGenC::VisitStmt_(op);
+  }
+
+  void EmitParallelElementwise(const CallNode* op, const std::string& function, int64_t size) {
+    const bool is_add = function.find("_add_") != std::string::npos;
+    const int output_arg = is_add ? 10 : 5;
+    const int count_arg = is_add ? 16 : 11;
+    ICHECK_EQ(op->args.size(), count_arg + 1);
+    const std::string dtype = function.find("s16") != std::string::npos ? "int16_t" : "int8_t";
+    const std::string prefix =
+        current_function_name_ + "_cmsisnn_parallel_" + std::to_string(parallel_elementwise_id_++);
+    const std::string closure_type = prefix + "_closure";
+
+    decl_stream << "\ntypedef struct {\n"
+                << "  const " << dtype << "* input_0;\n"
+                << "  const " << dtype << "* input_1;\n"
+                << "  " << dtype << "* output;\n"
+                << "} " << closure_type << ";\n"
+                << "static int32_t " << prefix
+                << "(int32_t task_id, TVMParallelGroupEnv* penv, void* cdata) {\n"
+                << "  " << closure_type << "* data = (" << closure_type << "*)cdata;\n"
+                << "  if (penv->num_task <= 0 || task_id < 0) return -1;\n"
+                // Assign fixed tiles cyclically so CRT's one-worker fallback executes both.
+                << "  for (int32_t tile = task_id; tile < 2;) {\n"
+                << "    const int32_t begin = tile == 0 ? 0 : " << (size / 2 + size % 2)
+                << ";\n"
+                << "    const int32_t count = tile == 0 ? " << (size / 2 + size % 2) << " : "
+                << size / 2 << ";\n"
+                << "    arm_cmsis_nn_status status = " << function << "(";
+    for (int i = 1; i <= count_arg; ++i) {
+      if (i != 1) decl_stream << ", ";
+      if (i == 1 || i == 2) {
+        decl_stream << "data->input_" << (i - 1) << " + begin";
+      } else if (i == output_arg) {
+        decl_stream << "data->output + begin";
+      } else if (i == count_arg) {
+        decl_stream << "count";
+      } else {
+        // Quantization and activation parameters are constants in this BYOC lowering.
+        const auto* value = op->args[i].as<IntImmNode>();
+        ICHECK(value);
+        decl_stream << value->value;
+      }
+    }
+    decl_stream << ");\n"
+                << "    if (status != ARM_CMSIS_NN_SUCCESS) return -1;\n"
+                << "    if (penv->num_task >= 2) break;\n"
+                << "    ++tile;\n"
+                << "  }\n"
+                << "  return 0;\n"
+                << "}\n";
+
+    const std::string input_0 = PrintExpr(op->args[1]);
+    const std::string input_1 = PrintExpr(op->args[2]);
+    const std::string output = PrintExpr(op->args[output_arg]);
+    PrintIndent();
+    stream << closure_type << " " << prefix << "_data = {"
+           << "(const " << dtype << "*)" << input_0 << ", "
+           << "(const " << dtype << "*)" << input_1 << ", "
+           << "(" << dtype << "*)" << output << "};\n";
+    PrintIndent();
+    stream << "if (TVMBackendParallelLaunch(" << prefix << ", &" << prefix
+           << "_data, 2) != 0) {\n";
+    if (debug_last_error) {
+      PrintIndent();
+      stream << "  TVMAPISetLastError(\"CMSIS-NN parallel elementwise launch failed\");\n";
+    }
+    PrintIndent();
+    stream << "  return -1;\n";
+    PrintIndent();
+    stream << "}\n";
+  }
 
   /*!  * \brief Emits CMSIS-NN APIs for every call_extern */
   void VisitExpr_(const CallNode* op, std::ostream& os) final {
@@ -570,9 +666,11 @@ runtime::Module TIRToRuntime(IRModule mod, Target target) {
   bool output_ssa = false;
   bool emit_asserts = false;
   bool emit_fwd_func_decl = false;
-  bool debug_last_error = GetCompilerAttrs()->debug_last_error;
+  auto config = GetCompilerAttrs();
+  bool debug_last_error = config->debug_last_error;
   CodeGenCMSISNN codegen;
-  codegen.Init(output_ssa, emit_asserts, emit_fwd_func_decl, target->str(), debug_last_error);
+  codegen.Init(output_ssa, emit_asserts, emit_fwd_func_decl, target->str(), debug_last_error,
+               config->experimental_parallel_elementwise);
 
   std::vector<std::pair<tvm::GlobalVar, tvm::PrimFunc>> funcs;
   for (auto [gvar, base_func] : mod->functions) {
