@@ -191,6 +191,9 @@ def conv2d_nhwc_hwoi_ime_packed_compute(
       MT = MI // 4
       NT = NI // 4
       KB = KI // K_STEP
+
+    With linked constant weights, FoldConstantWeightPacking folds B_pack
+    after schedule replay. Dynamic weights retain runtime packing.
     """
     assert data.dtype == "int8"
     assert weight.dtype == "int8"
@@ -253,6 +256,13 @@ def conv2d_nhwc_hwoi_ime_packed_compute(
     pack_attrs = {
         "ime_explicit_pack": True,
         "meta_schedule.no_random_compute_location": True,
+    }
+
+    b_pack_attrs = {
+        **pack_attrs,
+        # Preserve the fixed HWOI copy until constant folding after schedule replay.
+        "tir.weight_packing": True,
+        "meta_schedule.inline_rule": "disable",
     }
 
     def unpack_m(m):
@@ -330,7 +340,7 @@ def conv2d_nhwc_hwoi_ime_packed_compute(
         (NO, KO, KB, NT, 4, K_STEP),
         compute_b_pack,
         name="B_pack",
-        attrs=pack_attrs,
+        attrs=b_pack_attrs,
     )
 
     reduction_attrs = {
@@ -346,8 +356,7 @@ def conv2d_nhwc_hwoi_ime_packed_compute(
         "ime_k_micro_tiles": KB,
         "ime_k_max": K_MAX,
         # "meta_schedule.no_random_compute_location": True,
-        # TODO: test
-        "layout_free_placeholders": [B_pack],
+        # B_pack already has the fixed physical layout required by the microkernel.
     }
 
     # Keep KO outside the tensorized microkernel.  One ukernel consumes KI

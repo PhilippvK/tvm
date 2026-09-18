@@ -25,6 +25,12 @@ It previously became an ordinary TIR allocation and nested copy loop, even
 when its input was constant. Relay constant folding cannot see inside this
 TOPI computation.
 
+The same mechanism applies to ``conv2d_nhwc_hwoi_ime_packed_compute`` in
+``python/tvm/topi/arm_cpu/conv2d_gemm.py``. Its annotated weight copy maps
+HWOI weights to ``[NO, KO, KB, NT, 4, 8]``, flattening kernel height, kernel
+width, and input channels into K. Activation im2col/packing stays at runtime.
+The fixed weight layout does not request ``layout_free_placeholders`` rewriting.
+
 Constant binding and configuration
 ----------------------------------
 
@@ -135,3 +141,8 @@ weights also retain their runtime packing. Arbitrary custom schedules that
 remove the annotated copy or cease to represent it as a full bijective copy
 are outside the pass's contract. Existing IME shape/alignment restrictions
 still apply.
+
+``tests/python/topi/test_topi_conv2d_ime_prepack.py`` additionally checks HWOI
+packed bytes and convolution outputs across spatial kernels, stride, padding,
+dilation, microtile sizes, and reduction tiles, plus dynamic weights and Relay
+linked-parameter compilation with MetaSchedule database replay.
