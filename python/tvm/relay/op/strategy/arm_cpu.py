@@ -102,6 +102,18 @@ def _is_simd_aligned(dtype, dimensions, padding=None):
     return (dtype == "int8" and size % 4 == 0) or (dtype == "int16" and size % 2 == 0) or (dtype == "int32")
 
 
+def _is_ime_shape_supported(data, weight, out_type, m, n, k):
+    """Check the default IME tiles (MI=NI=K_STEP=8) before registering compute."""
+    return (
+        data.dtype == weight.dtype == "int8"
+        and out_type.dtype == "int32"
+        and all(
+            isinstance(dim, (int, tir.IntImm)) and int(dim) > 0 and int(dim) % 8 == 0
+            for dim in (m, n, k)
+        )
+    )
+
+
 @conv2d_strategy.register("arm_cpu")
 def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
     """conv2d arm cpu strategy"""
@@ -213,15 +225,26 @@ def conv2d_strategy_arm_cpu(attrs, inputs, out_type, target):
                 )
             # elif target.features.has_dsp and kernel_layout == "HWOI":
             elif True and kernel_layout == "HWOI":
-                # TODO: make generic
-                strategy.add_implementation(
-                    wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_dsp),
-                    wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_dsp),
-                    name="conv2d_nhwc_dsp.arm_cpu",
-                )
-                print("target.libs", target.libs)
                 if "ime_gemm" in target.libs:
-                    # TODO: check if applicable/supported
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(
+                            topi.nn.conv2d, need_data_layout=True, need_kernel_layout=True
+                        ),
+                        naive_schedule,
+                        name="conv2d_nhwc_hwoi.generic",
+                    )
+                else:
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_dsp),
+                        wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_dsp),
+                        name="conv2d_nhwc_dsp.arm_cpu",
+                    )
+                print("target.libs", target.libs)
+                batch, oh, ow, oc = out_type.shape
+                kh, kw, _, ic = kernel.shape
+                if "ime_gemm" in target.libs and _is_ime_shape_supported(
+                    data, kernel, out_type, batch * oh * ow, oc, kh * kw * ic
+                ):
                     # TODO: check is packing required
                     print("ADDED", "conv2d_nhwc_hwoi_ime_packed.arm_cpu")
                     strategy.add_implementation(
@@ -700,7 +723,16 @@ def schedule_dense_arm_cpu(attrs, inputs, out_type, target):
 
     need_auto_scheduler_layout = is_auto_scheduler_enabled()
     need_meta_schedule_layout = is_meta_schedule_enabled()
-    if need_auto_scheduler_layout or need_meta_schedule_layout:
+    if (
+        need_auto_scheduler_layout
+        or need_meta_schedule_layout
+        or (
+            "ime_gemm" in target.libs
+            and not _is_ime_shape_supported(
+                data, weight, out_type, data.shape[0], weight.shape[0], data.shape[1]
+            )
+        )
+    ):
         strategy.add_implementation(
             wrap_compute_dense(
                 topi.nn.dense,
@@ -741,11 +773,12 @@ def schedule_dense_arm_cpu(attrs, inputs, out_type, target):
             name="dense_gemm.arm_cpu",
             plevel=11,
         )
-    # TODO: check for legal shape and only if gemm/ime enabled!
+    # Register IME only when its default tiles fit without padding.
     print("target.libs", target.libs)
     if "ime_gemm" in target.libs:
-        if data.dtype in ["int8"] and weight.dtype in ["int8"] and out_type.dtype in ["int32"]:  # TODO
-            # TODO: check if applicable/supported
+        if _is_ime_shape_supported(
+            data, weight, out_type, data.shape[0], weight.shape[0], data.shape[1]
+        ):
             # TODO: check is packing required
             print("ADDED", "dense_ime_packed.arm_cpu")
             strategy.add_implementation(
