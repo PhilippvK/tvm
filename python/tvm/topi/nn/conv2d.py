@@ -616,7 +616,7 @@ def conv2d_NCHWc_int8(
 
 
 def conv2d_gemm_weight_transform(kernel, tile_N, tile_K, use_scalable_vectors=False, use_sme=False):
-    """Weight transformation for winograd
+    """Weight transformation (im2col) for Conv2D GEMM
 
     Parameters
     ----------
