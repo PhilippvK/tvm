@@ -171,6 +171,14 @@ def test_target_llvm_options():
     )
 
 
+@pytest.mark.parametrize("width", [128, 256, 512])
+def test_target_llvm_vector_width(width):
+    target = tvm.target.Target(f"llvm -vector-width={width}")
+    assert target.attrs["vector-width"] == width
+    assert tvm.target.Target(str(target)).attrs["vector-width"] == width
+    assert tvm.target.Target({"kind": "llvm", "vector-width": width}).attrs["vector-width"] == width
+
+
 def test_target_llvm_jit_options():
     target = tvm.target.Target("llvm -jit=mcjit")
     assert target.attrs["jit"] == "mcjit"

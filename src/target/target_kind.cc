@@ -284,7 +284,7 @@ TVM_REGISTER_TARGET_KIND("llvm", kDLCPU)
     // LLVM JIT engine mcjit/orcjit
     .add_attr_option<String>("jit")
     // TVM & LLVM custom vector bit width
-    .add_attr_option<Integer>("vector-width")
+    .add_attr_option<runtime::Int>("vector-width")
     .set_default_keys({"cpu"})
     // Force the external codegen kind attribute to be registered, even if no external
     // codegen targets are enabled by the TVM build.
