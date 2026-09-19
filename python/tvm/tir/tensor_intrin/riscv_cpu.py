@@ -181,6 +181,23 @@ def rvv_vec_dot_product_kernels(
     return rvv_vec_dot_prod_desc, rvv_vec_dot_prod_impl
 
 
+def get_required_lmul(
+    n_elems: int,
+    vlen: int,
+    elem_bits: int,
+) -> int:
+    elems_per_vreg = vlen // elem_bits
+
+    needed = (n_elems + elems_per_vreg - 1) // elems_per_vreg
+
+    # Round to legal integral LMUL.
+    lmul = 1
+    while lmul < needed:
+        lmul *= 2
+
+    return lmul
+
+
 @register_func("tir.tensor_intrin.register_rvv_isa_intrinsics")
 def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
     # print("register_rvv_isa_intrinsics")
@@ -236,6 +253,16 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
             # print("while", n_elems, time.time())
             iters += 1
 
+            lmul = get_required_lmul(
+                n_elems,
+                vlen,
+                DataType(d_dtype).bits,
+            )
+
+            # Widening doubles EMUL, so don't permit input LMUL > 4.
+            if DataType(o_dtype).bits > DataType(d_dtype).bits:
+                assert lmul <= 4
+
             dt = DataType(d_dtype)
             wt = DataType(w_dtype)
             ot = DataType(o_dtype)
@@ -247,7 +274,7 @@ def register_rvv_isa_intrinsics(target: Target, inventory_only=False) -> dict():
             kernels_inventory[kernel_name] = tvm.tir.IntImm("int64", n_elems)
 
             if not inventory_only:
-                logger.debug(f"Registering kernel {kernel_name}")
+                logger.debug("Registering kernel %swith LMUL=%d", kernel_name, lmul)
                 desc, impl = rvv_vec_dot_product_kernels(n_elems, n_lanes, d_dtype, w_dtype, o_dtype, lmul)
                 lookup = TensorIntrin.get(kernel_name, allow_missing=True)
                 # print("lookup", lookup)
