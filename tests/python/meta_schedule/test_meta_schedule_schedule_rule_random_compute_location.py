@@ -105,5 +105,18 @@ def test_random_compute_location():
     )
 
 
+def test_random_compute_location_keeps_materialized_packing_block():
+    mod = tvm.IRModule.from_expr(Add["main"].with_attr("global_symbol", "main"))
+    sch = tvm.tir.Schedule(mod, debug_mask="all")
+    move = sch.get_block("move")
+    sch.annotate(move, "meta_schedule.inline_rule", "disable")
+
+    # Decision -2 is the compute-inline sentinel.  A materialized block must
+    # fall back to a non-inline location instead of being eliminated.
+    location = sch.sample_compute_location(move, decision=-2)
+    sch.compute_at(move, location, preserve_unit_loops=True)
+    assert "with T.block(\"move\")" in sch.mod.script()
+
+
 if __name__ == "__main__":
     test_random_compute_location()

@@ -71,6 +71,13 @@ def _nodes(mod, kind):
 
 
 def _check_packed(before, after, weights):
+    a_stores = [s for s in _nodes(before, tir.BufferStore) if s.buffer.name == "A_pack"]
+    assert len(a_stores) == 1
+    a_blocks = [b for b in _nodes(before, tir.Block) if b.name_hint == "A_pack"]
+    assert len(a_blocks) == 1
+    # A_pack is an ABI-level K8-major layout, so tensorization must see the
+    # materialized buffer rather than an inlined logical [M, K] producer.
+    assert a_blocks[0].annotations["meta_schedule.inline_rule"] == "disable"
     stores = [s for s in _nodes(before, tir.BufferStore) if s.buffer.name == "B_pack"]
     assert len(stores) == 1
     shape = tuple(int(x) for x in stores[0].buffer.shape)
