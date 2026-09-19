@@ -124,7 +124,10 @@ def dense_ime_packed_compute(
     KB = KI // K_STEP
 
     pack_attrs = {
-        # "meta_schedule.no_random_compute_location": True,
+        # A_pack is the physical K8-major operand consumed by the IME
+        # TensorIntrin, not a logical reshape that may be folded into C_pack.
+        # Keep it materialized through RewriteTensorize just like B_pack.
+        "meta_schedule.inline_rule": "disable",
     }
     b_pack_attrs = {
         **pack_attrs,
