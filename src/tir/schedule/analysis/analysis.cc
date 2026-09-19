@@ -946,8 +946,11 @@ std::pair<Array<StmtSRef>, std::vector<int>> CollectComputeLocation(const Schedu
   std::vector<int> location_indices;
 
   // Step 1. Add the "compute-root" candidate. Add the "compute-inline" candidate if the block can
-  // be inlined.
-  if (CanComputeInline(self, block_sref)) {
+  // be inlined, unless the block must remain materialized.  In particular, physical packing blocks
+  // may still be profitably moved with compute-at, but must not be replaced by their producer.
+  Optional<String> inline_rule = GetAnn<String>(block_sref, attr::meta_schedule_inline_rule);
+  bool disable_inline = inline_rule.defined() && inline_rule.value() == "disable";
+  if (!disable_inline && CanComputeInline(self, block_sref)) {
     location_srefs.push_back(StmtSRef::InlineMark());
     location_indices.push_back(-2);
   }
