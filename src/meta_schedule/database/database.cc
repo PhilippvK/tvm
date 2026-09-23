@@ -210,7 +210,7 @@ TuningRecord TuningRecord::FromJSON(const ObjectRef& json_obj, const Workload& w
     LOG(FATAL) << "ValueError: Unable to parse the JSON object: " << json_obj
                << "\nThe error is: " << e.what();
   }
-  return TuningRecord(trace, workload, run_secs, target, args_info, timestamp);
+  return TuningRecord(trace, workload, run_secs, target, args_info, timestamp, space_idx);
 }
 
 /******** Database ********/
@@ -338,7 +338,7 @@ TVM_REGISTER_GLOBAL("meta_schedule.WorkloadFromJSON").set_body_typed(&Workload::
 TVM_REGISTER_GLOBAL("meta_schedule.TuningRecord")
     .set_body_typed([](tir::Trace trace, Workload workload, Optional<Array<FloatImm>> run_secs,
                        Optional<Target> target, Optional<Array<ArgInfo>> args_info, Optional<FloatImm> timestamp, int space_idx) {
-      return TuningRecord(trace, workload, run_secs, target, args_info, timestamp);
+      return TuningRecord(trace, workload, run_secs, target, args_info, timestamp, space_idx);
     });
 TVM_REGISTER_GLOBAL("meta_schedule.TuningRecordAsMeasureCandidate")
     .set_body_method<TuningRecord>(&TuningRecordNode::AsMeasureCandidate);
