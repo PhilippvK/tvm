@@ -33,6 +33,7 @@
 #include <tvm/runtime/crt/packed_func.h>
 #include <tvm/runtime/crt/page_allocator.h>
 
+#if 0
 static void DumpMetadata(const TVMMetadata* md) {
   LOG_DEBUG("%s:\n", __FUNCTION__);
   LOG_DEBUG("\tmod_name=%s\n", md->mod_name);
@@ -60,6 +61,7 @@ static void DumpMetadata(const TVMMetadata* md) {
     LOG_DEBUG("\tconstant_pools[%d]: %s\n", i, md->constant_pools[i].name_hint);
   }
 }
+#endif
 
 int TVMAotExecutor_GetNumInputs(TVMAotExecutor* executor) { return executor->metadata->num_inputs; }
 
