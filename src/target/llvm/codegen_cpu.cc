@@ -1018,8 +1018,8 @@ class MetadataTypeDefiner : public AttrVisitor {
 
  private:
   void VisitMetadataBase(runtime::metadata::MetadataBase metadata) {
-    elements_.emplace_back(llvm::PointerType::getUnqual(
-        llvm::StructType::create(*ctx_, metadata->get_c_struct_name())));
+    elements_.emplace_back(
+        llvmGetPointerTo(llvm::StructType::create(*ctx_, metadata->get_c_struct_name()), 0));
     if (visited_.find(metadata->get_c_struct_name()) != visited_.end()) {
       return;
     }
@@ -1037,13 +1037,13 @@ class MetadataTypeDefiner : public AttrVisitor {
     switch (arr->kind) {
       case MetadataKind::kUint64:  // LLVM encodes signed and unsigned with same types.
       case MetadataKind::kInt64:
-        elements_.emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_int64));
+        elements_.emplace_back(llvmGetPointerTo(llvm_types_->t_int64, 0));
         break;
       case MetadataKind::kBool:
-        elements_.emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_bool));
+        elements_.emplace_back(llvmGetPointerTo(llvm_types_->t_bool, 0));
         break;
       case MetadataKind::kString:
-        elements_.emplace_back(llvm::PointerType::getUnqual(llvm_types_->t_cstring));
+        elements_.emplace_back(llvmGetPointerTo(llvm_types_->t_cstring, 0));
         break;
       case MetadataKind::kHandle:
         CHECK(false) << "Do not support handle";
@@ -1051,7 +1051,7 @@ class MetadataTypeDefiner : public AttrVisitor {
       case MetadataKind::kMetadata:
         if (llvm_types_->structs_by_type_key.count(arr->type_key)) {
           elements_.emplace_back(
-              llvm::PointerType::getUnqual(llvm_types_->structs_by_type_key[arr->type_key]));
+              llvmGetPointerTo(llvm_types_->structs_by_type_key[arr->type_key], 0));
         }
         break;
       default:
@@ -1067,7 +1067,7 @@ class MetadataTypeDefiner : public AttrVisitor {
       VisitArray(arr);
     } else {
       elements_.emplace_back(
-          llvm::PointerType::getUnqual(llvm_types_->structs_by_type_key[(*value)->GetTypeKey()]));
+          llvmGetPointerTo(llvm_types_->structs_by_type_key[(*value)->GetTypeKey()], 0));
     }
   }
 

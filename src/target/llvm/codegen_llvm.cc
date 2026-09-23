@@ -2265,9 +2265,13 @@ void CodeGenLLVM::AddDebugInformation(llvm::Function* f_llvm, const Array<Type>&
 
     auto* store = builder.CreateStore(iter_param, paramAlloca);
     auto* di_loc = llvm::DILocation::get(*ctx, 0, 0, di_subprogram_);
-    dbg_info_->di_builder_->insertDeclare(paramAlloca, param,
-                                          dbg_info_->di_builder_->createExpression(),
-                                          llvm::DebugLoc(di_loc), store);
+    dbg_info_->di_builder_->insertDeclare(
+        paramAlloca, param, dbg_info_->di_builder_->createExpression(), llvm::DebugLoc(di_loc),
+#if TVM_LLVM_VERSION >= 220
+        store->getIterator());
+#else
+        store);
+#endif
   }
   dbg_info_->di_builder_->finalizeSubprogram(f_llvm->getSubprogram());
   auto* scope = f_llvm->getSubprogram();
@@ -2303,9 +2307,13 @@ void CodeGenLLVM::AddDebugInformation(llvm::Value* llvm_value, const Var& tir_va
   auto* di_loc = llvm::DILocation::get(*llvm_target_->GetContext(), 0, 0, di_subprogram_);
 
   if (insert_before) {
-    dbg_info_->di_builder_->insertDeclare(llvm_value, local_var,
-                                          dbg_info_->di_builder_->createExpression(),
-                                          llvm::DebugLoc(di_loc), insert_before);
+    dbg_info_->di_builder_->insertDeclare(
+        llvm_value, local_var, dbg_info_->di_builder_->createExpression(), llvm::DebugLoc(di_loc),
+#if TVM_LLVM_VERSION >= 220
+        insert_before->getIterator());
+#else
+        insert_before);
+#endif
   } else {
     dbg_info_->di_builder_->insertDeclare(llvm_value, local_var,
                                           dbg_info_->di_builder_->createExpression(),
