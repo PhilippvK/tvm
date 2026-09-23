@@ -95,7 +95,7 @@ int TVMAotExecutor_Run(TVMAotExecutor* executor) {
   {
     const size_t max_strlen = TVM_CRT_MAX_STRLEN_FUNCTION_NAME;
     size_t len = strnlen(executor->metadata->mod_name, max_strlen);
-    len += strnlen(tvm_main_suffix, max_strlen);
+    len += strlen(tvm_main_suffix);
 
     CHECK_LT(len, max_strlen, "tvm_main name too long %zu\n", len);
   }
@@ -145,9 +145,9 @@ int TVMAotExecutor_Init(TVMAotExecutor* executor, TVMModuleHandle module_handle,
 
   {
     size_t max_strlen = TVM_CRT_MAX_STRLEN_FUNCTION_NAME;
-    size_t len = strnlen(tvmgen_prefix, max_strlen);
+    size_t len = strlen(tvmgen_prefix);
     len += strnlen(module_name, max_strlen);
-    len += strnlen(get_c_metdata_suffix, max_strlen);
+    len += strlen(get_c_metdata_suffix);
 
     CHECK_LT(len, max_strlen, "get_c_metadata name too long %zu\n", len);
   }

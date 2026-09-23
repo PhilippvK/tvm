@@ -1559,7 +1559,8 @@ Doc TVMScriptPrinter::VisitStmt_(const BlockRealizeNode* op) {
 }
 
 Doc TVMScriptPrinter::PrintBody(const Stmt& body) {
-  int memo_num_child, memo_current_num;
+  int memo_num_child = 0;
+  int memo_current_num = 0;
   std::swap(memo_num_child, num_child_);
   std::swap(memo_current_num, current_num_);
 

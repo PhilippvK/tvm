@@ -66,7 +66,7 @@ struct ItervarFeature {
   int nest_level;
   AnnotationType ann;        // one-hot axis type
   int64_t topdown_product;   // accumulative product of axis length, in top-down order
-  int64_t bottomup_product;  // accumulative product of axis length, in bottom-up order
+  int64_t bottomup_product{0};  // accumulative product of axis length, in bottom-up order
   // bottomup_product = reuse * count for any touched buffer
 
   int order;  // used for soring axis

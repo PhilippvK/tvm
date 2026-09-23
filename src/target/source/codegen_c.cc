@@ -1056,7 +1056,7 @@ void CodeGenC::VisitStmt_(const AllocateNode* op) {
   // generated-C pattern where a temporary such as conv2d[64] is reused for each
   // outer spatial tile.  Emitting it in the caller would make all workers race on
   // the same scratch buffer.
-  if (const ForNode* for_node = op->body.as<ForNode>()) {
+  if (op->body.as<ForNode>()) {
     // if (for_node->kind == ForKind::kParallel) {
     if (IsDirectParallelLaunchBody(op->body)) {
       // LOG(INFO) << "AllocateNode: kParallel";

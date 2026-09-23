@@ -287,7 +287,7 @@ class CSourceCrtMetadataModuleNode : public runtime::ModuleNode {
 
   String GenerateDLTensorStructWrapper(String reference_arg) {
     code_ << "DLTensor " << reference_arg << "_dltensor = {\n";
-    code_ << ".data = &" << reference_arg << "\n";
+    code_ << ".data = (void*)&" << reference_arg << "\n";
     code_ << "};\n";
     code_ << "TVMValue " << reference_arg << "_tvm_value = {\n";
     code_ << ".v_handle = &" << reference_arg << "_dltensor\n";
