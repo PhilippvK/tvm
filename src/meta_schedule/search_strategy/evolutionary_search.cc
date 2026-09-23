@@ -581,11 +581,11 @@ std::vector<std::pair<Schedule, int>> EvolutionarySearchNode::State::SampleInitP
   // Array<Integer> design_spaces_mask;
   int num_enabled = 0;
   CHECK(design_spaces_mask.size() == design_spaces.size()) << "Size missmatch";
-  for (int i = 0; i < design_spaces_mask.size(); i++) {
+  for (size_t i = 0; i < design_spaces_mask.size(); i++) {
     int enabled = design_spaces_mask[i]->value;
     // LOG(INFO) << "i,enabled=" << i << "," << enabled;
     if (enabled) {
-      enabled_design_space_idxs.push_back(i);
+      enabled_design_space_idxs.push_back(static_cast<int>(i));
       num_enabled++;
     }
   }
