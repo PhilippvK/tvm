@@ -5374,19 +5374,30 @@ class QLinearAdd(OnnxOpConverter):
         c_scale = get_scalar(inputs[6], params)
         c_zero_point = get_scalar(inputs[7], params, "int32")
 
-        dtype = infer_type(a).checked_type.dtype
+        # dtype = infer_type(a).checked_type.dtype
 
         ## Onnxruntime doesn't actually do this op in integer, they dequantize to fp32
         ## and then requantize afer
         ## https://github.com/microsoft/onnxruntime/blob/master/onnxruntime/core/mlas/lib/qladd.cpp
-        a = _qnn.op.dequantize(
-            inputs[0], a_scale, a_zero_point
-        )  # , c_scale, c_zero_point, out_dtype = dtype)
-        b = _qnn.op.dequantize(
-            inputs[3], b_scale, b_zero_point
-        )  # , c_scale, c_zero_point, out_dtype = dtype)
-        out = _op.add(a, b)
-        return _qnn.op.quantize(out, c_scale, c_zero_point, out_dtype=dtype)
+        # a = _qnn.op.dequantize(
+        #     inputs[0], a_scale, a_zero_point
+        # )  # , c_scale, c_zero_point, out_dtype = dtype)
+        # b = _qnn.op.dequantize(
+        #     inputs[3], b_scale, b_zero_point
+        # )  # , c_scale, c_zero_point, out_dtype = dtype)
+        # out = _op.add(a, b)
+        # return _qnn.op.quantize(out, c_scale, c_zero_point, out_dtype=dtype)
+
+        return _qnn.op.add(
+            lhs=a,
+            rhs=b,
+            lhs_scale=a_scale,
+            lhs_zero_point=a_zero_point,
+            rhs_scale=b_scale,
+            rhs_zero_point=b_zero_point,
+            output_scale=c_scale,
+            output_zero_point=c_zero_point,
+        )
 
 
 class QLinearMatMul(OnnxOpConverter):
